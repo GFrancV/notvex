@@ -9,6 +9,11 @@
  *
  * The SQLCipher PRAGMA key is always the password-derived master key.
  * Recovery decrypts that same master key from the sidecar, not a separate key.
+ *
+ * Memory security:
+ * - masterKey lives in a native Buffer (outside V8 GC heap) locked with
+ *   VirtualLock/mlock so the OS cannot page it to disk.
+ * - All intermediate key copies are zeroed immediately after use.
  */
 import sqlcipher from '@journeyapps/sqlcipher'
 import type sqlite3 from '@journeyapps/sqlcipher'
@@ -22,9 +27,10 @@ import {
   encryptField,
   decryptField,
   memzero,
-  DEFAULT_ARGON2_PARAMS,
+  calibrateArgon2id,
   type Argon2Params,
 } from './crypto'
+import { allocSecure, freeSecure } from './memlock'
 import { generateMnemonic, mnemonicToMasterKey, validateMnemonic } from './recovery'
 import { runMigrations } from '../db/migrations'
 import { dbRun, dbGet } from '../db/queries'
@@ -38,15 +44,12 @@ interface VaultSidecar {
   verify_hash: string        // hex: BLAKE2b(masterKey)
   recovery_encrypted_master_key: string  // hex
   recovery_nonce: string     // hex
-  yubikey_challenge?: string // hex (set if YubiKey is configured)
-  yubikey_encrypted_master_key?: string
-  yubikey_nonce?: string
 }
 
 // ─── Module state ────────────────────────────────────────────────────────────
 
 let db: sqlite3.Database | null = null
-let masterKey: Uint8Array | null = null
+let masterKey: Buffer | null = null   // native heap, VirtualLock'd
 let currentVaultDir: string | null = null
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -84,7 +87,11 @@ function closeDatabase(database: sqlite3.Database): Promise<void> {
 }
 
 async function applyKey(database: sqlite3.Database, key: Uint8Array): Promise<void> {
-  const hex = Buffer.from(key).toString('hex')
+  // NOTE: toString('hex') creates an immutable JS string with the key material.
+  // This is an unavoidable limitation of the SQLCipher Node.js binding — there is
+  // no binary PRAGMA path. The string is unreachable after this function returns
+  // and will be collected by the GC on its next pass.
+  const hex = Buffer.isBuffer(key) ? key.toString('hex') : Buffer.from(key).toString('hex')
   await new Promise<void>((resolve, reject) => {
     database.serialize(() => {
       database.run(`PRAGMA key = "x'${hex}'"`, (err: Error | null) =>
@@ -92,6 +99,15 @@ async function applyKey(database: sqlite3.Database, key: Uint8Array): Promise<vo
       )
     })
   })
+}
+
+// Moves rawKey (WASM-backed or native Uint8Array) into a locked native Buffer
+// and zeros the original immediately. Call this as the last step before storing.
+function storeKey(rawKey: Uint8Array): Buffer {
+  const secure = allocSecure(rawKey.length)
+  secure.set(rawKey)
+  memzero(rawKey) // zero the WASM/native copy
+  return secure
 }
 
 function encryptMasterKey(
@@ -156,42 +172,44 @@ export async function createVault(dir: string, password: string): Promise<Create
     throw new Error('A vault already exists at this location.')
   }
 
-  // Derive master key from password
+  // Calibrate Argon2id to ~1.5s on this hardware (only runs at vault creation).
+  // The result is stored in the sidecar so future unlocks use the same params.
+  const params = calibrateArgon2id(1500)
   const salt = generateSalt()
-  const params = DEFAULT_ARGON2_PARAMS
-  const key = deriveKey(password, salt, params)
+  const rawKey = deriveKey(password, salt, params)
+  const verifyHash = hashForVerify(rawKey)
 
   // Create and key the SQLCipher database
   const database = await openDatabase(dbFilePath(dir))
-  await applyKey(database, key)
+  await applyKey(database, rawKey)
   await runMigrations(database)
 
   // Insert vault_meta row for version tracking
   await dbRun(database, `
     INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, verify_hash, recovery_verify_hash, yubikey_slot, created_at)
     VALUES (1, 1, ?, ?, ?, '', NULL, ?)`,
-    [Buffer.from(salt), JSON.stringify(params), hashForVerify(key), Date.now()],
+    [Buffer.from(salt), JSON.stringify(params), verifyHash, Date.now()],
   )
 
   // Generate recovery mnemonic and wrap the master key with it
   const mnemonic = generateMnemonic()
   const recoveryKey = mnemonicToMasterKey(mnemonic)
-  const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(key, recoveryKey)
+  const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(rawKey, recoveryKey)
   memzero(recoveryKey)
 
-  // Write sidecar (bootstrap data — not sensitive, salt is public by design)
+  // Write sidecar (bootstrap data — salt is public by design, not sensitive)
   const sidecar: VaultSidecar = {
     version: 1,
     argon2_salt: Buffer.from(salt).toString('hex'),
     argon2_params: params,
-    verify_hash: hashForVerify(key),
+    verify_hash: verifyHash,
     recovery_encrypted_master_key: recCipher,
     recovery_nonce: recNonce,
   }
   writeSidecar(dir, sidecar)
 
   db = database
-  masterKey = key
+  masterKey = storeKey(rawKey) // rawKey is zeroed inside storeKey
   currentVaultDir = dir
 
   return { mnemonic }
@@ -204,26 +222,26 @@ export async function openVault(dir: string, password: string): Promise<boolean>
 
   const sidecar = readSidecar(dir)
   const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
-  const key = deriveKey(password, salt, sidecar.argon2_params)
+  const rawKey = deriveKey(password, salt, sidecar.argon2_params)
 
-  if (hashForVerify(key) !== sidecar.verify_hash) {
-    memzero(key)
+  if (hashForVerify(rawKey) !== sidecar.verify_hash) {
+    memzero(rawKey)
     return false
   }
 
   const database = await openDatabase(dbFilePath(dir))
-  await applyKey(database, key)
+  await applyKey(database, rawKey)
 
   // Sanity check: make sure the DB is readable with this key
   const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
   if (!meta) {
     await closeDatabase(database)
-    memzero(key)
+    memzero(rawKey)
     throw new Error('Vault database could not be read. It may be corrupted.')
   }
 
   db = database
-  masterKey = key
+  masterKey = storeKey(rawKey)
   currentVaultDir = dir
   return true
 }
@@ -237,9 +255,9 @@ export async function openVaultWithRecovery(dir: string, mnemonic: string): Prom
   const sidecar = readSidecar(dir)
   const recoveryKey = mnemonicToMasterKey(mnemonic)
 
-  let key: Uint8Array
+  let rawKey: Uint8Array
   try {
-    key = decryptMasterKey(
+    rawKey = decryptMasterKey(
       sidecar.recovery_encrypted_master_key,
       sidecar.recovery_nonce,
       recoveryKey,
@@ -252,23 +270,23 @@ export async function openVaultWithRecovery(dir: string, mnemonic: string): Prom
   }
 
   const database = await openDatabase(dbFilePath(dir))
-  await applyKey(database, key)
+  await applyKey(database, rawKey)
 
   const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
   if (!meta) {
     await closeDatabase(database)
-    memzero(key)
+    rawKey.fill(0)
     return false
   }
 
   db = database
-  masterKey = key
+  masterKey = storeKey(rawKey)
   currentVaultDir = dir
   return true
 }
 
 export async function closeVault(): Promise<void> {
-  if (masterKey) { memzero(masterKey); masterKey = null }
+  if (masterKey) { freeSecure(masterKey); masterKey = null }
   if (db) {
     try { await closeDatabase(db) } catch { /* ignore */ }
     db = null

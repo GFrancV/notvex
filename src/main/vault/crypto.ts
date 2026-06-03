@@ -1,4 +1,5 @@
 import sodium from 'libsodium-wrappers-sumo'
+import { performance } from 'perf_hooks'
 
 let sodiumReady = false
 
@@ -92,4 +93,39 @@ export function memzero(buf: Uint8Array): void {
   } else {
     buf.fill(0)
   }
+}
+
+/**
+ * Measures how long Argon2id takes for a given parameter set on this machine.
+ * Returns the highest-security tier that finishes within targetMs.
+ * Only called once at vault creation — result is stored in the sidecar.
+ */
+export function calibrateArgon2id(targetMs = 1500): Argon2Params {
+  assertReady()
+  const testPassword = 'calibration-benchmark'
+  const testSalt = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES)
+  const ALG = sodium.crypto_pwhash_ALG_ARGON2ID13
+
+  // Ordered from highest to lowest security — first one that fits wins.
+  const tiers: Argon2Params[] = [
+    { memory: 536870912, iterations: 4, parallelism: 1 }, // 512 MB / 4 passes
+    { memory: 536870912, iterations: 3, parallelism: 1 }, // 512 MB / 3 passes
+    { memory: 268435456, iterations: 4, parallelism: 1 }, // 256 MB / 4 passes
+    { memory: 268435456, iterations: 3, parallelism: 1 }, // 256 MB / 3 passes  ← current default
+    { memory: 268435456, iterations: 2, parallelism: 1 }, // 256 MB / 2 passes
+    { memory: 134217728, iterations: 3, parallelism: 1 }, // 128 MB / 3 passes
+    { memory: 134217728, iterations: 2, parallelism: 1 }, // 128 MB / 2 passes
+    { memory: 67108864,  iterations: 3, parallelism: 1 }, //  64 MB / 3 passes
+    { memory: 67108864,  iterations: 2, parallelism: 1 }, //  64 MB / 2 passes  ← minimum
+  ]
+
+  for (const tier of tiers) {
+    const t0 = performance.now()
+    sodium.crypto_pwhash(32, testPassword, testSalt, tier.iterations, tier.memory, ALG)
+    if (performance.now() - t0 <= targetMs) {
+      return tier
+    }
+  }
+
+  return tiers[tiers.length - 1]
 }
