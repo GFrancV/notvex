@@ -22,16 +22,16 @@ export function Sidebar(): JSX.Element {
 
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [autoLockMinutes, setAutoLockMinutes] = useState(15)
-  const [vaultDir, setVaultDir] = useState<string | null>(null)
+  const [vaultPath, setVaultPath] = useState<string | null>(null)
 
   useEffect(() => {
     loadTags()
     loadTagCounts()
     notvex.prefs.get().then((res) => {
       if (res.success && res.data && typeof res.data === 'object') {
-        const prefs = res.data as { autoLockMinutes?: number; vaultDir?: string | null }
+        const prefs = res.data as { autoLockMinutes?: number; vaultPath?: string | null }
         setAutoLockMinutes(prefs.autoLockMinutes ?? 15)
-        setVaultDir(prefs.vaultDir ?? null)
+        setVaultPath(prefs.vaultPath ?? null)
       }
     })
   }, [])
@@ -89,10 +89,10 @@ export function Sidebar(): JSX.Element {
                   <option value={0}>Never</option>
                 </select>
               </div>
-              {vaultDir && (
+              {vaultPath && (
                 <div className="space-y-1">
                   <Label>Vault location</Label>
-                  <p className="text-xs text-[#737373] break-all">{vaultDir}</p>
+                  <p className="text-xs text-[#737373] break-all">{vaultPath}</p>
                 </div>
               )}
               <Separator />

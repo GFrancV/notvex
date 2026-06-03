@@ -5,22 +5,22 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { Shield, Eye, EyeOff, Key, Usb } from 'lucide-react'
+import { Shield, Eye, EyeOff, Key } from 'lucide-react'
 
 export function Unlock(): JSX.Element {
   const { setStatus, refreshAll } = useVaultStore()
 
-  const [vaultDir, setVaultDir] = useState<string | null>(null)
+  const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState<'password' | 'recovery' | 'yubikey'>('password')
+  const [tab, setTab] = useState<'password' | 'recovery'>('password')
 
   useEffect(() => {
-    notvex.prefs.get('vaultDir').then((res) => {
-      if (res.success && res.data) setVaultDir(res.data as string)
+    notvex.prefs.get('vaultPath').then((res) => {
+      if (res.success && res.data) setVaultPath(res.data as string)
     })
   }, [])
 
@@ -30,9 +30,9 @@ export function Unlock(): JSX.Element {
   }
 
   const handlePasswordUnlock = async (): Promise<void> => {
-    if (!vaultDir) return
+    if (!vaultPath) return
     setError(''); setLoading(true)
-    const res = await notvex.vault.open(vaultDir, password)
+    const res = await notvex.vault.open(vaultPath, password)
     setLoading(false)
     if (!res.success) { setError(res.error); return }
     if (!res.data) { setError('Incorrect password.'); return }
@@ -40,9 +40,9 @@ export function Unlock(): JSX.Element {
   }
 
   const handleRecoveryUnlock = async (): Promise<void> => {
-    if (!vaultDir) return
+    if (!vaultPath) return
     setError(''); setLoading(true)
-    const res = await notvex.vault.openWithRecovery(vaultDir, mnemonic.trim())
+    const res = await notvex.vault.openWithRecovery(vaultPath, mnemonic.trim())
     setLoading(false)
     if (!res.success) { setError(res.error); return }
     if (!res.data) { setError('Invalid recovery key.'); return }
@@ -63,9 +63,9 @@ export function Unlock(): JSX.Element {
           </div>
         </div>
 
-        {vaultDir && (
+        {vaultPath && (
           <p className="mb-4 text-xs text-[#737373] text-center truncate">
-            {vaultDir}
+            {vaultPath}
           </p>
         )}
 
@@ -76,9 +76,6 @@ export function Unlock(): JSX.Element {
             </TabsTrigger>
             <TabsTrigger value="recovery" className="flex-1 gap-1.5">
               <Shield className="h-3.5 w-3.5" /> Recovery
-            </TabsTrigger>
-            <TabsTrigger value="yubikey" className="flex-1 gap-1.5">
-              <Usb className="h-3.5 w-3.5" /> YubiKey
             </TabsTrigger>
           </TabsList>
 
@@ -136,33 +133,6 @@ export function Unlock(): JSX.Element {
               disabled={loading || mnemonic.trim().split(/\s+/).length < 24}
             >
               {loading ? 'Unlocking…' : 'Unlock with recovery key'}
-            </Button>
-          </TabsContent>
-
-          {/* YubiKey tab */}
-          <TabsContent value="yubikey" className="space-y-4">
-            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-6 text-center">
-              <Usb className="mx-auto h-10 w-10 text-[#737373] mb-3" />
-              <p className="text-sm text-[#a3a3a3] mb-1">Insert your YubiKey</p>
-              <p className="text-xs text-[#737373]">Slot 2 (HMAC-SHA1) will be used for authentication.</p>
-            </div>
-
-            {error && <p className="text-sm text-red-400">{error}</p>}
-
-            <Button
-              className="w-full"
-              disabled={loading || !vaultDir}
-              onClick={async () => {
-                if (!vaultDir) return
-                setError(''); setLoading(true)
-                const res = await notvex.vault.openWithYubiKey(vaultDir)
-                setLoading(false)
-                if (!res.success) { setError(res.error); return }
-                if (!res.data) { setError('YubiKey authentication failed.'); return }
-                await afterUnlock()
-              }}
-            >
-              {loading ? 'Waiting for YubiKey…' : 'Authenticate with YubiKey'}
             </Button>
           </TabsContent>
         </Tabs>

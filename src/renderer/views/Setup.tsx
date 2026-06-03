@@ -12,7 +12,7 @@ export function Setup(): JSX.Element {
   const setStatus = useVaultStore((s) => s.setStatus)
 
   const [step, setStep] = useState<Step>('location')
-  const [vaultDir, setVaultDir] = useState('')
+  const [vaultPath, setVaultPath] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -22,9 +22,9 @@ export function Setup(): JSX.Element {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleChooseDir = async (): Promise<void> => {
-    const res = await notvex.vault.chooseDirectory()
-    if (res.success && res.data) setVaultDir(res.data)
+  const handleChooseFile = async (): Promise<void> => {
+    const res = await notvex.vault.chooseFile('new')
+    if (res.success && res.data) setVaultPath(res.data)
   }
 
   const handleCreate = async (): Promise<void> => {
@@ -38,7 +38,7 @@ export function Setup(): JSX.Element {
       return
     }
     setLoading(true)
-    const res = await notvex.vault.create(vaultDir, password)
+    const res = await notvex.vault.create(vaultPath, password)
     setLoading(false)
     if (!res.success) { setError(res.error); return }
     setMnemonic(res.data.mnemonic)
@@ -73,27 +73,27 @@ export function Setup(): JSX.Element {
         {step === 'location' && (
           <div className="space-y-6">
             <div className="space-y-2">
-              <Label>Vault location</Label>
+              <Label>Vault file</Label>
               <div className="flex gap-2">
                 <Input
-                  value={vaultDir}
-                  onChange={(e) => setVaultDir(e.target.value)}
-                  placeholder="Choose a folder..."
+                  value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
+                  placeholder="Choose where to save..."
                   readOnly
+                  title={vaultPath}
                   className="flex-1"
                 />
-                <Button variant="outline" size="icon" onClick={handleChooseDir}>
+                <Button variant="outline" size="icon" onClick={handleChooseFile}>
                   <FolderOpen className="h-4 w-4" />
                 </Button>
               </div>
               <p className="text-xs text-[#737373]">
-                Your vault file <code className="text-emerald-400">notvex.db</code> will be created here.
+                Your vault will be saved as a single <code className="text-emerald-400">.nvx</code> file. Copy it to back up everything.
               </p>
             </div>
 
             <Button
               className="w-full"
-              disabled={!vaultDir}
+              disabled={!vaultPath}
               onClick={() => setStep('password')}
             >
               Continue
@@ -106,7 +106,7 @@ export function Setup(): JSX.Element {
           <div className="space-y-6">
             <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
               <p className="text-xs text-[#737373]">
-                <span className="text-[#a3a3a3]">Location:</span> {vaultDir}
+                <span className="text-[#a3a3a3]">File:</span> {vaultPath}
               </p>
             </div>
 
