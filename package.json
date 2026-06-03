@@ -39,7 +39,6 @@
     "libsodium-wrappers": "^0.7.13",
     "libsodium-wrappers-sumo": "^0.8.4",
     "lucide-react": "^0.460.0",
-    "node-hid": "^3.1.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-markdown": "^9.0.1",
