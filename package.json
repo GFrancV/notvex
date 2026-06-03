@@ -35,6 +35,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
+    "koffi": "^3.0.2",
     "libsodium-wrappers": "^0.7.13",
     "libsodium-wrappers-sumo": "^0.8.4",
     "lucide-react": "^0.460.0",
