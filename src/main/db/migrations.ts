@@ -13,7 +13,6 @@ export async function runMigrations(db: sqlite3.Database): Promise<void> {
       argon2_params         TEXT    NOT NULL,
       verify_hash           TEXT    NOT NULL,
       recovery_verify_hash  TEXT    NOT NULL,
-      yubikey_slot          INTEGER,
       created_at            INTEGER NOT NULL
     )
   `)

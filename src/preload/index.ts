@@ -37,36 +37,26 @@ export interface NoteFilter { trashed?: boolean; tagId?: string }
 export interface CreateTagInput { name: string; color: string }
 export interface TagPatch { name?: string; color?: string }
 
-export interface VaultStatus { isOpen: boolean; vaultDir: string | null }
+export interface VaultStatus { isOpen: boolean; vaultPath: string | null }
 export interface CreateVaultResult { mnemonic: string }
 
 export interface Prefs {
-  vaultDir: string | null
+  vaultPath: string | null
   autoLockMinutes: number
   showPreview: boolean
-}
-
-export interface YubiKeyDevice {
-  vendorId: number
-  productId: number
-  path?: string
-  manufacturer?: string
-  product?: string
 }
 
 type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
 
 export interface NotvexAPI {
   vault: {
-    hasVault(dir?: string): Promise<IpcResult<boolean>>
-    create(dir: string, password: string): Promise<IpcResult<CreateVaultResult>>
-    open(dir: string, password: string): Promise<IpcResult<boolean>>
-    openWithRecovery(dir: string, mnemonic: string): Promise<IpcResult<boolean>>
-    openWithYubiKey(dir: string): Promise<IpcResult<boolean>>
+    hasVault(filePath?: string): Promise<IpcResult<boolean>>
+    create(filePath: string, password: string): Promise<IpcResult<CreateVaultResult>>
+    open(filePath: string, password: string): Promise<IpcResult<boolean>>
+    openWithRecovery(filePath: string, mnemonic: string): Promise<IpcResult<boolean>>
     close(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
-    chooseDirectory(): Promise<IpcResult<string | null>>
-    listYubiKeys(): Promise<IpcResult<YubiKeyDevice[]>>
+    chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
   }
   notes: {
     create(input: CreateNoteInput): Promise<IpcResult<NoteListItem>>
@@ -102,15 +92,13 @@ export interface NotvexAPI {
 
 const api: NotvexAPI = {
   vault: {
-    hasVault: (dir) => ipcRenderer.invoke('vault:has-vault', dir),
-    create: (dir, pw) => ipcRenderer.invoke('vault:create', dir, pw),
-    open: (dir, pw) => ipcRenderer.invoke('vault:open', dir, pw),
-    openWithRecovery: (dir, m) => ipcRenderer.invoke('vault:open-with-recovery', dir, m),
-    openWithYubiKey: (dir) => ipcRenderer.invoke('vault:open-with-yubikey', dir),
+    hasVault: (filePath) => ipcRenderer.invoke('vault:has-vault', filePath),
+    create: (filePath, pw) => ipcRenderer.invoke('vault:create', filePath, pw),
+    open: (filePath, pw) => ipcRenderer.invoke('vault:open', filePath, pw),
+    openWithRecovery: (filePath, m) => ipcRenderer.invoke('vault:open-with-recovery', filePath, m),
     close: () => ipcRenderer.invoke('vault:close'),
     status: () => ipcRenderer.invoke('vault:status'),
-    chooseDirectory: () => ipcRenderer.invoke('vault:choose-directory'),
-    listYubiKeys: () => ipcRenderer.invoke('vault:list-yubikeys'),
+    chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode),
   },
   notes: {
     create: (input) => ipcRenderer.invoke('notes:create', input),

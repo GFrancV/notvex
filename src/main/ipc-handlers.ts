@@ -7,10 +7,10 @@ import {
   isVaultOpen,
   getMasterKey,
   getDb,
-  getVaultDir,
+  getVaultPath,
   vaultExistsAt,
+  syncContainer,
 } from './vault/vault'
-import { deriveKeyFromYubiKey, listYubiKeys } from './vault/yubikey'
 import {
   createNote,
   getNote,
@@ -49,10 +49,11 @@ function requireVault(): void {
   if (!isVaultOpen()) throw new Error('Vault is locked')
 }
 
-// ─── Auto-lock state ─────────────────────────────────────────────────────────
+// ─── Auto-lock + periodic sync state ─────────────────────────────────────────
 
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
+let syncTimer: ReturnType<typeof setInterval> | null = null
 let mainWindowRef: BrowserWindow | null = null
 
 function touchActivity(): void {
@@ -64,7 +65,7 @@ function startAutoLockTimer(win: BrowserWindow): void {
   mainWindowRef = win
   autoLockTimer = setInterval(async () => {
     const minutes = getPref('autoLockMinutes')
-    if (minutes === 0) return // 0 = never
+    if (minutes === 0) return
     if (!isVaultOpen()) return
     const elapsed = (Date.now() - lastActivityAt) / 60000
     if (elapsed >= minutes) {
@@ -72,10 +73,15 @@ function startAutoLockTimer(win: BrowserWindow): void {
       mainWindowRef?.webContents.send('vault:auto-locked')
     }
   }, 60_000)
+
+  // Repack the .nvx container every 5 minutes for crash safety
+  if (syncTimer) clearInterval(syncTimer)
+  syncTimer = setInterval(() => { syncContainer() }, 5 * 60_000)
 }
 
 export function stopAutoLockTimer(): void {
   if (autoLockTimer) { clearInterval(autoLockTimer); autoLockTimer = null }
+  if (syncTimer) { clearInterval(syncTimer); syncTimer = null }
 }
 
 // ─── Register all handlers ────────────────────────────────────────────────────
@@ -85,51 +91,38 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   // ── Vault ──────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('vault:has-vault', (_e, dir?: string) => {
+  ipcMain.handle('vault:has-vault', (_e, filePath?: string) => {
     try {
-      const path = dir ?? getPref('vaultDir')
+      const path = filePath ?? getPref('vaultPath')
       return ok(path ? vaultExistsAt(path) : false)
     } catch (e) { return fail(e) }
   })
 
-  ipcMain.handle('vault:create', async (_e, dir: string, password: string) => {
+  ipcMain.handle('vault:create', async (_e, filePath: string, password: string) => {
     try {
-      const result = await createVault(dir, password)
-      setPref('vaultDir', dir)
+      const result = await createVault(filePath, password)
+      setPref('vaultPath', filePath)
       touchActivity()
       return ok(result)
     } catch (e) { return fail(e) }
   })
 
-  ipcMain.handle('vault:open', async (_e, dir: string, password: string) => {
+  ipcMain.handle('vault:open', async (_e, filePath: string, password: string) => {
     try {
-      const success = await openVault(dir, password)
-      if (success) { setPref('vaultDir', dir); touchActivity() }
+      const success = await openVault(filePath, password)
+      if (success) { setPref('vaultPath', filePath); touchActivity() }
       return ok(success)
     } catch (e) { return fail(e) }
   })
 
-  ipcMain.handle('vault:open-with-recovery', async (_e, dir: string, mnemonic: string) => {
+  ipcMain.handle('vault:open-with-recovery', async (_e, filePath: string, mnemonic: string) => {
     try {
-      const success = await openVaultWithRecovery(dir, mnemonic)
-      if (success) { setPref('vaultDir', dir); touchActivity() }
+      const success = await openVaultWithRecovery(filePath, mnemonic)
+      if (success) { setPref('vaultPath', filePath); touchActivity() }
       return ok(success)
     } catch (e) { return fail(e) }
   })
 
-  ipcMain.handle('vault:open-with-yubikey', async (_e, dir: string) => {
-    try {
-      const { readFileSync } = await import('fs')
-      const { join } = await import('path')
-      const sidecar = JSON.parse(readFileSync(join(dir, 'notvex.json'), 'utf8')) as {
-        argon2_salt: string
-        argon2_params: { memory: number; iterations: number; parallelism: number }
-      }
-      const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
-      const _key = await deriveKeyFromYubiKey(salt) // TODO: use this key to open vault
-      return ok(false) // YubiKey vault opening: Phase 6 completion
-    } catch (e) { return fail(e) }
-  })
 
   ipcMain.handle('vault:close', async () => {
     try { await closeVault(); return ok(null) }
@@ -137,22 +130,27 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   })
 
   ipcMain.handle('vault:status', () => {
-    return ok({ isOpen: isVaultOpen(), vaultDir: getVaultDir() })
+    return ok({ isOpen: isVaultOpen(), vaultPath: getVaultPath() })
   })
 
-  ipcMain.handle('vault:choose-directory', async () => {
+  ipcMain.handle('vault:choose-file', async (_e, mode: 'new' | 'existing') => {
     try {
-      const result = await dialog.showOpenDialog(win, {
-        properties: ['openDirectory'],
-        title: 'Choose vault location',
-      })
-      return ok(result.canceled ? null : result.filePaths[0])
+      if (mode === 'new') {
+        const result = await dialog.showSaveDialog(win, {
+          title: 'Create new vault',
+          defaultPath: 'vault.nvx',
+          filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }],
+        })
+        return ok(result.canceled ? null : result.filePath)
+      } else {
+        const result = await dialog.showOpenDialog(win, {
+          title: 'Open existing vault',
+          properties: ['openFile'],
+          filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }],
+        })
+        return ok(result.canceled ? null : result.filePaths[0])
+      }
     } catch (e) { return fail(e) }
-  })
-
-  ipcMain.handle('vault:list-yubikeys', () => {
-    try { return ok(listYubiKeys()) }
-    catch (e) { return fail(e) }
   })
 
   // ── Notes ─────────────────────────────────────────────────────────────────
