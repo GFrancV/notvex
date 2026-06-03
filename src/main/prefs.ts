@@ -3,13 +3,13 @@ import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 
 export interface Prefs {
-  vaultDir: string | null
+  vaultPath: string | null
   autoLockMinutes: number
   showPreview: boolean
 }
 
 const DEFAULTS: Prefs = {
-  vaultDir: null,
+  vaultPath: null,
   autoLockMinutes: 15,
   showPreview: false,
 }

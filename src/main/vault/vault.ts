@@ -1,14 +1,14 @@
 /**
  * vault.ts — SQLCipher vault lifecycle
  *
- * Bootstrap data lives in a sidecar `notvex.json` alongside `notvex.db`:
- * - argon2_salt + params: needed to re-derive the master key from the password
- * - verify_hash: BLAKE2b(masterKey) — lets us validate the password quickly
- * - recovery_encrypted_master_key / recovery_nonce: masterKey encrypted with
- *   the recovery-derived key, so the mnemonic can recover access
+ * The vault is stored as a single opaque .nvx file (see container.ts):
+ *   [4B magic "NVEX"][2B version][4B sidecar length][sidecar JSON][SQLCipher DB bytes]
  *
- * The SQLCipher PRAGMA key is always the password-derived master key.
- * Recovery decrypts that same master key from the sidecar, not a separate key.
+ * At runtime the DB bytes are extracted to a temporary file and opened with
+ * SQLCipher. On close the temp file is repacked into the .nvx container then
+ * deleted. The sidecar (plaintext) holds the Argon2id salt, params, verify hash,
+ * and the recovery-wrapped master key — everything needed to re-derive or recover
+ * the master key without access to the encrypted DB.
  *
  * Memory security:
  * - masterKey lives in a native Buffer (outside V8 GC heap) locked with
@@ -17,8 +17,7 @@
  */
 import sqlcipher from '@journeyapps/sqlcipher'
 import type sqlite3 from '@journeyapps/sqlcipher'
-import { join } from 'path'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, unlinkSync } from 'fs'
 import {
   initSodium,
   generateSalt,
@@ -34,42 +33,28 @@ import { allocSecure, freeSecure } from './memlock'
 import { generateMnemonic, mnemonicToMasterKey, validateMnemonic } from './recovery'
 import { runMigrations } from '../db/migrations'
 import { dbRun, dbGet } from '../db/queries'
+import { readContainer, writeContainer, makeTempDbPath, isNotvexContainer } from './container'
 
 // ─── Sidecar schema ──────────────────────────────────────────────────────────
 
 interface VaultSidecar {
   version: number
-  argon2_salt: string        // hex
+  argon2_salt: string
   argon2_params: Argon2Params
-  verify_hash: string        // hex: BLAKE2b(masterKey)
-  recovery_encrypted_master_key: string  // hex
-  recovery_nonce: string     // hex
+  verify_hash: string
+  recovery_encrypted_master_key: string
+  recovery_nonce: string
 }
 
 // ─── Module state ────────────────────────────────────────────────────────────
 
 let db: sqlite3.Database | null = null
-let masterKey: Buffer | null = null   // native heap, VirtualLock'd
-let currentVaultDir: string | null = null
+let masterKey: Buffer | null = null
+let currentVaultPath: string | null = null
+let currentSidecar: VaultSidecar | null = null
+let tempDbPath: string | null = null
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
-
-function sidecarPath(dir: string): string {
-  return join(dir, 'notvex.json')
-}
-
-function dbFilePath(dir: string): string {
-  return join(dir, 'notvex.db')
-}
-
-function readSidecar(dir: string): VaultSidecar {
-  const raw = readFileSync(sidecarPath(dir), 'utf8')
-  return JSON.parse(raw) as VaultSidecar
-}
-
-function writeSidecar(dir: string, data: VaultSidecar): void {
-  writeFileSync(sidecarPath(dir), JSON.stringify(data, null, 2))
-}
 
 function openDatabase(path: string): Promise<sqlite3.Database> {
   return new Promise((resolve, reject) => {
@@ -102,11 +87,11 @@ async function applyKey(database: sqlite3.Database, key: Uint8Array): Promise<vo
 }
 
 // Moves rawKey (WASM-backed or native Uint8Array) into a locked native Buffer
-// and zeros the original immediately. Call this as the last step before storing.
+// and zeros the original immediately.
 function storeKey(rawKey: Uint8Array): Buffer {
   const secure = allocSecure(rawKey.length)
   secure.set(rawKey)
-  memzero(rawKey) // zero the WASM/native copy
+  memzero(rawKey)
   return secure
 }
 
@@ -137,6 +122,14 @@ function decryptMasterKey(
   return new Uint8Array(Buffer.from(hex, 'hex'))
 }
 
+// Reads the current temp DB and repacks the .nvx container. Safe to call while
+// the DB is idle (not mid-transaction). Does nothing if state is incomplete.
+function packContainer(): void {
+  if (!currentVaultPath || !currentSidecar || !tempDbPath) return
+  const dbBytes = readFileSync(tempDbPath)
+  writeContainer(currentVaultPath, JSON.stringify(currentSidecar), dbBytes)
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function isVaultOpen(): boolean {
@@ -153,22 +146,22 @@ export function getDb(): sqlite3.Database {
   return db
 }
 
-export function getVaultDir(): string | null {
-  return currentVaultDir
+export function getVaultPath(): string | null {
+  return currentVaultPath
 }
 
-export function vaultExistsAt(dir: string): boolean {
-  return existsSync(dbFilePath(dir)) && existsSync(sidecarPath(dir))
+export function vaultExistsAt(filePath: string): boolean {
+  return isNotvexContainer(filePath)
 }
 
 export interface CreateVaultResult {
   mnemonic: string
 }
 
-export async function createVault(dir: string, password: string): Promise<CreateVaultResult> {
+export async function createVault(filePath: string, password: string): Promise<CreateVaultResult> {
   await initSodium()
 
-  if (vaultExistsAt(dir)) {
+  if (vaultExistsAt(filePath)) {
     throw new Error('A vault already exists at this location.')
   }
 
@@ -179,25 +172,27 @@ export async function createVault(dir: string, password: string): Promise<Create
   const rawKey = deriveKey(password, salt, params)
   const verifyHash = hashForVerify(rawKey)
 
-  // Create and key the SQLCipher database
-  const database = await openDatabase(dbFilePath(dir))
+  // Build the DB in a temp file
+  const tmp = makeTempDbPath()
+  const database = await openDatabase(tmp)
   await applyKey(database, rawKey)
   await runMigrations(database)
 
-  // Insert vault_meta row for version tracking
   await dbRun(database, `
-    INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, verify_hash, recovery_verify_hash, yubikey_slot, created_at)
-    VALUES (1, 1, ?, ?, ?, '', NULL, ?)`,
+    INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, verify_hash, recovery_verify_hash, created_at)
+    VALUES (1, 1, ?, ?, ?, '', ?)`,
     [Buffer.from(salt), JSON.stringify(params), verifyHash, Date.now()],
   )
 
-  // Generate recovery mnemonic and wrap the master key with it
   const mnemonic = generateMnemonic()
   const recoveryKey = mnemonicToMasterKey(mnemonic)
   const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(rawKey, recoveryKey)
   memzero(recoveryKey)
 
-  // Write sidecar (bootstrap data — salt is public by design, not sensitive)
+  // Close DB to flush all pages to the temp file, then pack the .nvx container
+  await closeDatabase(database)
+  const dbBytes = readFileSync(tmp)
+
   const sidecar: VaultSidecar = {
     version: 1,
     argon2_salt: Buffer.from(salt).toString('hex'),
@@ -206,21 +201,28 @@ export async function createVault(dir: string, password: string): Promise<Create
     recovery_encrypted_master_key: recCipher,
     recovery_nonce: recNonce,
   }
-  writeSidecar(dir, sidecar)
+  writeContainer(filePath, JSON.stringify(sidecar), dbBytes)
 
-  db = database
-  masterKey = storeKey(rawKey) // rawKey is zeroed inside storeKey
-  currentVaultDir = dir
+  // Reopen the temp DB for the active session
+  const reopened = await openDatabase(tmp)
+  await applyKey(reopened, rawKey)
+
+  db = reopened
+  masterKey = storeKey(rawKey)
+  currentVaultPath = filePath
+  currentSidecar = sidecar
+  tempDbPath = tmp
 
   return { mnemonic }
 }
 
-export async function openVault(dir: string, password: string): Promise<boolean> {
+export async function openVault(filePath: string, password: string): Promise<boolean> {
   await initSodium()
 
-  if (!vaultExistsAt(dir)) throw new Error('Vault not found at the specified location.')
+  if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
 
-  const sidecar = readSidecar(dir)
+  const { sidecarJson, dbBytes } = readContainer(filePath)
+  const sidecar = JSON.parse(sidecarJson) as VaultSidecar
   const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
   const rawKey = deriveKey(password, salt, sidecar.argon2_params)
 
@@ -229,30 +231,36 @@ export async function openVault(dir: string, password: string): Promise<boolean>
     return false
   }
 
-  const database = await openDatabase(dbFilePath(dir))
+  const tmp = makeTempDbPath()
+  writeFileSync(tmp, dbBytes)
+
+  const database = await openDatabase(tmp)
   await applyKey(database, rawKey)
 
-  // Sanity check: make sure the DB is readable with this key
   const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
   if (!meta) {
     await closeDatabase(database)
+    try { unlinkSync(tmp) } catch { /* ignore */ }
     memzero(rawKey)
     throw new Error('Vault database could not be read. It may be corrupted.')
   }
 
   db = database
   masterKey = storeKey(rawKey)
-  currentVaultDir = dir
+  currentVaultPath = filePath
+  currentSidecar = sidecar
+  tempDbPath = tmp
   return true
 }
 
-export async function openVaultWithRecovery(dir: string, mnemonic: string): Promise<boolean> {
+export async function openVaultWithRecovery(filePath: string, mnemonic: string): Promise<boolean> {
   await initSodium()
 
-  if (!vaultExistsAt(dir)) throw new Error('Vault not found at the specified location.')
+  if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
   if (!validateMnemonic(mnemonic)) return false
 
-  const sidecar = readSidecar(dir)
+  const { sidecarJson, dbBytes } = readContainer(filePath)
+  const sidecar = JSON.parse(sidecarJson) as VaultSidecar
   const recoveryKey = mnemonicToMasterKey(mnemonic)
 
   let rawKey: Uint8Array
@@ -269,20 +277,33 @@ export async function openVaultWithRecovery(dir: string, mnemonic: string): Prom
     memzero(recoveryKey)
   }
 
-  const database = await openDatabase(dbFilePath(dir))
+  const tmp = makeTempDbPath()
+  writeFileSync(tmp, dbBytes)
+
+  const database = await openDatabase(tmp)
   await applyKey(database, rawKey)
 
   const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
   if (!meta) {
     await closeDatabase(database)
+    try { unlinkSync(tmp) } catch { /* ignore */ }
     rawKey.fill(0)
     return false
   }
 
   db = database
   masterKey = storeKey(rawKey)
-  currentVaultDir = dir
+  currentVaultPath = filePath
+  currentSidecar = sidecar
+  tempDbPath = tmp
   return true
+}
+
+// Repacks the .nvx container from the current temp DB without closing the session.
+// Called periodically for crash safety. No-op if vault is closed.
+export function syncContainer(): void {
+  if (!isVaultOpen()) return
+  try { packContainer() } catch { /* don't disrupt the session */ }
 }
 
 export async function closeVault(): Promise<void> {
@@ -291,5 +312,11 @@ export async function closeVault(): Promise<void> {
     try { await closeDatabase(db) } catch { /* ignore */ }
     db = null
   }
-  currentVaultDir = null
+  if (tempDbPath && currentVaultPath && currentSidecar) {
+    try { packContainer() } catch { /* don't throw on close */ }
+    try { unlinkSync(tempDbPath) } catch { /* ignore */ }
+  }
+  currentVaultPath = null
+  currentSidecar = null
+  tempDbPath = null
 }
