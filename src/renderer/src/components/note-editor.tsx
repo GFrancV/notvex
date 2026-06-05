@@ -11,7 +11,7 @@ import { livePreviewPlugin, livePreviewTheme } from '../lib/editor/live-preview'
 import { notvex } from '../lib/ipc'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
-import { EditorToolbar } from './editor-toolbar'
+import { EditorContextMenu } from './editor-context-menu'
 import { NoteReadingView } from './note-reading-view'
 import { Button } from './ui/button'
 import {
@@ -19,7 +19,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
 
@@ -41,7 +40,7 @@ const notvexEditorTheme = EditorView.theme({
 
 const AUTOSAVE_DELAY = 500
 
-export function NoteEditor(): JSX.Element | null {
+export function NoteEditor() {
   const { activeNoteId, loadNotes, loadTagCounts } = useVaultStore()
   const { editorMode, toggleEditorMode } = useUiStore()
 
@@ -50,7 +49,7 @@ export function NoteEditor(): JSX.Element | null {
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>()
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const activeIdRef = useRef<string | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
 
@@ -180,16 +179,6 @@ export function NoteEditor(): JSX.Element | null {
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuGroup>
-                <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Billing</DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem>Team</DropdownMenuItem>
-                <DropdownMenuItem>Subscription</DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
                 <DropdownMenuItem
                   variant="destructive"
                   onClick={() => void handleTrash()}
@@ -204,44 +193,43 @@ export function NoteEditor(): JSX.Element | null {
         </div>
       </div>
 
-      {/* Formatting toolbar — only in editing mode */}
-      {editorMode === 'editing' && <EditorToolbar editorView={editorViewRef.current} />}
-
       {/* Editor / Reading view */}
       <div className="flex min-h-0 flex-1">
         {editorMode === 'reading' ? (
           <NoteReadingView content={content} />
         ) : (
-          <CodeMirror
-            value={content}
-            theme="dark"
-            extensions={[
-              markdown({ base: markdownLanguage }),
-              oneDark,
-              notvexEditorTheme,
-              livePreviewPlugin,
-              livePreviewTheme
-            ]}
-            onChange={handleContentChange}
-            onCreateEditor={(view) => {
-              editorViewRef.current = view
-              view.focus()
-            }}
-            basicSetup={{
-              lineNumbers: false,
-              foldGutter: false,
-              dropCursor: false,
-              allowMultipleSelections: false,
-              indentOnInput: false,
-              highlightActiveLine: true,
-              highlightSelectionMatches: false,
-              closeBrackets: false,
-              autocompletion: false,
-              crosshairCursor: false,
-              highlightActiveLineGutter: false
-            }}
-            className="h-full w-full overflow-auto"
-          />
+          <EditorContextMenu editorView={editorViewRef.current}>
+            <CodeMirror
+              value={content}
+              theme="dark"
+              extensions={[
+                markdown({ base: markdownLanguage }),
+                oneDark,
+                notvexEditorTheme,
+                livePreviewPlugin,
+                livePreviewTheme
+              ]}
+              onChange={handleContentChange}
+              onCreateEditor={(view) => {
+                editorViewRef.current = view
+                view.focus()
+              }}
+              basicSetup={{
+                lineNumbers: false,
+                foldGutter: false,
+                dropCursor: false,
+                allowMultipleSelections: false,
+                indentOnInput: false,
+                highlightActiveLine: true,
+                highlightSelectionMatches: false,
+                closeBrackets: false,
+                autocompletion: false,
+                crosshairCursor: false,
+                highlightActiveLineGutter: false
+              }}
+              className="h-full w-full overflow-auto"
+            />
+          </EditorContextMenu>
         )}
       </div>
     </div>
