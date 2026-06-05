@@ -14,6 +14,7 @@ import {
   FileText, Pin, Trash2, Tag as TagIcon, Settings, Lock, Plus, ChevronRight,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { ChangePasswordDialog } from './ChangePasswordDialog'
 import type { Tag } from '../../preload/index'
 
 export function Sidebar(): JSX.Element {
@@ -21,6 +22,7 @@ export function Sidebar(): JSX.Element {
   const { activeTagFilter, showTrash, setActiveTagFilter, setShowTrash, setSettingsOpen } = useUiStore()
 
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [autoLockMinutes, setAutoLockMinutes] = useState(15)
   const [vaultPath, setVaultPath] = useState<string | null>(null)
 
@@ -95,6 +97,17 @@ export function Sidebar(): JSX.Element {
                   <p className="text-xs text-[#737373] break-all">{vaultPath}</p>
                 </div>
               )}
+              <div className="space-y-1">
+                <p className="text-xs text-[#737373] font-medium uppercase tracking-wide">Security</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-[#a3a3a3] hover:text-[#e5e5e5] h-8 px-2 text-xs"
+                  onClick={() => { setChangePasswordOpen(true); setSettingsPopoverOpen(false) }}
+                >
+                  Change password
+                </Button>
+              </div>
               <Separator />
               <Button variant="destructive" size="sm" className="w-full" onClick={handleLock}>
                 <Lock className="h-3.5 w-3.5 mr-2" /> Lock vault
@@ -160,6 +173,11 @@ export function Sidebar(): JSX.Element {
         <div className="h-2 w-2 rounded-full bg-emerald-500" />
         <span className="text-xs text-[#737373]">Vault unlocked</span>
       </div>
+
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+      />
     </div>
   )
 }
