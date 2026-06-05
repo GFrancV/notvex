@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import { app } from 'electron'
@@ -6,13 +6,11 @@ import { app } from 'electron'
 export interface Prefs {
   vaultPath: string | null
   autoLockMinutes: number
-  showPreview: boolean
 }
 
 const DEFAULTS: Prefs = {
   vaultPath: null,
-  autoLockMinutes: 15,
-  showPreview: false,
+  autoLockMinutes: 15
 }
 
 function prefsPath(): string {

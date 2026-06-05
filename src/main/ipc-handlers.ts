@@ -1,39 +1,39 @@
 import type { BrowserWindow } from 'electron'
-import { ipcMain, dialog } from 'electron'
+import { dialog, ipcMain, shell } from 'electron'
 
+import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
-  createNote,
-  getNote,
-  listNotes,
-  updateNote,
-  trashNote,
-  restoreNote,
-  deleteNote,
-  emptyTrash,
-  searchNotesByTitle,
-  createTag,
-  listTags,
-  updateTag,
-  deleteTag,
   addTagToNote,
-  removeTagFromNote,
-  getNoteTags,
+  createNote,
+  createTag,
+  deleteNote,
+  deleteTag,
+  emptyTrash,
+  getNote,
   getNoteCountPerTag,
+  getNoteTags,
+  listNotes,
+  listTags,
+  removeTagFromNote,
+  restoreNote,
+  searchNotesByTitle,
+  trashNote,
+  updateNote,
+  updateTag
 } from './db/queries'
-import type { CreateNoteInput, NotePatch, NoteFilter, CreateTagInput, TagPatch } from './db/queries'
-import { getPrefs, setPrefs, getPref, setPref } from './prefs'
+import { getPref, getPrefs, setPref, setPrefs } from './prefs'
 import {
+  changePassword,
+  closeVault,
   createVault,
+  getDb,
+  getMasterKey,
+  getVaultPath,
+  isVaultOpen,
   openVault,
   openVaultWithRecovery,
-  closeVault,
-  changePassword,
-  isVaultOpen,
-  getMasterKey,
-  getDb,
-  getVaultPath,
-  vaultExistsAt,
   syncContainer,
+  vaultExistsAt
 } from './vault/vault'
 
 // ─── IPC envelope helper ─────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       } catch (e) {
         return fail(e)
       }
-    },
+    }
   )
 
   ipcMain.handle('vault:close', async () => {
@@ -183,14 +183,14 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         const result = await dialog.showSaveDialog(win, {
           title: 'Create new vault',
           defaultPath: 'vault.nvx',
-          filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }],
+          filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }]
         })
         return ok(result.canceled ? null : result.filePath)
       } else {
         const result = await dialog.showOpenDialog(win, {
           title: 'Open existing vault',
           properties: ['openFile'],
-          filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }],
+          filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }]
         })
         return ok(result.canceled ? null : result.filePaths[0])
       }
@@ -401,6 +401,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(null)
     } catch (e) {
       return fail(e)
+    }
+  })
+
+  ipcMain.handle('shell:open-external', async (_e, url: string) => {
+    if (/^https?:\/\//.test(url)) {
+      await shell.openExternal(url)
     }
   })
 }
