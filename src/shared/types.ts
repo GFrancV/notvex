@@ -63,7 +63,6 @@ export interface ChangePasswordResult {
 export interface Prefs {
   vaultPath: string | null
   autoLockMinutes: number
-  showPreview: boolean
 }
 
 export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
@@ -108,6 +107,9 @@ export interface NotvexAPI {
   prefs: {
     get(key?: string): Promise<IpcResult<Prefs | Prefs[keyof Prefs]>>
     set(key: string, value: unknown): Promise<IpcResult<null>>
+  }
+  shell: {
+    openExternal(url: string): Promise<void>
   }
   onAutoLocked(callback: () => void): () => void
 }
