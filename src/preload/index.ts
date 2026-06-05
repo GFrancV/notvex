@@ -1,20 +1,20 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 export type {
-  Note,
-  NoteListItem,
-  Tag,
-  CreateNoteInput,
-  NotePatch,
-  NoteFilter,
-  CreateTagInput,
-  TagPatch,
-  VaultStatus,
-  CreateVaultResult,
   ChangePasswordResult,
-  Prefs,
+  CreateNoteInput,
+  CreateTagInput,
+  CreateVaultResult,
   IpcResult,
+  Note,
+  NoteFilter,
+  NoteListItem,
+  NotePatch,
   NotvexAPI,
+  Prefs,
+  Tag,
+  TagPatch,
+  VaultStatus
 } from '../shared/types'
 
 import type { NotvexAPI } from '../shared/types'
@@ -30,7 +30,7 @@ const api: NotvexAPI = {
     changePassword: (cur, next) => ipcRenderer.invoke('vault:change-password', cur, next),
     close: () => ipcRenderer.invoke('vault:close'),
     status: () => ipcRenderer.invoke('vault:status'),
-    chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode),
+    chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode)
   },
   notes: {
     create: (input) => ipcRenderer.invoke('notes:create', input),
@@ -41,23 +41,26 @@ const api: NotvexAPI = {
     restore: (id) => ipcRenderer.invoke('notes:restore', id),
     delete: (id) => ipcRenderer.invoke('notes:delete', id),
     emptyTrash: () => ipcRenderer.invoke('notes:empty-trash'),
-    search: (q) => ipcRenderer.invoke('notes:search', q),
+    search: (q) => ipcRenderer.invoke('notes:search', q)
   },
   tags: {
     create: (input) => ipcRenderer.invoke('tags:create', input),
     list: () => ipcRenderer.invoke('tags:list'),
     update: (id, patch) => ipcRenderer.invoke('tags:update', id, patch),
-    delete: (id) => ipcRenderer.invoke('tags:delete', id),
+    delete: (id) => ipcRenderer.invoke('tags:delete', id)
   },
   noteTags: {
     add: (n, t) => ipcRenderer.invoke('note-tags:add', n, t),
     remove: (n, t) => ipcRenderer.invoke('note-tags:remove', n, t),
     list: (n) => ipcRenderer.invoke('note-tags:list', n),
-    counts: () => ipcRenderer.invoke('note-tags:counts'),
+    counts: () => ipcRenderer.invoke('note-tags:counts')
   },
   prefs: {
     get: (key) => ipcRenderer.invoke('prefs:get', key),
-    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
+    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value)
+  },
+  shell: {
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
   },
   onAutoLocked: (callback) => {
     const listener = (): void => callback()
@@ -65,7 +68,7 @@ const api: NotvexAPI = {
     return (): void => {
       ipcRenderer.off('vault:auto-locked', listener)
     }
-  },
+  }
 }
 
 contextBridge.exposeInMainWorld('notvex', api)
