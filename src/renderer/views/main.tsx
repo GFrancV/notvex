@@ -10,7 +10,7 @@ import { useVaultStore } from '../store/vault.store'
 
 export function Main(): JSX.Element {
   const { refreshAll, setActiveNoteId, loadNotes, setStatus, setNotes } = useVaultStore()
-  const { setShowTrash, togglePreview } = useUiStore()
+  const { setShowTrash, toggleEditorMode } = useUiStore()
 
   // Load initial data
   useEffect(() => {
@@ -54,11 +54,6 @@ export function Main(): JSX.Element {
             }
             break
 
-          case 'p':
-            e.preventDefault()
-            togglePreview()
-            break
-
           case 'k':
             // Handled by CommandPalette component itself
             break
@@ -67,16 +62,26 @@ export function Main(): JSX.Element {
             break
         }
 
-        if (mod && e.shiftKey && e.key.toLowerCase() === 't') {
-          e.preventDefault()
-          setShowTrash(true)
+        if (mod && e.shiftKey) {
+          switch (e.key.toLowerCase()) {
+            case 't':
+              e.preventDefault()
+              setShowTrash(true)
+              break
+            case 'e':
+              e.preventDefault()
+              toggleEditorMode()
+              break
+            default:
+              break
+          }
         }
       })()
     }
 
     window.addEventListener('keydown', handler)
     return (): void => window.removeEventListener('keydown', handler)
-  }, [loadNotes, setStatus, setActiveNoteId, setNotes, togglePreview, setShowTrash])
+  }, [loadNotes, setStatus, setActiveNoteId, setNotes, toggleEditorMode, setShowTrash])
 
   return (
     <div className="bg-background pt-8.5">

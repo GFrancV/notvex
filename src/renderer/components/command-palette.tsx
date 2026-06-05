@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback } from 'react'
 
 import { Command } from 'cmdk'
-import { FileText, Plus, Lock, Columns2, Trash2 } from 'lucide-react'
+import { FileText, Plus, Lock, Eye, Trash2 } from 'lucide-react'
 
 import type { NoteListItem } from '../../shared/types'
 import { notvex } from '../lib/ipc'
@@ -9,7 +9,7 @@ import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
 
 export function CommandPalette(): JSX.Element | null {
-  const { commandPaletteOpen, setCommandPaletteOpen, togglePreview, setShowTrash } = useUiStore()
+  const { commandPaletteOpen, setCommandPaletteOpen, toggleEditorMode, setShowTrash } = useUiStore()
   const {
     notes,
     setStatus,
@@ -89,10 +89,10 @@ export function CommandPalette(): JSX.Element | null {
                 onSelect={() => run(handleNewNote)}
               />
               <PaletteItem
-                icon={<Columns2 className="h-4 w-4" />}
-                label="Toggle Preview"
-                shortcut="Ctrl+P"
-                onSelect={() => run(togglePreview)}
+                icon={<Eye className="h-4 w-4" />}
+                label="Toggle Reading View"
+                shortcut="Ctrl+Shift+E"
+                onSelect={() => run(toggleEditorMode)}
               />
               <PaletteItem
                 icon={<Trash2 className="h-4 w-4" />}
