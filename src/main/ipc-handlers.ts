@@ -4,6 +4,7 @@ import {
   openVault,
   openVaultWithRecovery,
   closeVault,
+  changePassword,
   isVaultOpen,
   getMasterKey,
   getDb,
@@ -123,6 +124,14 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     } catch (e) { return fail(e) }
   })
 
+
+  ipcMain.handle('vault:change-password', async (_e, currentPassword: string, newPassword: string) => {
+    try {
+      requireVault(); touchActivity()
+      const result = await changePassword(currentPassword, newPassword)
+      return ok(result)
+    } catch (e) { return fail(e) }
+  })
 
   ipcMain.handle('vault:close', async () => {
     try { await closeVault(); return ok(null) }

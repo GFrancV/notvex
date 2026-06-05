@@ -39,6 +39,7 @@ export interface TagPatch { name?: string; color?: string }
 
 export interface VaultStatus { isOpen: boolean; vaultPath: string | null }
 export interface CreateVaultResult { mnemonic: string }
+export interface ChangePasswordResult { mnemonic: string }
 
 export interface Prefs {
   vaultPath: string | null
@@ -54,6 +55,7 @@ export interface NotvexAPI {
     create(filePath: string, password: string): Promise<IpcResult<CreateVaultResult>>
     open(filePath: string, password: string): Promise<IpcResult<boolean>>
     openWithRecovery(filePath: string, mnemonic: string): Promise<IpcResult<boolean>>
+    changePassword(currentPassword: string, newPassword: string): Promise<IpcResult<ChangePasswordResult>>
     close(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
     chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
@@ -96,6 +98,7 @@ const api: NotvexAPI = {
     create: (filePath, pw) => ipcRenderer.invoke('vault:create', filePath, pw),
     open: (filePath, pw) => ipcRenderer.invoke('vault:open', filePath, pw),
     openWithRecovery: (filePath, m) => ipcRenderer.invoke('vault:open-with-recovery', filePath, m),
+    changePassword: (cur, next) => ipcRenderer.invoke('vault:change-password', cur, next),
     close: () => ipcRenderer.invoke('vault:close'),
     status: () => ipcRenderer.invoke('vault:status'),
     chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode),

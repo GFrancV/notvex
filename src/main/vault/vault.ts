@@ -15,25 +15,25 @@
  *   VirtualLock/mlock so the OS cannot page it to disk.
  * - All intermediate key copies are zeroed immediately after use.
  */
-import sqlcipher from '@journeyapps/sqlcipher'
 import type sqlite3 from '@journeyapps/sqlcipher'
-import { readFileSync, writeFileSync, unlinkSync } from 'fs'
+import sqlcipher from '@journeyapps/sqlcipher'
+import { readFileSync, unlinkSync, writeFileSync } from 'fs'
+import { runMigrations } from '../db/migrations'
+import { dbAll, dbGet, dbRun } from '../db/queries'
+import { isNotvexContainer, makeTempDbPath, readContainer, writeContainer } from './container'
 import {
-  initSodium,
-  generateSalt,
-  deriveKey,
-  hashForVerify,
-  encryptField,
-  decryptField,
-  memzero,
   calibrateArgon2id,
+  decryptField,
+  deriveKey,
+  encryptField,
+  generateSalt,
+  hashForVerify,
+  initSodium,
+  memzero,
   type Argon2Params,
 } from './crypto'
 import { allocSecure, freeSecure } from './memlock'
 import { generateMnemonic, mnemonicToMasterKey, validateMnemonic } from './recovery'
-import { runMigrations } from '../db/migrations'
-import { dbRun, dbGet } from '../db/queries'
-import { readContainer, writeContainer, makeTempDbPath, isNotvexContainer } from './container'
 
 // ─── Sidecar schema ──────────────────────────────────────────────────────────
 
@@ -297,6 +297,119 @@ export async function openVaultWithRecovery(filePath: string, mnemonic: string):
   currentSidecar = sidecar
   tempDbPath = tmp
   return true
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ mnemonic: string }> {
+  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+    throw new Error('Vault is not open')
+  }
+
+  // Step 1 — verify current password
+  const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
+  const testKey = deriveKey(currentPassword, salt, currentSidecar.argon2_params)
+  if (hashForVerify(testKey) !== currentSidecar.verify_hash) {
+    memzero(testKey)
+    throw new Error('Current password is incorrect')
+  }
+  memzero(testKey)
+
+  // Step 2 — derive new key with a fresh salt
+  const newSalt = generateSalt()
+  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params)
+  const newVerifyHash = hashForVerify(newRawKey)
+
+  // Capture old key hex for rollback if steps after rekey fail
+  const oldKeyHex = masterKey.toString('hex')
+
+  // Step 3 — re-key SQLCipher in-place
+  const newHex = Buffer.from(newRawKey).toString('hex')
+  await new Promise<void>((resolve, reject) => {
+    db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+      err ? reject(err) : resolve(),
+    )
+  })
+
+  try {
+    // Steps 4-6 inside a single transaction so all data changes are atomic.
+    // If anything fails the DB rolls back to pre-transaction state; we then
+    // restore the SQLCipher key via a second PRAGMA rekey.
+    await dbRun(db, 'BEGIN TRANSACTION')
+
+    try {
+      // Step 4 — update vault_meta with new salt and verify hash
+      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1`,
+        [Buffer.from(newSalt), newVerifyHash],
+      )
+
+      // Step 5 — re-encrypt all note ciphertexts with the new key.
+      // PRAGMA rekey re-encrypted the SQLCipher pages, but title/content are
+      // application-level XChaCha20 ciphertexts that still use the old masterKey.
+      // They must be decrypted with the old key and re-encrypted with the new one.
+      interface RawNote { id: string; title: Buffer; title_iv: Buffer; content: Buffer; content_iv: Buffer }
+      const notes = await dbAll<RawNote>(db, 'SELECT id, title, title_iv, content, content_iv FROM notes', [])
+
+      for (const note of notes) {
+        const titlePlain = decryptField(new Uint8Array(note.title), new Uint8Array(note.title_iv), masterKey!)
+        const contentPlain = decryptField(new Uint8Array(note.content), new Uint8Array(note.content_iv), masterKey!)
+
+        const { ciphertext: newTitle, nonce: newTitleIv } = encryptField(titlePlain, newRawKey)
+        const { ciphertext: newContent, nonce: newContentIv } = encryptField(contentPlain, newRawKey)
+
+        await dbRun(db, `UPDATE notes SET title = ?, title_iv = ?, content = ?, content_iv = ? WHERE id = ?`,
+          [Buffer.from(newTitle), Buffer.from(newTitleIv), Buffer.from(newContent), Buffer.from(newContentIv), note.id],
+        )
+      }
+
+      await dbRun(db, 'COMMIT')
+    } catch (txErr) {
+      await dbRun(db, 'ROLLBACK').catch(() => {})
+      throw txErr
+    }
+
+    // Step 6 — checkpoint WAL so readFileSync gets all committed data
+    await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
+
+    // Step 7 — generate new recovery mnemonic, wrap new key
+    const mnemonic = generateMnemonic()
+    const recoveryKey = mnemonicToMasterKey(mnemonic)
+    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, recoveryKey)
+    memzero(recoveryKey)
+
+    // Step 8 — repack container atomically
+    const newSidecar: VaultSidecar = {
+      ...currentSidecar,
+      argon2_salt: Buffer.from(newSalt).toString('hex'),
+      verify_hash: newVerifyHash,
+      recovery_encrypted_master_key: recCipher,
+      recovery_nonce: recNonce,
+    }
+    const dbBytes = readFileSync(tempDbPath)
+    writeContainer(currentVaultPath, JSON.stringify(newSidecar), dbBytes)
+
+    // Step 9 — swap masterKey in memory
+    const newSecureKey = storeKey(newRawKey) // zeros newRawKey
+    freeSecure(masterKey)
+    masterKey = newSecureKey
+    currentSidecar = newSidecar
+
+    return { mnemonic }
+  } catch (err) {
+    // Data changes rolled back by ROLLBACK above (if inside transaction).
+    // Restore the SQLCipher key so the on-disk container (still old key) remains openable.
+    try {
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
+          e ? reject(e) : resolve(),
+        )
+      })
+    } catch {
+      await closeVault()
+    }
+    throw err
+  }
 }
 
 // Repacks the .nvx container from the current temp DB without closing the session.
