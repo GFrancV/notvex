@@ -1,7 +1,15 @@
-import { readFileSync, writeFileSync, renameSync, openSync, readSync, closeSync, existsSync } from 'fs'
-import { join } from 'path'
-import os from 'os'
 import { randomBytes } from 'crypto'
+import {
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  openSync,
+  readSync,
+  closeSync,
+  existsSync,
+} from 'fs'
+import os from 'os'
+import { join } from 'path'
 
 const MAGIC = Buffer.from('NVEX')
 const FORMAT_VERSION = 1

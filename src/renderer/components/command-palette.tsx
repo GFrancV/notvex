@@ -1,14 +1,23 @@
 import React, { useEffect, useCallback } from 'react'
+
 import { Command } from 'cmdk'
-import { useVaultStore } from '../store/vault.store'
-import { useUiStore } from '../store/ui.store'
-import { notvex } from '../lib/ipc'
 import { FileText, Plus, Lock, Columns2, Trash2 } from 'lucide-react'
-import type { NoteListItem } from '../../preload/index'
+
+import type { NoteListItem } from '../../shared/types'
+import { notvex } from '../lib/ipc'
+import { useUiStore } from '../store/ui.store'
+import { useVaultStore } from '../store/vault.store'
 
 export function CommandPalette(): JSX.Element | null {
   const { commandPaletteOpen, setCommandPaletteOpen, togglePreview, setShowTrash } = useUiStore()
-  const { notes, setStatus, setActiveNoteId, loadNotes, setNotes, setActiveNoteId: selectNote } = useVaultStore()
+  const {
+    notes,
+    setStatus,
+    setActiveNoteId,
+    loadNotes,
+    setNotes,
+    setActiveNoteId: selectNote,
+  } = useVaultStore()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -19,11 +28,11 @@ export function CommandPalette(): JSX.Element | null {
       if (e.key === 'Escape') setCommandPaletteOpen(false)
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return (): void => window.removeEventListener('keydown', onKey)
   }, [setCommandPaletteOpen])
 
   const run = useCallback(
-    (action: () => void | Promise<void>) => {
+    (action: () => void | Promise<void>): void => {
       setCommandPaletteOpen(false)
       void action()
     },
@@ -49,17 +58,18 @@ export function CommandPalette(): JSX.Element | null {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[20vh] backdrop-blur-sm"
+      role="none"
       onClick={() => setCommandPaletteOpen(false)}
     >
       <div
-        className="w-full max-w-lg rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] shadow-2xl overflow-hidden"
+        className="w-full max-w-lg overflow-hidden rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] shadow-2xl"
+        role="none"
         onClick={(e) => e.stopPropagation()}
       >
         <Command className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-[#737373]">
           <div className="flex items-center border-b border-[#2a2a2a] px-3">
             <Command.Input
-              autoFocus
               placeholder="Search notes, run commands…"
               className="flex h-12 w-full bg-transparent text-sm text-[#e5e5e5] placeholder:text-[#737373] focus:outline-none"
             />
@@ -120,7 +130,10 @@ export function CommandPalette(): JSX.Element | null {
 }
 
 function PaletteItem({
-  icon, label, shortcut, onSelect,
+  icon,
+  label,
+  shortcut,
+  onSelect,
 }: {
   icon: React.ReactNode
   label: string
@@ -130,26 +143,21 @@ function PaletteItem({
   return (
     <Command.Item
       onSelect={onSelect}
-      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-[#e5e5e5] aria-selected:bg-[#222] transition-colors"
+      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-[#e5e5e5] transition-colors aria-selected:bg-[#222]"
     >
       <span className="text-[#737373]">{icon}</span>
       <span className="flex-1">{label}</span>
-      {shortcut && <kbd className="text-xs text-[#737373] font-mono">{shortcut}</kbd>}
+      {shortcut && <kbd className="font-mono text-xs text-[#737373]">{shortcut}</kbd>}
     </Command.Item>
   )
 }
 
-function NoteItem({
-  note, onSelect,
-}: {
-  note: NoteListItem
-  onSelect: () => void
-}): JSX.Element {
+function NoteItem({ note, onSelect }: { note: NoteListItem; onSelect: () => void }): JSX.Element {
   return (
     <Command.Item
       value={note.title}
       onSelect={onSelect}
-      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-[#e5e5e5] aria-selected:bg-[#222] transition-colors"
+      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-[#e5e5e5] transition-colors aria-selected:bg-[#222]"
     >
       <FileText className="h-4 w-4 text-[#737373]" />
       <span className="flex-1 truncate">{note.title || 'Untitled'}</span>

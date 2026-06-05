@@ -17,8 +17,11 @@ interface UiStore {
 }
 
 function loadLS(key: string, fallback: boolean): boolean {
-  try { return JSON.parse(localStorage.getItem(key) ?? '') }
-  catch { return fallback }
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? '') as boolean
+  } catch {
+    return fallback
+  }
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -29,19 +32,19 @@ export const useUiStore = create<UiStore>((set) => ({
   commandPaletteOpen: false,
   settingsOpen: false,
 
-  setShowPreview: (showPreview) => {
+  setShowPreview: (showPreview): void => {
     set({ showPreview })
     localStorage.setItem('notvex.showPreview', JSON.stringify(showPreview))
   },
-  togglePreview: () =>
+  togglePreview: (): void =>
     set((s) => {
       const next = !s.showPreview
       localStorage.setItem('notvex.showPreview', JSON.stringify(next))
       return { showPreview: next }
     }),
-  setSearchQuery: (searchQuery) => set({ searchQuery }),
-  setActiveTagFilter: (activeTagFilter) => set({ activeTagFilter, showTrash: false }),
-  setShowTrash: (showTrash) => set({ showTrash, activeTagFilter: null }),
-  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSearchQuery: (searchQuery): void => set({ searchQuery }),
+  setActiveTagFilter: (activeTagFilter): void => set({ activeTagFilter, showTrash: false }),
+  setShowTrash: (showTrash): void => set({ showTrash, activeTagFilter: null }),
+  setCommandPaletteOpen: (commandPaletteOpen): void => set({ commandPaletteOpen }),
+  setSettingsOpen: (settingsOpen): void => set({ settingsOpen }),
 }))

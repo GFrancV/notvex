@@ -1,5 +1,6 @@
-import sodium from 'libsodium-wrappers-sumo'
 import { performance } from 'perf_hooks'
+
+import sodium from 'libsodium-wrappers-sumo'
 
 let sodiumReady = false
 
@@ -22,7 +23,7 @@ export interface Argon2Params {
 // Hardcoded to avoid reading sodium constants before sodium.ready
 export const DEFAULT_ARGON2_PARAMS: Argon2Params = {
   memory: 268435456, // sodium.crypto_pwhash_MEMLIMIT_MODERATE (256 MB)
-  iterations: 3,     // sodium.crypto_pwhash_OPSLIMIT_MODERATE
+  iterations: 3, // sodium.crypto_pwhash_OPSLIMIT_MODERATE
   parallelism: 1,
 }
 
@@ -83,7 +84,7 @@ export function decryptField(
 
 export function hashForVerify(masterKey: Uint8Array): string {
   assertReady()
-  const hash = sodium.crypto_generichash(32, masterKey)
+  const hash = sodium.crypto_generichash(32, masterKey, new Uint8Array(0))
   return sodium.to_hex(hash)
 }
 
@@ -115,8 +116,8 @@ export function calibrateArgon2id(targetMs = 1500): Argon2Params {
     { memory: 268435456, iterations: 2, parallelism: 1 }, // 256 MB / 2 passes
     { memory: 134217728, iterations: 3, parallelism: 1 }, // 128 MB / 3 passes
     { memory: 134217728, iterations: 2, parallelism: 1 }, // 128 MB / 2 passes
-    { memory: 67108864,  iterations: 3, parallelism: 1 }, //  64 MB / 3 passes
-    { memory: 67108864,  iterations: 2, parallelism: 1 }, //  64 MB / 2 passes  ← minimum
+    { memory: 67108864, iterations: 3, parallelism: 1 }, //  64 MB / 3 passes
+    { memory: 67108864, iterations: 2, parallelism: 1 }, //  64 MB / 2 passes  ← minimum
   ]
 
   for (const tier of tiers) {

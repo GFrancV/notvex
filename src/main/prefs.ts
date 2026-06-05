@@ -1,6 +1,7 @@
-import { app } from 'electron'
-import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { join } from 'path'
+
+import { app } from 'electron'
 
 export interface Prefs {
   vaultPath: string | null
@@ -22,7 +23,7 @@ export function getPrefs(): Prefs {
   const path = prefsPath()
   if (!existsSync(path)) return { ...DEFAULTS }
   try {
-    return { ...DEFAULTS, ...JSON.parse(readFileSync(path, 'utf8')) }
+    return { ...DEFAULTS, ...(JSON.parse(readFileSync(path, 'utf8')) as Partial<Prefs>) }
   } catch {
     return { ...DEFAULTS }
   }
@@ -39,5 +40,5 @@ export function getPref<K extends keyof Prefs>(key: K): Prefs[K] {
 }
 
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
-  setPrefs({ [key]: value } as Partial<Prefs>)
+  setPrefs({ [key]: value })
 }

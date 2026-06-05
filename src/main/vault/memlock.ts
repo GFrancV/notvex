@@ -10,31 +10,41 @@
  * physical access to the drive cannot find the key in the pagefile/swapfile.
  */
 
+import koffi from 'koffi'
+
+type MemFn = (buf: Buffer, size: number) => void
+
 let _lock: ((buf: Buffer) => void) | null = null
 let _unlock: ((buf: Buffer) => void) | null = null
 
-;(function initMemlock(): void {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const koffi = require('koffi')
-
-    if (process.platform === 'win32') {
-      const k32 = koffi.load('kernel32.dll')
-      const vlock   = k32.func('bool VirtualLock(void* lpAddress, size_t dwSize)')
-      const vunlock = k32.func('bool VirtualUnlock(void* lpAddress, size_t dwSize)')
-      _lock   = (buf) => { vlock(buf, buf.byteLength) }
-      _unlock = (buf) => { vunlock(buf, buf.byteLength) }
-    } else if (process.platform === 'linux' || process.platform === 'darwin') {
-      const lib = koffi.load(process.platform === 'darwin' ? 'libSystem.B.dylib' : 'libc.so.6')
-      const mlock   = lib.func('int mlock(const void* addr, size_t len)')
-      const munlock = lib.func('int munlock(const void* addr, size_t len)')
-      _lock   = (buf) => { mlock(buf, buf.byteLength) }
-      _unlock = (buf) => { munlock(buf, buf.byteLength) }
+try {
+  if (process.platform === 'win32') {
+    const k32 = koffi.load('kernel32.dll')
+    const vlock = k32.func('bool VirtualLock(void* lpAddress, size_t dwSize)') as unknown as MemFn
+    const vunlock = k32.func(
+      'bool VirtualUnlock(void* lpAddress, size_t dwSize)',
+    ) as unknown as MemFn
+    _lock = (buf): void => {
+      vlock(buf, buf.byteLength)
     }
-  } catch {
-    // koffi unavailable — memory locking disabled, app still works normally
+    _unlock = (buf): void => {
+      vunlock(buf, buf.byteLength)
+    }
+  } else if (process.platform === 'linux' || process.platform === 'darwin') {
+    const libName = process.platform === 'darwin' ? 'libSystem.B.dylib' : 'libc.so.6'
+    const lib = koffi.load(libName)
+    const mlock = lib.func('int mlock(const void* addr, size_t len)') as unknown as MemFn
+    const munlock = lib.func('int munlock(const void* addr, size_t len)') as unknown as MemFn
+    _lock = (buf): void => {
+      mlock(buf, buf.byteLength)
+    }
+    _unlock = (buf): void => {
+      munlock(buf, buf.byteLength)
+    }
   }
-})()
+} catch {
+  // koffi unavailable — memory locking disabled, app still works normally
+}
 
 /**
  * Allocates a Buffer in native heap (outside V8 GC) and locks the page in RAM.

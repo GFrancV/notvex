@@ -13,10 +13,6 @@
       "@main/*": ["./src/main/*"]
     }
   },
-  "include": [
-    "electron.vite.config.*",
-    "src/main/**/*",
-    "src/preload/**/*"
-  ],
+  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "src/shared/**/*"],
   "exclude": ["node_modules", "out", "dist"]
 }

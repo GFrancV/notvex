@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
+
 import { notvex } from './lib/ipc'
 import { useVaultStore } from './store/vault.store'
-import { Setup } from './views/Setup'
-import { Unlock } from './views/Unlock'
-import { Main } from './views/Main'
+import { Main } from './views/main'
+import { Setup } from './views/setup'
+import { Unlock } from './views/unlock'
 
 export default function App(): JSX.Element {
   const { status, setStatus } = useVaultStore()
@@ -24,7 +25,7 @@ export default function App(): JSX.Element {
         setStatus('locked')
       }
     }
-    init()
+    void init()
   }, [setStatus])
 
   if (status === 'checking') {

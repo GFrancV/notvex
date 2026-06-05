@@ -1,4 +1,5 @@
 import type sqlite3 from '@journeyapps/sqlcipher'
+
 import { encryptField, decryptField } from '../vault/crypto'
 
 // ─── Promise wrappers ───────────────────────────────────────────────────────
@@ -19,11 +20,7 @@ export function dbGet<T>(
   })
 }
 
-export function dbAll<T>(
-  db: sqlite3.Database,
-  sql: string,
-  params: unknown[] = [],
-): Promise<T[]> {
+export function dbAll<T>(db: sqlite3.Database, sql: string, params: unknown[] = []): Promise<T[]> {
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err: Error | null, rows: T[]) => (err ? reject(err) : resolve(rows || [])))
   })
@@ -123,8 +120,14 @@ export async function createNote(
 ): Promise<NoteListItem> {
   const id = newId()
   const now = Date.now()
-  const { ciphertext: titleCipher, nonce: titleIv } = encryptField(input.title || 'Untitled', masterKey)
-  const { ciphertext: contentCipher, nonce: contentIv } = encryptField(input.content || '', masterKey)
+  const { ciphertext: titleCipher, nonce: titleIv } = encryptField(
+    input.title || 'Untitled',
+    masterKey,
+  )
+  const { ciphertext: contentCipher, nonce: contentIv } = encryptField(
+    input.content || '',
+    masterKey,
+  )
 
   await dbRun(
     db,
@@ -158,11 +161,7 @@ export async function getNote(
   id: string,
   masterKey: Uint8Array,
 ): Promise<Note | null> {
-  const row = await dbGet<RawNote>(
-    db,
-    'SELECT * FROM notes WHERE id = ?',
-    [id],
-  )
+  const row = await dbGet<RawNote>(db, 'SELECT * FROM notes WHERE id = ?', [id])
   if (!row) return null
 
   const tags = await getNoteTags(db, id)
@@ -271,10 +270,7 @@ export async function searchNotesByTitle(
 
 // ─── Tag queries ─────────────────────────────────────────────────────────────
 
-export async function createTag(
-  db: sqlite3.Database,
-  input: CreateTagInput,
-): Promise<Tag> {
+export async function createTag(db: sqlite3.Database, input: CreateTagInput): Promise<Tag> {
   const id = newId()
   const now = Date.now()
   await dbRun(db, 'INSERT INTO tags (id, name, color, created_at) VALUES (?, ?, ?, ?)', [
@@ -290,16 +286,18 @@ export async function listTags(db: sqlite3.Database): Promise<Tag[]> {
   return dbAll<Tag>(db, 'SELECT id, name, color, created_at as createdAt FROM tags ORDER BY name')
 }
 
-export async function updateTag(
-  db: sqlite3.Database,
-  id: string,
-  patch: TagPatch,
-): Promise<void> {
+export async function updateTag(db: sqlite3.Database, id: string, patch: TagPatch): Promise<void> {
   const updates: string[] = []
   const params: unknown[] = []
 
-  if (patch.name !== undefined) { updates.push('name = ?'); params.push(patch.name) }
-  if (patch.color !== undefined) { updates.push('color = ?'); params.push(patch.color) }
+  if (patch.name !== undefined) {
+    updates.push('name = ?')
+    params.push(patch.name)
+  }
+  if (patch.color !== undefined) {
+    updates.push('color = ?')
+    params.push(patch.color)
+  }
 
   if (updates.length === 0) return
   params.push(id)
@@ -317,7 +315,10 @@ export async function addTagToNote(
   noteId: string,
   tagId: string,
 ): Promise<void> {
-  await dbRun(db, 'INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)', [noteId, tagId])
+  await dbRun(db, 'INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)', [
+    noteId,
+    tagId,
+  ])
 }
 
 export async function removeTagFromNote(
@@ -338,9 +339,7 @@ export async function getNoteTags(db: sqlite3.Database, noteId: string): Promise
   )
 }
 
-export async function getNoteCountPerTag(
-  db: sqlite3.Database,
-): Promise<Record<string, number>> {
+export async function getNoteCountPerTag(db: sqlite3.Database): Promise<Record<string, number>> {
   const rows = await dbAll<{ tag_id: string; count: number }>(
     db,
     `SELECT nt.tag_id, COUNT(*) as count FROM note_tags nt

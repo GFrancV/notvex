@@ -1,11 +1,13 @@
 import { useState } from 'react'
+
+import { Eye, EyeOff, Copy, Check, AlertTriangle } from 'lucide-react'
+
 import { notvex } from '../lib/ipc'
 import { passwordStrength } from '../lib/utils'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { Eye, EyeOff, Copy, Check, AlertTriangle } from 'lucide-react'
 
 interface ChangePasswordDialogProps {
   open: boolean
@@ -51,11 +53,18 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
 
   const handleSubmit = async (): Promise<void> => {
     const ve = validationError()
-    if (ve) { setError(ve); return }
-    setError(''); setLoading(true)
+    if (ve) {
+      setError(ve)
+      return
+    }
+    setError('')
+    setLoading(true)
     const res = await notvex.vault.changePassword(currentPw, newPw)
     setLoading(false)
-    if (!res.success) { setError(res.error); return }
+    if (!res.success) {
+      setError(res.error)
+      return
+    }
     setMnemonic(res.data.mnemonic)
     setStep('mnemonic')
   }
@@ -68,16 +77,28 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
 
   const handleClose = (): void => {
     setStep('form')
-    setCurrentPw(''); setNewPw(''); setConfirmPw('')
-    setShowCurrent(false); setShowNew(false); setShowConfirm(false)
-    setError(''); setLoading(false)
-    setMnemonic(''); setMnemonicCopied(false); setMnemonicConfirmed(false)
+    setCurrentPw('')
+    setNewPw('')
+    setConfirmPw('')
+    setShowCurrent(false)
+    setShowNew(false)
+    setShowConfirm(false)
+    setError('')
+    setLoading(false)
+    setMnemonic('')
+    setMnemonicCopied(false)
+    setMnemonicConfirmed(false)
     onClose()
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-      <DialogContent className="bg-[#1a1a1a] border-[#2a2a2a] text-[#e5e5e5] max-w-md">
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) handleClose()
+      }}
+    >
+      <DialogContent className="max-w-md border-[#2a2a2a] bg-[#1a1a1a] text-[#e5e5e5]">
         <DialogHeader>
           <DialogTitle className="text-[#e5e5e5]">
             {step === 'form' ? 'Change password' : 'Save your new recovery key'}
@@ -85,23 +106,22 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
         </DialogHeader>
 
         {step === 'form' && (
-          <div className="space-y-4 mt-2">
+          <div className="mt-2 space-y-4">
             {/* Current password */}
             <div className="space-y-1.5">
-              <Label className="text-[#a3a3a3] text-xs">Current password</Label>
+              <Label className="text-xs text-[#a3a3a3]">Current password</Label>
               <div className="relative">
                 <Input
                   type={showCurrent ? 'text' : 'password'}
                   value={currentPw}
                   onChange={(e) => setCurrentPw(e.target.value)}
                   placeholder="Your current password"
-                  className="pr-10 bg-[#111111] border-[#2a2a2a] text-[#e5e5e5]"
-                  autoFocus
+                  className="border-[#2a2a2a] bg-[#111111] pr-10 text-[#e5e5e5]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrent((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
                 >
                   {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -110,26 +130,26 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
 
             {/* New password */}
             <div className="space-y-1.5">
-              <Label className="text-[#a3a3a3] text-xs">New password</Label>
+              <Label className="text-xs text-[#a3a3a3]">New password</Label>
               <div className="relative">
                 <Input
                   type={showNew ? 'text' : 'password'}
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
                   placeholder="At least 12 characters"
-                  className="pr-10 bg-[#111111] border-[#2a2a2a] text-[#e5e5e5]"
+                  className="border-[#2a2a2a] bg-[#111111] pr-10 text-[#e5e5e5]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
                 >
                   {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               {/* Strength bar */}
               {newPw && (
-                <div className="flex gap-1 mt-1">
+                <div className="mt-1 flex gap-1">
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
@@ -144,20 +164,22 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
 
             {/* Confirm new password */}
             <div className="space-y-1.5">
-              <Label className="text-[#a3a3a3] text-xs">Confirm new password</Label>
+              <Label className="text-xs text-[#a3a3a3]">Confirm new password</Label>
               <div className="relative">
                 <Input
                   type={showConfirm ? 'text' : 'password'}
                   value={confirmPw}
                   onChange={(e) => setConfirmPw(e.target.value)}
                   placeholder="Repeat new password"
-                  className="pr-10 bg-[#111111] border-[#2a2a2a] text-[#e5e5e5]"
-                  onKeyDown={(e) => e.key === 'Enter' && canSubmit && handleSubmit()}
+                  className="border-[#2a2a2a] bg-[#111111] pr-10 text-[#e5e5e5]"
+                  onKeyDown={(e): void => {
+                    if (e.key === 'Enter' && canSubmit) void handleSubmit()
+                  }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirm((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
                 >
                   {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -167,10 +189,21 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
             {error && <p className="text-sm text-red-400">{error}</p>}
 
             <div className="flex gap-3 pt-1">
-              <Button variant="outline" className="flex-1 border-[#2a2a2a] text-[#a3a3a3]" onClick={handleClose} disabled={loading}>
+              <Button
+                variant="outline"
+                className="flex-1 border-[#2a2a2a] text-[#a3a3a3]"
+                onClick={handleClose}
+                disabled={loading}
+              >
                 Cancel
               </Button>
-              <Button className="flex-1" onClick={handleSubmit} disabled={!canSubmit}>
+              <Button
+                className="flex-1"
+                onClick={(): void => {
+                  void handleSubmit()
+                }}
+                disabled={!canSubmit}
+              >
                 {loading ? 'Re-encrypting vault…' : 'Change password'}
               </Button>
             </div>
@@ -178,25 +211,34 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
         )}
 
         {step === 'mnemonic' && (
-          <div className="space-y-4 mt-2">
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+          <div className="mt-2 space-y-4">
+            <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
               <p className="text-xs text-amber-300">
-                Your recovery key has changed. The previous key is no longer valid. Save this new one — it will not be shown again.
+                Your recovery key has changed. The previous key is no longer valid. Save this new
+                one — it will not be shown again.
               </p>
             </div>
 
             <div className="relative rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-4">
-              <p className="font-mono text-sm text-emerald-300 leading-relaxed break-all">{mnemonic}</p>
+              <p className="font-mono text-sm leading-relaxed break-all text-emerald-300">
+                {mnemonic}
+              </p>
               <button
-                onClick={copyMnemonic}
-                className="absolute right-3 top-3 rounded p-1 text-[#737373] hover:text-[#e5e5e5] hover:bg-[#2a2a2a]"
+                onClick={(): void => {
+                  void copyMnemonic()
+                }}
+                className="absolute top-3 right-3 rounded p-1 text-[#737373] hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
               >
-                {mnemonicCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                {mnemonicCopied ? (
+                  <Check className="h-4 w-4 text-emerald-400" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
               </button>
             </div>
 
-            <label className="flex items-start gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
                 className="mt-0.5 accent-emerald-500"

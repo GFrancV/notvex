@@ -1,94 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// ─── API types (exported for renderer use) ────────────────────────────────────
+export type {
+  Note,
+  NoteListItem,
+  Tag,
+  CreateNoteInput,
+  NotePatch,
+  NoteFilter,
+  CreateTagInput,
+  TagPatch,
+  VaultStatus,
+  CreateVaultResult,
+  ChangePasswordResult,
+  Prefs,
+  IpcResult,
+  NotvexAPI,
+} from '../shared/types'
 
-export interface Note {
-  id: string
-  title: string
-  content: string
-  isPinned: boolean
-  isTrashed: boolean
-  createdAt: number
-  updatedAt: number
-  trashedAt: number | null
-  tags: Tag[]
-}
-
-export interface NoteListItem {
-  id: string
-  title: string
-  isPinned: boolean
-  isTrashed: boolean
-  createdAt: number
-  updatedAt: number
-  trashedAt: number | null
-}
-
-export interface Tag {
-  id: string
-  name: string
-  color: string
-  createdAt: number
-}
-
-export interface CreateNoteInput { title: string; content: string }
-export interface NotePatch { title?: string; content?: string; isPinned?: boolean }
-export interface NoteFilter { trashed?: boolean; tagId?: string }
-export interface CreateTagInput { name: string; color: string }
-export interface TagPatch { name?: string; color?: string }
-
-export interface VaultStatus { isOpen: boolean; vaultPath: string | null }
-export interface CreateVaultResult { mnemonic: string }
-export interface ChangePasswordResult { mnemonic: string }
-
-export interface Prefs {
-  vaultPath: string | null
-  autoLockMinutes: number
-  showPreview: boolean
-}
-
-type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
-
-export interface NotvexAPI {
-  vault: {
-    hasVault(filePath?: string): Promise<IpcResult<boolean>>
-    create(filePath: string, password: string): Promise<IpcResult<CreateVaultResult>>
-    open(filePath: string, password: string): Promise<IpcResult<boolean>>
-    openWithRecovery(filePath: string, mnemonic: string): Promise<IpcResult<boolean>>
-    changePassword(currentPassword: string, newPassword: string): Promise<IpcResult<ChangePasswordResult>>
-    close(): Promise<IpcResult<null>>
-    status(): Promise<IpcResult<VaultStatus>>
-    chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
-  }
-  notes: {
-    create(input: CreateNoteInput): Promise<IpcResult<NoteListItem>>
-    get(id: string): Promise<IpcResult<Note | null>>
-    list(filter?: NoteFilter): Promise<IpcResult<NoteListItem[]>>
-    update(id: string, patch: NotePatch): Promise<IpcResult<null>>
-    trash(id: string): Promise<IpcResult<null>>
-    restore(id: string): Promise<IpcResult<null>>
-    delete(id: string): Promise<IpcResult<null>>
-    emptyTrash(): Promise<IpcResult<null>>
-    search(query: string): Promise<IpcResult<NoteListItem[]>>
-  }
-  tags: {
-    create(input: CreateTagInput): Promise<IpcResult<Tag>>
-    list(): Promise<IpcResult<Tag[]>>
-    update(id: string, patch: TagPatch): Promise<IpcResult<null>>
-    delete(id: string): Promise<IpcResult<null>>
-  }
-  noteTags: {
-    add(noteId: string, tagId: string): Promise<IpcResult<null>>
-    remove(noteId: string, tagId: string): Promise<IpcResult<null>>
-    list(noteId: string): Promise<IpcResult<Tag[]>>
-    counts(): Promise<IpcResult<Record<string, number>>>
-  }
-  prefs: {
-    get(key?: string): Promise<IpcResult<Prefs | Prefs[keyof Prefs]>>
-    set(key: string, value: unknown): Promise<IpcResult<null>>
-  }
-  onAutoLocked(callback: () => void): () => void
-}
+import type { NotvexAPI } from '../shared/types'
 
 // ─── Implementation ────────────────────────────────────────────────────────────
 
@@ -133,7 +62,9 @@ const api: NotvexAPI = {
   onAutoLocked: (callback) => {
     const listener = (): void => callback()
     ipcRenderer.on('vault:auto-locked', listener)
-    return () => ipcRenderer.off('vault:auto-locked', listener)
+    return (): void => {
+      ipcRenderer.off('vault:auto-locked', listener)
+    }
   },
 }
 

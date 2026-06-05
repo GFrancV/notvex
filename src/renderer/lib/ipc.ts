@@ -1,4 +1,4 @@
-import type { NotvexAPI } from '../../preload/index'
+import type { NotvexAPI } from '../../shared/types'
 
 declare global {
   interface Window {

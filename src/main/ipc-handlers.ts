@@ -1,17 +1,6 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
-import {
-  createVault,
-  openVault,
-  openVaultWithRecovery,
-  closeVault,
-  changePassword,
-  isVaultOpen,
-  getMasterKey,
-  getDb,
-  getVaultPath,
-  vaultExistsAt,
-  syncContainer,
-} from './vault/vault'
+import type { BrowserWindow } from 'electron'
+import { ipcMain, dialog } from 'electron'
+
 import {
   createNote,
   getNote,
@@ -31,8 +20,21 @@ import {
   getNoteTags,
   getNoteCountPerTag,
 } from './db/queries'
-import { getPrefs, setPrefs, getPref, setPref } from './prefs'
 import type { CreateNoteInput, NotePatch, NoteFilter, CreateTagInput, TagPatch } from './db/queries'
+import { getPrefs, setPrefs, getPref, setPref } from './prefs'
+import {
+  createVault,
+  openVault,
+  openVaultWithRecovery,
+  closeVault,
+  changePassword,
+  isVaultOpen,
+  getMasterKey,
+  getDb,
+  getVaultPath,
+  vaultExistsAt,
+  syncContainer,
+} from './vault/vault'
 
 // ─── IPC envelope helper ─────────────────────────────────────────────────────
 
@@ -64,25 +66,35 @@ function touchActivity(): void {
 function startAutoLockTimer(win: BrowserWindow): void {
   if (autoLockTimer) clearInterval(autoLockTimer)
   mainWindowRef = win
-  autoLockTimer = setInterval(async () => {
-    const minutes = getPref('autoLockMinutes')
-    if (minutes === 0) return
-    if (!isVaultOpen()) return
-    const elapsed = (Date.now() - lastActivityAt) / 60000
-    if (elapsed >= minutes) {
-      await closeVault()
-      mainWindowRef?.webContents.send('vault:auto-locked')
-    }
+  autoLockTimer = setInterval((): void => {
+    void (async (): Promise<void> => {
+      const minutes = getPref('autoLockMinutes')
+      if (minutes === 0) return
+      if (!isVaultOpen()) return
+      const elapsed = (Date.now() - lastActivityAt) / 60000
+      if (elapsed >= minutes) {
+        await closeVault()
+        mainWindowRef?.webContents.send('vault:auto-locked')
+      }
+    })()
   }, 60_000)
 
   // Repack the .nvx container every 5 minutes for crash safety
   if (syncTimer) clearInterval(syncTimer)
-  syncTimer = setInterval(() => { syncContainer() }, 5 * 60_000)
+  syncTimer = setInterval(() => {
+    syncContainer()
+  }, 5 * 60_000)
 }
 
 export function stopAutoLockTimer(): void {
-  if (autoLockTimer) { clearInterval(autoLockTimer); autoLockTimer = null }
-  if (syncTimer) { clearInterval(syncTimer); syncTimer = null }
+  if (autoLockTimer) {
+    clearInterval(autoLockTimer)
+    autoLockTimer = null
+  }
+  if (syncTimer) {
+    clearInterval(syncTimer)
+    syncTimer = null
+  }
 }
 
 // ─── Register all handlers ────────────────────────────────────────────────────
@@ -96,7 +108,9 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     try {
       const path = filePath ?? getPref('vaultPath')
       return ok(path ? vaultExistsAt(path) : false)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('vault:create', async (_e, filePath: string, password: string) => {
@@ -105,37 +119,58 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       setPref('vaultPath', filePath)
       touchActivity()
       return ok(result)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('vault:open', async (_e, filePath: string, password: string) => {
     try {
       const success = await openVault(filePath, password)
-      if (success) { setPref('vaultPath', filePath); touchActivity() }
+      if (success) {
+        setPref('vaultPath', filePath)
+        touchActivity()
+      }
       return ok(success)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('vault:open-with-recovery', async (_e, filePath: string, mnemonic: string) => {
     try {
       const success = await openVaultWithRecovery(filePath, mnemonic)
-      if (success) { setPref('vaultPath', filePath); touchActivity() }
+      if (success) {
+        setPref('vaultPath', filePath)
+        touchActivity()
+      }
       return ok(success)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
-
-  ipcMain.handle('vault:change-password', async (_e, currentPassword: string, newPassword: string) => {
-    try {
-      requireVault(); touchActivity()
-      const result = await changePassword(currentPassword, newPassword)
-      return ok(result)
-    } catch (e) { return fail(e) }
-  })
+  ipcMain.handle(
+    'vault:change-password',
+    async (_e, currentPassword: string, newPassword: string) => {
+      try {
+        requireVault()
+        touchActivity()
+        const result = await changePassword(currentPassword, newPassword)
+        return ok(result)
+      } catch (e) {
+        return fail(e)
+      }
+    },
+  )
 
   ipcMain.handle('vault:close', async () => {
-    try { await closeVault(); return ok(null) }
-    catch (e) { return fail(e) }
+    try {
+      await closeVault()
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('vault:status', () => {
@@ -159,141 +194,194 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         })
         return ok(result.canceled ? null : result.filePaths[0])
       }
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   // ── Notes ─────────────────────────────────────────────────────────────────
 
   ipcMain.handle('notes:create', async (_e, input: CreateNoteInput) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await createNote(getDb(), input, getMasterKey()))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:get', async (_e, id: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await getNote(getDb(), id, getMasterKey()))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:list', async (_e, filter: NoteFilter = {}) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await listNotes(getDb(), getMasterKey(), filter))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:update', async (_e, id: string, patch: NotePatch) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await updateNote(getDb(), id, patch, getMasterKey())
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:trash', async (_e, id: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await trashNote(getDb(), id)
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:restore', async (_e, id: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await restoreNote(getDb(), id)
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:delete', async (_e, id: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await deleteNote(getDb(), id)
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:empty-trash', async () => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await emptyTrash(getDb())
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('notes:search', async (_e, query: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await searchNotesByTitle(getDb(), query, getMasterKey()))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   // ── Tags ──────────────────────────────────────────────────────────────────
 
   ipcMain.handle('tags:create', async (_e, input: CreateTagInput) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await createTag(getDb(), input))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('tags:list', async () => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await listTags(getDb()))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('tags:update', async (_e, id: string, patch: TagPatch) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await updateTag(getDb(), id, patch)
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('tags:delete', async (_e, id: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await deleteTag(getDb(), id)
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   // ── Note-tags ─────────────────────────────────────────────────────────────
 
   ipcMain.handle('note-tags:add', async (_e, noteId: string, tagId: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await addTagToNote(getDb(), noteId, tagId)
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('note-tags:remove', async (_e, noteId: string, tagId: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       await removeTagFromNote(getDb(), noteId, tagId)
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('note-tags:list', async (_e, noteId: string) => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await getNoteTags(getDb(), noteId))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('note-tags:counts', async () => {
     try {
-      requireVault(); touchActivity()
+      requireVault()
+      touchActivity()
       return ok(await getNoteCountPerTag(getDb()))
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   // ── Prefs ─────────────────────────────────────────────────────────────────
@@ -302,13 +390,17 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     try {
       const prefs = getPrefs()
       return ok(key ? prefs[key as keyof typeof prefs] : prefs)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('prefs:set', (_e, key: string, value: unknown) => {
     try {
-      setPrefs({ [key]: value } as Parameters<typeof setPrefs>[0])
+      setPrefs({ [key]: value })
       return ok(null)
-    } catch (e) { return fail(e) }
+    } catch (e) {
+      return fail(e)
+    }
   })
 }

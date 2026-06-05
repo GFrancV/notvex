@@ -1,15 +1,23 @@
 import { useState } from 'react'
+
+import { Plus, X, Edit2, Check } from 'lucide-react'
+
 import { notvex } from '../lib/ipc'
 import { useVaultStore } from '../store/vault.store'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import { Plus, X, Edit2, Check } from 'lucide-react'
-import type { Tag } from '../../preload/index'
+import type { Tag } from '../../shared/types'
 
 const PRESET_COLORS = [
-  '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b',
-  '#ef4444', '#ec4899', '#06b6d4', '#84cc16',
+  '#10b981',
+  '#3b82f6',
+  '#8b5cf6',
+  '#f59e0b',
+  '#ef4444',
+  '#ec4899',
+  '#06b6d4',
+  '#84cc16',
 ]
 
 interface TagManagerProps {
@@ -32,13 +40,13 @@ export function TagManager({ noteId, noteTags, onTagsChanged }: TagManagerProps)
   const handleAddTag = async (tagId: string): Promise<void> => {
     await notvex.noteTags.add(noteId, tagId)
     onTagsChanged()
-    loadTagCounts()
+    void loadTagCounts()
   }
 
   const handleRemoveTag = async (tagId: string): Promise<void> => {
     await notvex.noteTags.remove(noteId, tagId)
     onTagsChanged()
-    loadTagCounts()
+    void loadTagCounts()
   }
 
   const handleCreateTag = async (): Promise<void> => {
@@ -68,7 +76,7 @@ export function TagManager({ noteId, noteTags, onTagsChanged }: TagManagerProps)
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="flex items-center gap-1 text-xs text-[#737373] hover:text-[#a3a3a3] transition-colors">
+        <button className="flex items-center gap-1 text-xs text-[#737373] transition-colors hover:text-[#a3a3a3]">
           <Plus className="h-3 w-3" /> Add tag
         </button>
       </PopoverTrigger>
@@ -77,7 +85,7 @@ export function TagManager({ noteId, noteTags, onTagsChanged }: TagManagerProps)
           <p className="text-xs font-medium text-[#a3a3a3]">Tags</p>
 
           {/* Existing tags */}
-          <div className="space-y-1 max-h-40 overflow-y-auto">
+          <div className="max-h-40 space-y-1 overflow-y-auto">
             {tags.map((tag) => (
               <div key={tag.id} className="flex items-center gap-2">
                 {editingTag?.id === tag.id ? (
@@ -86,42 +94,62 @@ export function TagManager({ noteId, noteTags, onTagsChanged }: TagManagerProps)
                       type="color"
                       value={editColor}
                       onChange={(e) => setEditColor(e.target.value)}
-                      className="h-5 w-5 rounded cursor-pointer border-0 bg-transparent"
+                      className="h-5 w-5 cursor-pointer rounded border-0 bg-transparent"
                     />
                     <Input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="h-6 flex-1 text-xs py-0"
-                      onKeyDown={(e) => e.key === 'Enter' && handleUpdateTag()}
-                      autoFocus
+                      className="h-6 flex-1 py-0 text-xs"
+                      onKeyDown={(e): void => {
+                        if (e.key === 'Enter') void handleUpdateTag()
+                      }}
                     />
-                    <button onClick={handleUpdateTag} className="text-emerald-400 hover:text-emerald-300">
+                    <button
+                      onClick={(): void => {
+                        void handleUpdateTag()
+                      }}
+                      className="text-emerald-400 hover:text-emerald-300"
+                    >
                       <Check className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 ) : (
                   <>
                     <button
-                      onClick={() => noteTagIds.has(tag.id) ? handleRemoveTag(tag.id) : handleAddTag(tag.id)}
-                      className="flex flex-1 items-center gap-2 rounded px-1.5 py-1 hover:bg-[#222] transition-colors"
+                      onClick={(): void => {
+                        if (noteTagIds.has(tag.id)) {
+                          void handleRemoveTag(tag.id)
+                        } else {
+                          void handleAddTag(tag.id)
+                        }
+                      }}
+                      className="flex flex-1 items-center gap-2 rounded px-1.5 py-1 transition-colors hover:bg-[#222]"
                     >
                       <span
                         className="h-2 w-2 shrink-0 rounded-full"
                         style={{ backgroundColor: tag.color }}
                       />
-                      <span className={`flex-1 text-left text-xs ${noteTagIds.has(tag.id) ? 'text-[#e5e5e5]' : 'text-[#737373]'}`}>
+                      <span
+                        className={`flex-1 text-left text-xs ${noteTagIds.has(tag.id) ? 'text-[#e5e5e5]' : 'text-[#737373]'}`}
+                      >
                         {tag.name}
                       </span>
                       {noteTagIds.has(tag.id) && <Check className="h-3 w-3 text-emerald-400" />}
                     </button>
                     <button
-                      onClick={() => { setEditingTag(tag); setEditName(tag.name); setEditColor(tag.color) }}
+                      onClick={() => {
+                        setEditingTag(tag)
+                        setEditName(tag.name)
+                        setEditColor(tag.color)
+                      }}
                       className="text-[#737373] hover:text-[#a3a3a3]"
                     >
                       <Edit2 className="h-3 w-3" />
                     </button>
                     <button
-                      onClick={() => handleDeleteTag(tag)}
+                      onClick={(): void => {
+                        void handleDeleteTag(tag)
+                      }}
                       className="text-[#737373] hover:text-red-400"
                     >
                       <X className="h-3 w-3" />
@@ -134,32 +162,41 @@ export function TagManager({ noteId, noteTags, onTagsChanged }: TagManagerProps)
 
           {/* Create new tag */}
           <div className="border-t border-[#2a2a2a] pt-3">
-            <p className="text-xs text-[#737373] mb-2">Create new tag</p>
+            <p className="mb-2 text-xs text-[#737373]">Create new tag</p>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <input
                   type="color"
                   value={newTagColor}
                   onChange={(e) => setNewTagColor(e.target.value)}
-                  className="h-7 w-7 rounded cursor-pointer border border-[#2a2a2a] bg-transparent p-0.5"
+                  className="h-7 w-7 cursor-pointer rounded border border-[#2a2a2a] bg-transparent p-0.5"
                 />
               </div>
               <Input
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
                 placeholder="Tag name"
-                className="flex-1 h-7 text-xs"
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateTag()}
+                className="h-7 flex-1 text-xs"
+                onKeyDown={(e): void => {
+                  if (e.key === 'Enter') void handleCreateTag()
+                }}
               />
-              <Button size="sm" variant="outline" onClick={handleCreateTag} className="h-7 px-2 text-xs">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(): void => {
+                  void handleCreateTag()
+                }}
+                className="h-7 px-2 text-xs"
+              >
                 Add
               </Button>
             </div>
-            <div className="flex gap-1.5 mt-2">
+            <div className="mt-2 flex gap-1.5">
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
-                  className={`h-4 w-4 rounded-full border-2 transition-all ${newTagColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                  className={`h-4 w-4 rounded-full border-2 transition-all ${newTagColor === c ? 'scale-110 border-white' : 'border-transparent'}`}
                   style={{ backgroundColor: c }}
                   onClick={() => setNewTagColor(c)}
                 />

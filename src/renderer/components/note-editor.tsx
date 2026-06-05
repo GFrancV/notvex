@@ -1,24 +1,32 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { EditorView } from '@codemirror/view'
+
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeSanitize from 'rehype-sanitize'
-import rehypeHighlight from 'rehype-highlight'
+
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { notvex } from '../lib/ipc'
-import { useVaultStore } from '../store/vault.store'
-import { useUiStore } from '../store/ui.store'
+import { EditorView } from '@codemirror/view'
+import CodeMirror from '@uiw/react-codemirror'
 import { Columns2, FileText, Pin, Trash2 } from 'lucide-react'
+import rehypeHighlight from 'rehype-highlight'
+import rehypeSanitize from 'rehype-sanitize'
+import remarkGfm from 'remark-gfm'
+
+import type { Note } from '../../shared/types'
+import { notvex } from '../lib/ipc'
+import { useUiStore } from '../store/ui.store'
+import { useVaultStore } from '../store/vault.store'
 import { Button } from './ui/button'
-import type { Note } from '../../preload/index'
 
 // Extra overrides on top of oneDark to match Notvex design
 const notvexEditorTheme = EditorView.theme({
   '&': { backgroundColor: '#111111 !important', height: '100%' },
   '.cm-scroller': { backgroundColor: '#111111' },
-  '.cm-content': { fontFamily: '"JetBrains Mono","Fira Code","Consolas",monospace', fontSize: '14px', lineHeight: '1.75', padding: '16px 20px' },
+  '.cm-content': {
+    fontFamily: '"JetBrains Mono","Fira Code","Consolas",monospace',
+    fontSize: '14px',
+    lineHeight: '1.75',
+    padding: '16px 20px',
+  },
   '.cm-gutters': { display: 'none' },
   '.cm-cursor': { borderLeftColor: '#10b981 !important' },
   '.cm-selectionBackground': { backgroundColor: '#10b98130 !important' },
@@ -41,9 +49,14 @@ export function NoteEditor(): JSX.Element | null {
   const activeIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!activeNoteId) { setNote(null); setTitle(''); setContent(''); return }
+    if (!activeNoteId) {
+      setNote(null)
+      setTitle('')
+      setContent('')
+      return
+    }
     activeIdRef.current = activeNoteId
-    notvex.notes.get(activeNoteId).then((res) => {
+    void notvex.notes.get(activeNoteId).then((res) => {
       if (res.success && res.data && activeIdRef.current === activeNoteId) {
         setNote(res.data)
         setTitle(res.data.title)
@@ -53,21 +66,23 @@ export function NoteEditor(): JSX.Element | null {
   }, [activeNoteId])
 
   const saveContent = useCallback(
-    async (id: string, newContent: string) => {
+    async (id: string, newContent: string): Promise<void> => {
       setSaving(true)
       await notvex.notes.update(id, { content: newContent })
       setSaving(false)
-      loadNotes()
+      void loadNotes()
     },
     [loadNotes],
   )
 
   const handleContentChange = useCallback(
-    (value: string) => {
+    (value: string): void => {
       if (!activeNoteId) return
       setContent(value)
       clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout(() => saveContent(activeNoteId, value), AUTOSAVE_DELAY)
+      saveTimer.current = setTimeout((): void => {
+        void saveContent(activeNoteId, value)
+      }, AUTOSAVE_DELAY)
     },
     [activeNoteId, saveContent],
   )
@@ -75,44 +90,46 @@ export function NoteEditor(): JSX.Element | null {
   const handleTitleBlur = async (): Promise<void> => {
     if (!activeNoteId || !note || title === note.title) return
     await notvex.notes.update(activeNoteId, { title })
-    loadNotes()
+    void loadNotes()
   }
 
   const handlePin = async (): Promise<void> => {
     if (!activeNoteId || !note) return
     await notvex.notes.update(activeNoteId, { isPinned: !note.isPinned })
     setNote({ ...note, isPinned: !note.isPinned })
-    loadNotes()
+    void loadNotes()
   }
 
   const handleTrash = async (): Promise<void> => {
     if (!activeNoteId) return
     await notvex.notes.trash(activeNoteId)
     useVaultStore.getState().setActiveNoteId(null)
-    loadNotes()
-    loadTagCounts()
+    void loadNotes()
+    void loadTagCounts()
   }
 
   if (!activeNoteId) {
     return (
       <div className="flex flex-1 items-center justify-center text-[#737373] select-none">
         <div className="text-center">
-          <FileText className="mx-auto h-12 w-12 opacity-20 mb-3" />
+          <FileText className="mx-auto mb-3 h-12 w-12 opacity-20" />
           <p className="text-sm">Select a note or create a new one</p>
-          <p className="text-xs mt-1 opacity-60">Ctrl+N to create</p>
+          <p className="mt-1 text-xs opacity-60">Ctrl+N to create</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-1 flex-col min-w-0 border-l border-[#1e1e1e]">
+    <div className="flex min-w-0 flex-1 flex-col border-l border-[#1e1e1e]">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-[#1e1e1e] px-4 py-2 shrink-0">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[#1e1e1e] px-4 py-2">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleTitleBlur}
+          onBlur={(): void => {
+            void handleTitleBlur()
+          }}
           placeholder="Untitled"
           className="flex-1 bg-transparent text-base font-semibold text-[#e5e5e5] placeholder:text-[#737373] focus:outline-none"
         />
@@ -121,25 +138,42 @@ export function NoteEditor(): JSX.Element | null {
           <Button
             variant="ghost"
             size="icon"
-            onClick={handlePin}
+            onClick={(): void => {
+              void handlePin()
+            }}
             title={note?.isPinned ? 'Unpin' : 'Pin'}
             className={note?.isPinned ? 'text-emerald-400' : 'text-[#737373]'}
           >
             <Pin className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={togglePreview} title="Toggle preview (Ctrl+P)"
-            className={showPreview ? 'text-emerald-400' : 'text-[#737373]'}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={togglePreview}
+            title="Toggle preview (Ctrl+P)"
+            className={showPreview ? 'text-emerald-400' : 'text-[#737373]'}
+          >
             <Columns2 className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleTrash} title="Move to trash" className="text-[#737373] hover:text-red-400">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(): void => {
+              void handleTrash()
+            }}
+            title="Move to trash"
+            className="text-[#737373] hover:text-red-400"
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {/* Editor */}
-      <div className="flex flex-1 min-h-0">
-        <div className={`flex flex-col ${showPreview ? 'w-1/2' : 'w-full'} min-h-0 overflow-hidden`}>
+      <div className="flex min-h-0 flex-1">
+        <div
+          className={`flex flex-col ${showPreview ? 'w-1/2' : 'w-full'} min-h-0 overflow-hidden`}
+        >
           <CodeMirror
             value={content}
             theme="dark"
@@ -162,9 +196,7 @@ export function NoteEditor(): JSX.Element | null {
           />
         </div>
 
-        {showPreview && (
-          <NotePreview content={content} />
-        )}
+        {showPreview && <NotePreview content={content} />}
       </div>
     </div>
   )
@@ -172,7 +204,7 @@ export function NoteEditor(): JSX.Element | null {
 
 function NotePreview({ content }: { content: string }): JSX.Element {
   return (
-    <div className="w-1/2 border-l border-[#1e1e1e] overflow-auto">
+    <div className="w-1/2 overflow-auto border-l border-[#1e1e1e]">
       <div className="prose prose-invert prose-sm max-w-none p-6">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}

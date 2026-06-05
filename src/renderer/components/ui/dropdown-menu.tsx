@@ -1,6 +1,8 @@
 import * as React from 'react'
+
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
-import { Check, ChevronRight, Circle } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
+
 import { cn } from '../../lib/utils'
 
 const DropdownMenu = DropdownMenuPrimitive.Root
@@ -17,8 +19,9 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-[#e5e5e5] outline-none focus:bg-[#222] data-[state=open]:bg-[#222]',
-      inset && 'pl-8', className,
+      'flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-[#e5e5e5] outline-none select-none focus:bg-[#222] data-[state=open]:bg-[#222]',
+      inset && 'pl-8',
+      className,
     )}
     {...props}
   >
@@ -73,9 +76,10 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-[#e5e5e5] outline-none',
+      'relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-[#e5e5e5] outline-none select-none',
       'transition-colors focus:bg-[#222] focus:text-[#e5e5e5] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-      inset && 'pl-8', className,
+      inset && 'pl-8',
+      className,
     )}
     {...props}
   />
@@ -86,7 +90,11 @@ const DropdownMenuSeparator = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.Separator ref={ref} className={cn('-mx-1 my-1 h-px bg-[#2a2a2a]', className)} {...props} />
+  <DropdownMenuPrimitive.Separator
+    ref={ref}
+    className={cn('-mx-1 my-1 h-px bg-[#2a2a2a]', className)}
+    {...props}
+  />
 ))
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName
 
@@ -103,7 +111,16 @@ const DropdownMenuLabel = React.forwardRef<
 DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName
 
 export {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuGroup, DropdownMenuPortal,
-  DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuRadioGroup,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuRadioGroup,
 }

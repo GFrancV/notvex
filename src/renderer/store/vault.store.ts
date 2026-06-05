@@ -1,6 +1,7 @@
 import { create } from 'zustand'
+
+import type { NoteListItem, Tag } from '../../shared/types'
 import { notvex } from '../lib/ipc'
-import type { NoteListItem, Tag } from '../../preload/index'
 
 export type VaultStatus = 'checking' | 'uninitialized' | 'locked' | 'unlocked'
 
@@ -28,28 +29,28 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   tagCounts: {},
   activeNoteId: null,
 
-  setStatus: (status) => set({ status }),
-  setNotes: (notes) => set({ notes }),
-  setTags: (tags) => set({ tags }),
-  setTagCounts: (tagCounts) => set({ tagCounts }),
-  setActiveNoteId: (activeNoteId) => set({ activeNoteId }),
+  setStatus: (status): void => set({ status }),
+  setNotes: (notes): void => set({ notes }),
+  setTags: (tags): void => set({ tags }),
+  setTagCounts: (tagCounts): void => set({ tagCounts }),
+  setActiveNoteId: (activeNoteId): void => set({ activeNoteId }),
 
-  loadNotes: async (filter = {}) => {
+  loadNotes: async (filter = {}): Promise<void> => {
     const res = await notvex.notes.list(filter)
     if (res.success) set({ notes: res.data })
   },
 
-  loadTags: async () => {
+  loadTags: async (): Promise<void> => {
     const res = await notvex.tags.list()
     if (res.success) set({ tags: res.data })
   },
 
-  loadTagCounts: async () => {
+  loadTagCounts: async (): Promise<void> => {
     const res = await notvex.noteTags.counts()
     if (res.success) set({ tagCounts: res.data })
   },
 
-  refreshAll: async () => {
+  refreshAll: async (): Promise<void> => {
     const { loadNotes, loadTags, loadTagCounts } = get()
     await Promise.all([loadNotes(), loadTags(), loadTagCounts()])
   },

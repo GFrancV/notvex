@@ -1,25 +1,23 @@
 import React, { useEffect, useState } from 'react'
+
+import { FileText, Pin, Trash2, Settings, Lock } from 'lucide-react'
+
+import { ChangePasswordDialog } from './change-password-dialog'
 import { notvex } from '../lib/ipc'
-import { useVaultStore } from '../store/vault.store'
 import { useUiStore } from '../store/ui.store'
+import { useVaultStore } from '../store/vault.store'
+import { Button } from './ui/button'
+import { Label } from './ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
-import {
-  Popover, PopoverContent, PopoverTrigger,
-} from './ui/popover'
-import { Button } from './ui/button'
-import { Input } from './ui/input'
-import { Label } from './ui/label'
-import {
-  FileText, Pin, Trash2, Tag as TagIcon, Settings, Lock, Plus, ChevronRight,
-} from 'lucide-react'
+import type { Tag } from '../../shared/types'
 import { cn } from '../lib/utils'
-import { ChangePasswordDialog } from './ChangePasswordDialog'
-import type { Tag } from '../../preload/index'
 
 export function Sidebar(): JSX.Element {
-  const { tags, tagCounts, loadTags, loadTagCounts, notes, setStatus, setActiveNoteId, setNotes } = useVaultStore()
-  const { activeTagFilter, showTrash, setActiveTagFilter, setShowTrash, setSettingsOpen } = useUiStore()
+  const { tags, tagCounts, loadTags, loadTagCounts, notes, setStatus, setActiveNoteId, setNotes } =
+    useVaultStore()
+  const { activeTagFilter, showTrash, setActiveTagFilter, setShowTrash } = useUiStore()
 
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
@@ -27,16 +25,16 @@ export function Sidebar(): JSX.Element {
   const [vaultPath, setVaultPath] = useState<string | null>(null)
 
   useEffect(() => {
-    loadTags()
-    loadTagCounts()
-    notvex.prefs.get().then((res) => {
+    void loadTags()
+    void loadTagCounts()
+    void notvex.prefs.get().then((res) => {
       if (res.success && res.data && typeof res.data === 'object') {
         const prefs = res.data as { autoLockMinutes?: number; vaultPath?: string | null }
         setAutoLockMinutes(prefs.autoLockMinutes ?? 15)
         setVaultPath(prefs.vaultPath ?? null)
       }
     })
-  }, [])
+  }, [loadTags, loadTagCounts])
 
   const handleLock = async (): Promise<void> => {
     await notvex.vault.close()
@@ -47,7 +45,7 @@ export function Sidebar(): JSX.Element {
 
   const handleAutoLockChange = (minutes: number): void => {
     setAutoLockMinutes(minutes)
-    notvex.prefs.set('autoLockMinutes', minutes)
+    void notvex.prefs.set('autoLockMinutes', minutes)
   }
 
   const allNotesCount = notes.filter((n) => !n.isTrashed).length
@@ -55,34 +53,38 @@ export function Sidebar(): JSX.Element {
   const trashCount = notes.filter((n) => n.isTrashed).length
 
   return (
-    <div className="flex w-60 shrink-0 flex-col bg-[#0f0f0f] border-r border-[#1e1e1e]">
+    <div className="flex w-60 shrink-0 flex-col border-r border-[#1e1e1e] bg-[#0f0f0f]">
       {/* App header */}
-      <div className="flex items-center justify-between px-4 py-4 titlebar-drag">
-        <span className="text-sm font-semibold text-[#e5e5e5] titlebar-no-drag select-none">Notvex</span>
-        <div className="flex items-center gap-1 titlebar-no-drag">
+      <div className="titlebar-drag flex items-center justify-between px-4 py-4">
+        <span className="titlebar-no-drag text-sm font-semibold text-[#e5e5e5] select-none">
+          Notvex
+        </span>
+        <div className="titlebar-no-drag flex items-center gap-1">
           <button
-            onClick={handleLock}
+            onClick={(): void => {
+              void handleLock()
+            }}
             title="Lock vault (Ctrl+L)"
-            className="rounded p-1 text-[#737373] hover:text-[#e5e5e5] hover:bg-[#1a1a1a] transition-colors"
+            className="rounded p-1 text-[#737373] transition-colors hover:bg-[#1a1a1a] hover:text-[#e5e5e5]"
           >
             <Lock className="h-3.5 w-3.5" />
           </button>
           <Popover open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
             <PopoverTrigger asChild>
-              <button className="rounded p-1 text-[#737373] hover:text-[#e5e5e5] hover:bg-[#1a1a1a] transition-colors">
+              <button className="rounded p-1 text-[#737373] transition-colors hover:bg-[#1a1a1a] hover:text-[#e5e5e5]">
                 <Settings className="h-3.5 w-3.5" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 p-4 space-y-4">
+            <PopoverContent align="end" className="w-64 space-y-4 p-4">
               <div>
-                <p className="text-sm font-medium text-[#e5e5e5] mb-3">Settings</p>
+                <p className="mb-3 text-sm font-medium text-[#e5e5e5]">Settings</p>
               </div>
               <div className="space-y-2">
                 <Label>Auto-lock after</Label>
                 <select
                   value={autoLockMinutes}
                   onChange={(e) => handleAutoLockChange(Number(e.target.value))}
-                  className="w-full rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-1.5 text-sm text-[#e5e5e5] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-1.5 text-sm text-[#e5e5e5] focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                 >
                   <option value={5}>5 minutes</option>
                   <option value={15}>15 minutes</option>
@@ -94,23 +96,35 @@ export function Sidebar(): JSX.Element {
               {vaultPath && (
                 <div className="space-y-1">
                   <Label>Vault location</Label>
-                  <p className="text-xs text-[#737373] break-all">{vaultPath}</p>
+                  <p className="text-xs break-all text-[#737373]">{vaultPath}</p>
                 </div>
               )}
               <div className="space-y-1">
-                <p className="text-xs text-[#737373] font-medium uppercase tracking-wide">Security</p>
+                <p className="text-xs font-medium tracking-wide text-[#737373] uppercase">
+                  Security
+                </p>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-start text-[#a3a3a3] hover:text-[#e5e5e5] h-8 px-2 text-xs"
-                  onClick={() => { setChangePasswordOpen(true); setSettingsPopoverOpen(false) }}
+                  className="h-8 w-full justify-start px-2 text-xs text-[#a3a3a3] hover:text-[#e5e5e5]"
+                  onClick={() => {
+                    setChangePasswordOpen(true)
+                    setSettingsPopoverOpen(false)
+                  }}
                 >
                   Change password
                 </Button>
               </div>
               <Separator />
-              <Button variant="destructive" size="sm" className="w-full" onClick={handleLock}>
-                <Lock className="h-3.5 w-3.5 mr-2" /> Lock vault
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full"
+                onClick={(): void => {
+                  void handleLock()
+                }}
+              >
+                <Lock className="mr-2 h-3.5 w-3.5" /> Lock vault
               </Button>
             </PopoverContent>
           </Popover>
@@ -121,20 +135,26 @@ export function Sidebar(): JSX.Element {
 
       {/* Navigation */}
       <ScrollArea className="flex-1">
-        <nav className="p-2 space-y-0.5">
+        <nav className="space-y-0.5 p-2">
           <NavItem
             icon={<FileText className="h-3.5 w-3.5" />}
             label="All Notes"
             count={allNotesCount}
             active={!activeTagFilter && !showTrash}
-            onClick={() => { setActiveTagFilter(null); setShowTrash(false) }}
+            onClick={() => {
+              setActiveTagFilter(null)
+              setShowTrash(false)
+            }}
           />
           <NavItem
             icon={<Pin className="h-3.5 w-3.5" />}
             label="Pinned"
             count={pinnedCount}
             active={false}
-            onClick={() => { setActiveTagFilter(null); setShowTrash(false) }}
+            onClick={() => {
+              setActiveTagFilter(null)
+              setShowTrash(false)
+            }}
           />
           <NavItem
             icon={<Trash2 className="h-3.5 w-3.5" />}
@@ -148,7 +168,9 @@ export function Sidebar(): JSX.Element {
         {/* Tags section */}
         <div className="px-2 py-1">
           <div className="flex items-center justify-between px-2 py-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#737373]">Tags</span>
+            <span className="text-xs font-semibold tracking-wider text-[#737373] uppercase">
+              Tags
+            </span>
           </div>
           {tags.length === 0 ? (
             <p className="px-2 py-1 text-xs text-[#737373]">No tags yet</p>
@@ -169,7 +191,7 @@ export function Sidebar(): JSX.Element {
       </ScrollArea>
 
       {/* Status indicator */}
-      <div className="flex items-center gap-2 px-4 py-3 border-t border-[#1e1e1e]">
+      <div className="flex items-center gap-2 border-t border-[#1e1e1e] px-4 py-3">
         <div className="h-2 w-2 rounded-full bg-emerald-500" />
         <span className="text-xs text-[#737373]">Vault unlocked</span>
       </div>
@@ -183,7 +205,11 @@ export function Sidebar(): JSX.Element {
 }
 
 function NavItem({
-  icon, label, count, active, onClick,
+  icon,
+  label,
+  count,
+  active,
+  onClick,
 }: {
   icon: React.ReactNode
   label: string
@@ -203,15 +229,16 @@ function NavItem({
     >
       {icon}
       <span className="flex-1 text-left">{label}</span>
-      {count > 0 && (
-        <span className="text-xs text-[#737373]">{count}</span>
-      )}
+      {count > 0 && <span className="text-xs text-[#737373]">{count}</span>}
     </button>
   )
 }
 
 function TagItem({
-  tag, count, active, onClick,
+  tag,
+  count,
+  active,
+  onClick,
 }: {
   tag: Tag
   count: number

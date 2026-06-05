@@ -1,4 +1,5 @@
 import * as bip39 from 'bip39'
+
 import { hashForVerify } from './crypto'
 
 export function generateMnemonic(): string {

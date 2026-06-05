@@ -15,11 +15,14 @@
  *   VirtualLock/mlock so the OS cannot page it to disk.
  * - All intermediate key copies are zeroed immediately after use.
  */
+import { readFileSync, unlinkSync, writeFileSync } from 'fs'
+
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
-import { readFileSync, unlinkSync, writeFileSync } from 'fs'
+
 import { runMigrations } from '../db/migrations'
 import { dbAll, dbGet, dbRun } from '../db/queries'
+
 import { isNotvexContainer, makeTempDbPath, readContainer, writeContainer } from './container'
 import {
   calibrateArgon2id,
@@ -58,7 +61,7 @@ let tempDbPath: string | null = null
 
 function openDatabase(path: string): Promise<sqlite3.Database> {
   return new Promise((resolve, reject) => {
-    const database = new (sqlcipher as unknown as typeof sqlite3).Database(path, (err) => {
+    const database = new sqlcipher.Database(path, (err) => {
       if (err) reject(err)
       else resolve(database)
     })
@@ -99,10 +102,7 @@ function encryptMasterKey(
   masterKeyBuf: Uint8Array,
   wrapKey: Uint8Array,
 ): { ciphertext: string; nonce: string } {
-  const { ciphertext, nonce } = encryptField(
-    Buffer.from(masterKeyBuf).toString('hex'),
-    wrapKey,
-  )
+  const { ciphertext, nonce } = encryptField(Buffer.from(masterKeyBuf).toString('hex'), wrapKey)
   return {
     ciphertext: Buffer.from(ciphertext).toString('hex'),
     nonce: Buffer.from(nonce).toString('hex'),
@@ -178,7 +178,9 @@ export async function createVault(filePath: string, password: string): Promise<C
   await applyKey(database, rawKey)
   await runMigrations(database)
 
-  await dbRun(database, `
+  await dbRun(
+    database,
+    `
     INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, verify_hash, recovery_verify_hash, created_at)
     VALUES (1, 1, ?, ?, ?, '', ?)`,
     [Buffer.from(salt), JSON.stringify(params), verifyHash, Date.now()],
@@ -240,7 +242,11 @@ export async function openVault(filePath: string, password: string): Promise<boo
   const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
   if (!meta) {
     await closeDatabase(database)
-    try { unlinkSync(tmp) } catch { /* ignore */ }
+    try {
+      unlinkSync(tmp)
+    } catch {
+      /* ignore */
+    }
     memzero(rawKey)
     throw new Error('Vault database could not be read. It may be corrupted.')
   }
@@ -286,7 +292,11 @@ export async function openVaultWithRecovery(filePath: string, mnemonic: string):
   const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
   if (!meta) {
     await closeDatabase(database)
-    try { unlinkSync(tmp) } catch { /* ignore */ }
+    try {
+      unlinkSync(tmp)
+    } catch {
+      /* ignore */
+    }
     rawKey.fill(0)
     return false
   }
@@ -327,9 +337,7 @@ export async function changePassword(
   // Step 3 — re-key SQLCipher in-place
   const newHex = Buffer.from(newRawKey).toString('hex')
   await new Promise<void>((resolve, reject) => {
-    db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-      err ? reject(err) : resolve(),
-    )
+    db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) => (err ? reject(err) : resolve()))
   })
 
   try {
@@ -340,26 +348,56 @@ export async function changePassword(
 
     try {
       // Step 4 — update vault_meta with new salt and verify hash
-      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1`,
-        [Buffer.from(newSalt), newVerifyHash],
-      )
+      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1`, [
+        Buffer.from(newSalt),
+        newVerifyHash,
+      ])
 
       // Step 5 — re-encrypt all note ciphertexts with the new key.
       // PRAGMA rekey re-encrypted the SQLCipher pages, but title/content are
       // application-level XChaCha20 ciphertexts that still use the old masterKey.
       // They must be decrypted with the old key and re-encrypted with the new one.
-      interface RawNote { id: string; title: Buffer; title_iv: Buffer; content: Buffer; content_iv: Buffer }
-      const notes = await dbAll<RawNote>(db, 'SELECT id, title, title_iv, content, content_iv FROM notes', [])
+      interface RawNote {
+        id: string
+        title: Buffer
+        title_iv: Buffer
+        content: Buffer
+        content_iv: Buffer
+      }
+      const notes = await dbAll<RawNote>(
+        db,
+        'SELECT id, title, title_iv, content, content_iv FROM notes',
+        [],
+      )
 
       for (const note of notes) {
-        const titlePlain = decryptField(new Uint8Array(note.title), new Uint8Array(note.title_iv), masterKey!)
-        const contentPlain = decryptField(new Uint8Array(note.content), new Uint8Array(note.content_iv), masterKey!)
+        const titlePlain = decryptField(
+          new Uint8Array(note.title),
+          new Uint8Array(note.title_iv),
+          masterKey,
+        )
+        const contentPlain = decryptField(
+          new Uint8Array(note.content),
+          new Uint8Array(note.content_iv),
+          masterKey,
+        )
 
         const { ciphertext: newTitle, nonce: newTitleIv } = encryptField(titlePlain, newRawKey)
-        const { ciphertext: newContent, nonce: newContentIv } = encryptField(contentPlain, newRawKey)
+        const { ciphertext: newContent, nonce: newContentIv } = encryptField(
+          contentPlain,
+          newRawKey,
+        )
 
-        await dbRun(db, `UPDATE notes SET title = ?, title_iv = ?, content = ?, content_iv = ? WHERE id = ?`,
-          [Buffer.from(newTitle), Buffer.from(newTitleIv), Buffer.from(newContent), Buffer.from(newContentIv), note.id],
+        await dbRun(
+          db,
+          `UPDATE notes SET title = ?, title_iv = ?, content = ?, content_iv = ? WHERE id = ?`,
+          [
+            Buffer.from(newTitle),
+            Buffer.from(newTitleIv),
+            Buffer.from(newContent),
+            Buffer.from(newContentIv),
+            note.id,
+          ],
         )
       }
 
@@ -416,18 +454,37 @@ export async function changePassword(
 // Called periodically for crash safety. No-op if vault is closed.
 export function syncContainer(): void {
   if (!isVaultOpen()) return
-  try { packContainer() } catch { /* don't disrupt the session */ }
+  try {
+    packContainer()
+  } catch {
+    /* don't disrupt the session */
+  }
 }
 
 export async function closeVault(): Promise<void> {
-  if (masterKey) { freeSecure(masterKey); masterKey = null }
+  if (masterKey) {
+    freeSecure(masterKey)
+    masterKey = null
+  }
   if (db) {
-    try { await closeDatabase(db) } catch { /* ignore */ }
+    try {
+      await closeDatabase(db)
+    } catch {
+      /* ignore */
+    }
     db = null
   }
   if (tempDbPath && currentVaultPath && currentSidecar) {
-    try { packContainer() } catch { /* don't throw on close */ }
-    try { unlinkSync(tempDbPath) } catch { /* ignore */ }
+    try {
+      packContainer()
+    } catch {
+      /* don't throw on close */
+    }
+    try {
+      unlinkSync(tempDbPath)
+    } catch {
+      /* ignore */
+    }
   }
   currentVaultPath = null
   currentSidecar = null

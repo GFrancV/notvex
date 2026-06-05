@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { notvex } from '../lib/ipc'
-import { useVaultStore } from '../store/vault.store'
+
+import { Shield, FolderOpen, Copy, Check, Eye, EyeOff } from 'lucide-react'
+
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import { Shield, FolderOpen, Copy, Check, Eye, EyeOff } from 'lucide-react'
+import { notvex } from '../lib/ipc'
+import { useVaultStore } from '../store/vault.store'
 
 type Step = 'location' | 'password' | 'recovery'
 
@@ -40,7 +42,10 @@ export function Setup(): JSX.Element {
     setLoading(true)
     const res = await notvex.vault.create(vaultPath, password)
     setLoading(false)
-    if (!res.success) { setError(res.error); return }
+    if (!res.success) {
+      setError(res.error)
+      return
+    }
     setMnemonic(res.data.mnemonic)
     setStep('recovery')
   }
@@ -60,12 +65,12 @@ export function Setup(): JSX.Element {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-600/20 border border-emerald-600/30">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-emerald-600/30 bg-emerald-600/20">
             <Shield className="h-7 w-7 text-emerald-400" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-[#e5e5e5] tracking-tight">Notvex</h1>
-            <p className="text-sm text-[#737373] mt-1">Create your secure vault</p>
+            <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Notvex</h1>
+            <p className="mt-1 text-sm text-[#737373]">Create your secure vault</p>
           </div>
         </div>
 
@@ -82,20 +87,23 @@ export function Setup(): JSX.Element {
                   title={vaultPath}
                   className="flex-1"
                 />
-                <Button variant="outline" size="icon" onClick={handleChooseFile}>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={(): void => {
+                    void handleChooseFile()
+                  }}
+                >
                   <FolderOpen className="h-4 w-4" />
                 </Button>
               </div>
               <p className="text-xs text-[#737373]">
-                Your vault will be saved as a single <code className="text-emerald-400">.nvx</code> file. Copy it to back up everything.
+                Your vault will be saved as a single <code className="text-emerald-400">.nvx</code>{' '}
+                file. Copy it to back up everything.
               </p>
             </div>
 
-            <Button
-              className="w-full"
-              disabled={!vaultPath}
-              onClick={() => setStep('password')}
-            >
+            <Button className="w-full" disabled={!vaultPath} onClick={() => setStep('password')}>
               Continue
             </Button>
           </div>
@@ -125,7 +133,7 @@ export function Setup(): JSX.Element {
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
+                    className="absolute top-1/2 right-3 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -140,7 +148,9 @@ export function Setup(): JSX.Element {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   placeholder="Repeat password"
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  onKeyDown={(e): void => {
+                    if (e.key === 'Enter') void handleCreate()
+                  }}
                 />
               </div>
             </div>
@@ -151,12 +161,18 @@ export function Setup(): JSX.Element {
               <Button variant="outline" className="flex-1" onClick={() => setStep('location')}>
                 Back
               </Button>
-              <Button className="flex-1" onClick={handleCreate} disabled={loading}>
+              <Button
+                className="flex-1"
+                onClick={(): void => {
+                  void handleCreate()
+                }}
+                disabled={loading}
+              >
                 {loading ? 'Creating vault…' : 'Create vault'}
               </Button>
             </div>
 
-            <p className="text-xs text-[#737373] text-center">
+            <p className="text-center text-xs text-[#737373]">
               This derives your encryption key using Argon2id. May take a few seconds.
             </p>
           </div>
@@ -166,25 +182,34 @@ export function Setup(): JSX.Element {
         {step === 'recovery' && (
           <div className="space-y-6">
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-              <p className="text-sm text-amber-300 font-medium mb-1">Save your recovery key</p>
+              <p className="mb-1 text-sm font-medium text-amber-300">Save your recovery key</p>
               <p className="text-xs text-amber-300/70">
-                If you lose your password, this is the only way to recover your notes. Write it down or store it in a password manager. It will never be shown again.
+                If you lose your password, this is the only way to recover your notes. Write it down
+                or store it in a password manager. It will never be shown again.
               </p>
             </div>
 
             <div className="space-y-2">
               <div className="relative rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-4">
-                <p className="font-mono text-sm text-emerald-300 leading-relaxed break-all">{mnemonic}</p>
+                <p className="font-mono text-sm leading-relaxed break-all text-emerald-300">
+                  {mnemonic}
+                </p>
                 <button
-                  onClick={copyMnemonic}
-                  className="absolute right-3 top-3 rounded p-1 text-[#737373] hover:text-[#e5e5e5] hover:bg-[#2a2a2a]"
+                  onClick={(): void => {
+                    void copyMnemonic()
+                  }}
+                  className="absolute top-3 right-3 rounded p-1 text-[#737373] hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
                 >
-                  {mnemonicCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                  {mnemonicCopied ? (
+                    <Check className="h-4 w-4 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
 
-            <label className="flex items-start gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
                 className="mt-0.5 accent-emerald-500"
@@ -192,7 +217,8 @@ export function Setup(): JSX.Element {
                 onChange={(e) => setConfirmed(e.target.checked)}
               />
               <span className="text-sm text-[#a3a3a3]">
-                I have saved my recovery key in a secure location. I understand that if I lose both my password and this key, my notes are irrecoverable.
+                I have saved my recovery key in a secure location. I understand that if I lose both
+                my password and this key, my notes are irrecoverable.
               </span>
             </label>
 

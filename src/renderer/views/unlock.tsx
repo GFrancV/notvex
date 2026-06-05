@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { notvex } from '../lib/ipc'
-import { useVaultStore } from '../store/vault.store'
+
+import { Shield, Eye, EyeOff, Key } from 'lucide-react'
+
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { Shield, Eye, EyeOff, Key } from 'lucide-react'
+import { notvex } from '../lib/ipc'
+import { useVaultStore } from '../store/vault.store'
 
 export function Unlock(): JSX.Element {
   const { setStatus, refreshAll } = useVaultStore()
@@ -19,7 +21,7 @@ export function Unlock(): JSX.Element {
   const [tab, setTab] = useState<'password' | 'recovery'>('password')
 
   useEffect(() => {
-    notvex.prefs.get('vaultPath').then((res) => {
+    void notvex.prefs.get('vaultPath').then((res) => {
       if (res.success && res.data) setVaultPath(res.data as string)
     })
   }, [])
@@ -31,21 +33,35 @@ export function Unlock(): JSX.Element {
 
   const handlePasswordUnlock = async (): Promise<void> => {
     if (!vaultPath) return
-    setError(''); setLoading(true)
+    setError('')
+    setLoading(true)
     const res = await notvex.vault.open(vaultPath, password)
     setLoading(false)
-    if (!res.success) { setError(res.error); return }
-    if (!res.data) { setError('Incorrect password.'); return }
+    if (!res.success) {
+      setError(res.error)
+      return
+    }
+    if (!res.data) {
+      setError('Incorrect password.')
+      return
+    }
     await afterUnlock()
   }
 
   const handleRecoveryUnlock = async (): Promise<void> => {
     if (!vaultPath) return
-    setError(''); setLoading(true)
+    setError('')
+    setLoading(true)
     const res = await notvex.vault.openWithRecovery(vaultPath, mnemonic.trim())
     setLoading(false)
-    if (!res.success) { setError(res.error); return }
-    if (!res.data) { setError('Invalid recovery key.'); return }
+    if (!res.success) {
+      setError(res.error)
+      return
+    }
+    if (!res.data) {
+      setError('Invalid recovery key.')
+      return
+    }
     await afterUnlock()
   }
 
@@ -54,23 +70,27 @@ export function Unlock(): JSX.Element {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-600/20 border border-emerald-600/30">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-emerald-600/30 bg-emerald-600/20">
             <Shield className="h-7 w-7 text-emerald-400" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-[#e5e5e5] tracking-tight">Notvex</h1>
-            <p className="text-sm text-[#737373] mt-1">Unlock your vault</p>
+            <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Notvex</h1>
+            <p className="mt-1 text-sm text-[#737373]">Unlock your vault</p>
           </div>
         </div>
 
         {vaultPath && (
-          <p className="mb-4 text-xs text-[#737373] text-center truncate">
-            {vaultPath}
-          </p>
+          <p className="mb-4 truncate text-center text-xs text-[#737373]">{vaultPath}</p>
         )}
 
-        <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setError('') }}>
-          <TabsList className="w-full mb-6">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            setTab(v as typeof tab)
+            setError('')
+          }}
+        >
+          <TabsList className="mb-6 w-full">
             <TabsTrigger value="password" className="flex-1 gap-1.5">
               <Key className="h-3.5 w-3.5" /> Password
             </TabsTrigger>
@@ -91,13 +111,14 @@ export function Unlock(): JSX.Element {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   className="pr-10"
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handlePasswordUnlock()}
+                  onKeyDown={(e): void => {
+                    if (e.key === 'Enter') void handlePasswordUnlock()
+                  }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -106,7 +127,13 @@ export function Unlock(): JSX.Element {
 
             {error && <p className="text-sm text-red-400">{error}</p>}
 
-            <Button className="w-full" onClick={handlePasswordUnlock} disabled={loading || !password}>
+            <Button
+              className="w-full"
+              onClick={(): void => {
+                void handlePasswordUnlock()
+              }}
+              disabled={loading || !password}
+            >
               {loading ? 'Unlocking…' : 'Unlock'}
             </Button>
           </TabsContent>
@@ -120,8 +147,7 @@ export function Unlock(): JSX.Element {
                 value={mnemonic}
                 onChange={(e) => setMnemonic(e.target.value)}
                 placeholder="Enter your 24 recovery words separated by spaces..."
-                className="flex min-h-[96px] w-full rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-sm text-[#e5e5e5] font-mono placeholder:text-[#737373] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 resize-none"
-                autoFocus
+                className="flex min-h-[96px] w-full resize-none rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 font-mono text-sm text-[#e5e5e5] placeholder:text-[#737373] focus-visible:ring-1 focus-visible:ring-emerald-500 focus-visible:outline-none"
               />
             </div>
 
@@ -129,7 +155,9 @@ export function Unlock(): JSX.Element {
 
             <Button
               className="w-full"
-              onClick={handleRecoveryUnlock}
+              onClick={(): void => {
+                void handleRecoveryUnlock()
+              }}
               disabled={loading || mnemonic.trim().split(/\s+/).length < 24}
             >
               {loading ? 'Unlocking…' : 'Unlock with recovery key'}
