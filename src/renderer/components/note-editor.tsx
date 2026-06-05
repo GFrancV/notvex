@@ -1,23 +1,28 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-
-import ReactMarkdown from 'react-markdown'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
 import CodeMirror from '@uiw/react-codemirror'
-import { Columns2, FileText, Pin, Trash2 } from 'lucide-react'
-import rehypeHighlight from 'rehype-highlight'
-import rehypeSanitize from 'rehype-sanitize'
-import remarkGfm from 'remark-gfm'
+import { EllipsisVerticalIcon, Eye, FileText, Pencil, Pin, Trash2Icon } from 'lucide-react'
 
 import type { Note } from '../../shared/types'
+import { livePreviewPlugin, livePreviewTheme } from '../lib/editor/live-preview'
 import { notvex } from '../lib/ipc'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
+import { EditorToolbar } from './editor-toolbar'
+import { NoteReadingView } from './note-reading-view'
 import { Button } from './ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu'
 
-// Extra overrides on top of oneDark to match Notvex design
 const notvexEditorTheme = EditorView.theme({
   '&': { backgroundColor: '#111111 !important', height: '100%' },
   '.cm-scroller': { backgroundColor: '#111111' },
@@ -25,20 +30,20 @@ const notvexEditorTheme = EditorView.theme({
     fontFamily: '"JetBrains Mono","Fira Code","Consolas",monospace',
     fontSize: '14px',
     lineHeight: '1.75',
-    padding: '16px 20px',
+    padding: '16px 20px'
   },
   '.cm-gutters': { display: 'none' },
   '.cm-cursor': { borderLeftColor: '#10b981 !important' },
   '.cm-selectionBackground': { backgroundColor: '#10b98130 !important' },
   '&.cm-focused .cm-selectionBackground': { backgroundColor: '#10b98140 !important' },
-  '.cm-activeLine': { backgroundColor: '#ffffff05' },
+  '.cm-activeLine': { backgroundColor: '#ffffff05' }
 })
 
 const AUTOSAVE_DELAY = 500
 
 export function NoteEditor(): JSX.Element | null {
   const { activeNoteId, loadNotes, loadTagCounts } = useVaultStore()
-  const { showPreview, togglePreview } = useUiStore()
+  const { editorMode, toggleEditorMode } = useUiStore()
 
   const [note, setNote] = useState<Note | null>(null)
   const [title, setTitle] = useState('')
@@ -47,6 +52,7 @@ export function NoteEditor(): JSX.Element | null {
 
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
   const activeIdRef = useRef<string | null>(null)
+  const editorViewRef = useRef<EditorView | null>(null)
 
   useEffect(() => {
     if (!activeNoteId) {
@@ -61,6 +67,13 @@ export function NoteEditor(): JSX.Element | null {
         setNote(res.data)
         setTitle(res.data.title)
         setContent(res.data.content)
+        // Reset scroll and cursor to top when switching notes
+        if (editorViewRef.current) {
+          editorViewRef.current.dispatch({
+            selection: { anchor: 0 },
+            scrollIntoView: true
+          })
+        }
       }
     })
   }, [activeNoteId])
@@ -72,7 +85,7 @@ export function NoteEditor(): JSX.Element | null {
       setSaving(false)
       void loadNotes()
     },
-    [loadNotes],
+    [loadNotes]
   )
 
   const handleContentChange = useCallback(
@@ -84,7 +97,7 @@ export function NoteEditor(): JSX.Element | null {
         void saveContent(activeNoteId, value)
       }, AUTOSAVE_DELAY)
     },
-    [activeNoteId, saveContent],
+    [activeNoteId, saveContent]
   )
 
   const handleTitleBlur = async (): Promise<void> => {
@@ -122,7 +135,7 @@ export function NoteEditor(): JSX.Element | null {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col border-l border-[#1e1e1e]">
-      {/* Toolbar */}
+      {/* Title bar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-[#1e1e1e] px-4 py-2">
         <input
           value={title}
@@ -149,36 +162,71 @@ export function NoteEditor(): JSX.Element | null {
           <Button
             variant="ghost"
             size="icon"
-            onClick={togglePreview}
-            title="Toggle preview (Ctrl+P)"
-            className={showPreview ? 'text-emerald-400' : 'text-[#737373]'}
+            onClick={toggleEditorMode}
+            title={editorMode === 'editing' ? 'Reading view (Ctrl+Shift+E)' : 'Edit (Ctrl+Shift+E)'}
+            className={editorMode === 'reading' ? 'text-emerald-400' : 'text-[#737373]'}
           >
-            <Columns2 className="h-4 w-4" />
+            {editorMode === 'editing' ? (
+              <Eye className="h-4 w-4" />
+            ) : (
+              <Pencil className="h-4 w-4" />
+            )}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(): void => {
-              void handleTrash()
-            }}
-            title="Move to trash"
-            className="text-[#737373] hover:text-red-400"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted">
+                <EllipsisVerticalIcon className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuGroup>
+                <DropdownMenuItem>Profile</DropdownMenuItem>
+                <DropdownMenuItem>Billing</DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem>Team</DropdownMenuItem>
+                <DropdownMenuItem>Subscription</DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => void handleTrash()}
+                  title="Move to trash"
+                >
+                  <Trash2Icon className="size-4" />
+                  Delete file
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {/* Editor */}
+      {/* Formatting toolbar — only in editing mode */}
+      {editorMode === 'editing' && <EditorToolbar editorView={editorViewRef.current} />}
+
+      {/* Editor / Reading view */}
       <div className="flex min-h-0 flex-1">
-        <div
-          className={`flex flex-col ${showPreview ? 'w-1/2' : 'w-full'} min-h-0 overflow-hidden`}
-        >
+        {editorMode === 'reading' ? (
+          <NoteReadingView content={content} />
+        ) : (
           <CodeMirror
             value={content}
             theme="dark"
-            extensions={[markdown({ base: markdownLanguage }), oneDark, notvexEditorTheme]}
+            extensions={[
+              markdown({ base: markdownLanguage }),
+              oneDark,
+              notvexEditorTheme,
+              livePreviewPlugin,
+              livePreviewTheme
+            ]}
             onChange={handleContentChange}
+            onCreateEditor={(view) => {
+              editorViewRef.current = view
+              view.focus()
+            }}
             basicSetup={{
               lineNumbers: false,
               foldGutter: false,
@@ -190,28 +238,11 @@ export function NoteEditor(): JSX.Element | null {
               closeBrackets: false,
               autocompletion: false,
               crosshairCursor: false,
-              highlightActiveLineGutter: false,
+              highlightActiveLineGutter: false
             }}
-            className="h-full overflow-auto"
+            className="h-full w-full overflow-auto"
           />
-        </div>
-
-        {showPreview && <NotePreview content={content} />}
-      </div>
-    </div>
-  )
-}
-
-function NotePreview({ content }: { content: string }): JSX.Element {
-  return (
-    <div className="w-1/2 overflow-auto border-l border-[#1e1e1e]">
-      <div className="prose prose-invert prose-sm max-w-none p-6">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeSanitize, rehypeHighlight]}
-        >
-          {content}
-        </ReactMarkdown>
+        )}
       </div>
     </div>
   )

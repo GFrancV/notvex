@@ -1,14 +1,14 @@
 import { create } from 'zustand'
 
 interface UiStore {
-  showPreview: boolean
+  editorMode: 'editing' | 'reading'
   searchQuery: string
   activeTagFilter: string | null
   showTrash: boolean
   commandPaletteOpen: boolean
   settingsOpen: boolean
-  setShowPreview: (v: boolean) => void
-  togglePreview: () => void
+  setEditorMode: (mode: 'editing' | 'reading') => void
+  toggleEditorMode: () => void
   setSearchQuery: (q: string) => void
   setActiveTagFilter: (id: string | null) => void
   setShowTrash: (v: boolean) => void
@@ -16,32 +16,17 @@ interface UiStore {
   setSettingsOpen: (v: boolean) => void
 }
 
-function loadLS(key: string, fallback: boolean): boolean {
-  try {
-    return JSON.parse(localStorage.getItem(key) ?? '') as boolean
-  } catch {
-    return fallback
-  }
-}
-
 export const useUiStore = create<UiStore>((set) => ({
-  showPreview: loadLS('notvex.showPreview', false),
+  editorMode: 'editing',
   searchQuery: '',
   activeTagFilter: null,
   showTrash: false,
   commandPaletteOpen: false,
   settingsOpen: false,
 
-  setShowPreview: (showPreview): void => {
-    set({ showPreview })
-    localStorage.setItem('notvex.showPreview', JSON.stringify(showPreview))
-  },
-  togglePreview: (): void =>
-    set((s) => {
-      const next = !s.showPreview
-      localStorage.setItem('notvex.showPreview', JSON.stringify(next))
-      return { showPreview: next }
-    }),
+  setEditorMode: (editorMode): void => set({ editorMode }),
+  toggleEditorMode: (): void =>
+    set((s) => ({ editorMode: s.editorMode === 'editing' ? 'reading' : 'editing' })),
   setSearchQuery: (searchQuery): void => set({ searchQuery }),
   setActiveTagFilter: (activeTagFilter): void => set({ activeTagFilter, showTrash: false }),
   setShowTrash: (showTrash): void => set({ showTrash, activeTagFilter: null }),
