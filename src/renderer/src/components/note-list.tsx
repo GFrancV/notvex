@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { formatDistanceToNow } from 'date-fns'
-import { Pin, Trash2, RotateCcw, Trash, Plus, Search } from 'lucide-react'
+import { Pin, Plus, RotateCcw, Search, Trash, Trash2 } from 'lucide-react'
 
+import type { NoteListItem } from '../../../shared/types'
 import { notvex } from '../lib/ipc'
+import { cn } from '../lib/utils'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
 import { Button } from './ui/button'
@@ -12,11 +14,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger
 } from './ui/dropdown-menu'
 import { ScrollArea } from './ui/scroll-area'
-import type { NoteListItem } from '../../shared/types'
-import { cn } from '../lib/utils'
 
 const SEARCH_DEBOUNCE = 300
 
@@ -62,7 +62,7 @@ export function NoteList(): JSX.Element {
       await notvex.notes.update(note.id, { isPinned: !note.isPinned })
       void loadNotes({ trashed: showTrash, tagId: activeTagFilter ?? undefined })
     },
-    [showTrash, activeTagFilter, loadNotes],
+    [showTrash, activeTagFilter, loadNotes]
   )
 
   const handleTrash = useCallback(
@@ -72,7 +72,7 @@ export function NoteList(): JSX.Element {
       void loadNotes({ trashed: showTrash, tagId: activeTagFilter ?? undefined })
       void loadTagCounts()
     },
-    [showTrash, activeTagFilter, activeNoteId, loadNotes, loadTagCounts, setActiveNoteId],
+    [showTrash, activeTagFilter, activeNoteId, loadNotes, loadTagCounts, setActiveNoteId]
   )
 
   const handleRestore = useCallback(
@@ -80,7 +80,7 @@ export function NoteList(): JSX.Element {
       await notvex.notes.restore(note.id)
       void loadNotes({ trashed: true })
     },
-    [loadNotes],
+    [loadNotes]
   )
 
   const handleDelete = useCallback(
@@ -89,7 +89,7 @@ export function NoteList(): JSX.Element {
       if (activeNoteId === note.id) setActiveNoteId(null)
       void loadNotes({ trashed: true })
     },
-    [activeNoteId, loadNotes, setActiveNoteId],
+    [activeNoteId, loadNotes, setActiveNoteId]
   )
 
   const handleEmptyTrash = async (): Promise<void> => {
@@ -175,7 +175,7 @@ export function NoteList(): JSX.Element {
                     className={cn(
                       'w-full border-b border-[#1a1a1a] px-3 py-3 text-left transition-colors',
                       'hover:bg-[#1a1a1a] focus:outline-none',
-                      activeNoteId === note.id && 'border-l-2 border-l-emerald-500 bg-[#1e1e1e]',
+                      activeNoteId === note.id && 'border-l-2 border-l-emerald-500 bg-[#1e1e1e]'
                     )}
                     onClick={() => setActiveNoteId(note.id)}
                     onContextMenu={(e) => {

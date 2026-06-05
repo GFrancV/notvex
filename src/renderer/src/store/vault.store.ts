@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import type { NoteListItem, Tag } from '../../shared/types'
+import type { NoteListItem, Tag } from '../../../shared/types'
 import { notvex } from '../lib/ipc'
 
 export type VaultStatus = 'checking' | 'uninitialized' | 'locked' | 'unlocked'
@@ -53,5 +53,5 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   refreshAll: async (): Promise<void> => {
     const { loadNotes, loadTags, loadTagCounts } = get()
     await Promise.all([loadNotes(), loadTags(), loadTagCounts()])
-  },
+  }
 }))

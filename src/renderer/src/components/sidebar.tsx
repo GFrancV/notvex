@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react'
 
-import { FileText, Pin, Trash2, Settings, Lock } from 'lucide-react'
+import { FileText, Lock, Pin, Settings, Trash2 } from 'lucide-react'
 
-import { ChangePasswordDialog } from './change-password-dialog'
+import type { Tag } from '../../../shared/types'
 import { notvex } from '../lib/ipc'
+import { cn } from '../lib/utils'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
+import { ChangePasswordDialog } from './change-password-dialog'
 import { Button } from './ui/button'
 import { Label } from './ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
-import type { Tag } from '../../shared/types'
-import { cn } from '../lib/utils'
 
 export function Sidebar(): JSX.Element {
   const { tags, tagCounts, loadTags, loadTagCounts, notes, setStatus, setActiveNoteId, setNotes } =
@@ -209,7 +209,7 @@ function NavItem({
   label,
   count,
   active,
-  onClick,
+  onClick
 }: {
   icon: React.ReactNode
   label: string
@@ -224,7 +224,7 @@ function NavItem({
         'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
         active
           ? 'bg-[#1e1e1e] text-[#e5e5e5]'
-          : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]',
+          : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]'
       )}
     >
       {icon}
@@ -238,7 +238,7 @@ function TagItem({
   tag,
   count,
   active,
-  onClick,
+  onClick
 }: {
   tag: Tag
   count: number
@@ -252,7 +252,7 @@ function TagItem({
         'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
         active
           ? 'bg-[#1e1e1e] text-[#e5e5e5]'
-          : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]',
+          : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]'
       )}
     >
       <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />

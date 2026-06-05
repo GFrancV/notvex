@@ -6,7 +6,7 @@ import { EditorView } from '@codemirror/view'
 import CodeMirror from '@uiw/react-codemirror'
 import { EllipsisVerticalIcon, Eye, FileText, Pencil, Pin, Trash2Icon } from 'lucide-react'
 
-import type { Note } from '../../shared/types'
+import type { Note } from '../../../shared/types'
 import { livePreviewPlugin, livePreviewTheme } from '../lib/editor/live-preview'
 import { notvex } from '../lib/ipc'
 import { useUiStore } from '../store/ui.store'

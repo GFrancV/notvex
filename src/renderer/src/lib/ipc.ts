@@ -1,4 +1,4 @@
-import type { NotvexAPI } from '../../shared/types'
+import type { NotvexAPI } from '../../../shared/types'
 
 declare global {
   interface Window {

@@ -1,13 +1,13 @@
 import { useState } from 'react'
 
-import { Plus, X, Edit2, Check } from 'lucide-react'
+import { Check, Edit2, Plus, X } from 'lucide-react'
 
+import type { Tag } from '../../../shared/types'
 import { notvex } from '../lib/ipc'
 import { useVaultStore } from '../store/vault.store'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import type { Tag } from '../../shared/types'
 
 const PRESET_COLORS = [
   '#10b981',
@@ -17,7 +17,7 @@ const PRESET_COLORS = [
   '#ef4444',
   '#ec4899',
   '#06b6d4',
-  '#84cc16',
+  '#84cc16'
 ]
 
 interface TagManagerProps {

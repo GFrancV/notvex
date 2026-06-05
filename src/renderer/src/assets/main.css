@@ -8,9 +8,10 @@
   --color-surface-2: #222222;
   --color-border: oklch(0.235 0 0);
   --color-accent: #10b981;
+  --color-destructive: oklch(0.577 0.245 27.325);
   --color-accent-muted: #059669;
   --color-text: #e5e5e5;
-  --color-text-muted: #737373;
+  --color-muted: oklch(0.5555 0 0);
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
 }
 

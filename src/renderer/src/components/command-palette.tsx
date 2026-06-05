@@ -1,9 +1,9 @@
-import React, { useEffect, useCallback } from 'react'
+import React, { useCallback, useEffect } from 'react'
 
 import { Command } from 'cmdk'
-import { FileText, Plus, Lock, Eye, Trash2 } from 'lucide-react'
+import { Eye, FileText, Lock, Plus, Trash2 } from 'lucide-react'
 
-import type { NoteListItem } from '../../shared/types'
+import type { NoteListItem } from '../../../shared/types'
 import { notvex } from '../lib/ipc'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
@@ -16,7 +16,7 @@ export function CommandPalette(): JSX.Element | null {
     setActiveNoteId,
     loadNotes,
     setNotes,
-    setActiveNoteId: selectNote,
+    setActiveNoteId: selectNote
   } = useVaultStore()
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export function CommandPalette(): JSX.Element | null {
       setCommandPaletteOpen(false)
       void action()
     },
-    [setCommandPaletteOpen],
+    [setCommandPaletteOpen]
   )
 
   const handleNewNote = async (): Promise<void> => {
@@ -133,7 +133,7 @@ function PaletteItem({
   icon,
   label,
   shortcut,
-  onSelect,
+  onSelect
 }: {
   icon: React.ReactNode
   label: string
