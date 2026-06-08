@@ -1,6 +1,6 @@
 import type sqlite3 from '@journeyapps/sqlcipher'
 
-import { encryptField, decryptField } from '../vault/crypto'
+import { decryptField, encryptField } from '../vault/crypto'
 
 // ─── Promise wrappers ───────────────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ export function dbRun(db: sqlite3.Database, sql: string, params: unknown[] = [])
 export function dbGet<T>(
   db: sqlite3.Database,
   sql: string,
-  params: unknown[] = [],
+  params: unknown[] = []
 ): Promise<T | undefined> {
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err: Error | null, row: T) => (err ? reject(err) : resolve(row)))
@@ -116,17 +116,17 @@ function newId(): string {
 export async function createNote(
   db: sqlite3.Database,
   input: CreateNoteInput,
-  masterKey: Uint8Array,
+  masterKey: Uint8Array
 ): Promise<NoteListItem> {
   const id = newId()
   const now = Date.now()
   const { ciphertext: titleCipher, nonce: titleIv } = encryptField(
     input.title || 'Untitled',
-    masterKey,
+    masterKey
   )
   const { ciphertext: contentCipher, nonce: contentIv } = encryptField(
     input.content || '',
-    masterKey,
+    masterKey
   )
 
   await dbRun(
@@ -141,8 +141,8 @@ export async function createNote(
       Buffer.from(contentCipher),
       Buffer.from(contentIv),
       now,
-      now,
-    ],
+      now
+    ]
   )
 
   return {
@@ -152,14 +152,14 @@ export async function createNote(
     isTrashed: false,
     createdAt: now,
     updatedAt: now,
-    trashedAt: null,
+    trashedAt: null
   }
 }
 
 export async function getNote(
   db: sqlite3.Database,
   id: string,
-  masterKey: Uint8Array,
+  masterKey: Uint8Array
 ): Promise<Note | null> {
   const row = await dbGet<RawNote>(db, 'SELECT * FROM notes WHERE id = ?', [id])
   if (!row) return null
@@ -174,14 +174,14 @@ export async function getNote(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     trashedAt: row.trashed_at,
-    tags,
+    tags
   }
 }
 
 export async function listNotes(
   db: sqlite3.Database,
   masterKey: Uint8Array,
-  filter: NoteFilter = {},
+  filter: NoteFilter = {}
 ): Promise<NoteListItem[]> {
   let sql: string
   let params: unknown[]
@@ -207,7 +207,7 @@ export async function listNotes(
     isTrashed: row.is_trashed === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    trashedAt: row.trashed_at,
+    trashedAt: row.trashed_at
   }))
 }
 
@@ -215,7 +215,7 @@ export async function updateNote(
   db: sqlite3.Database,
   id: string,
   patch: NotePatch,
-  masterKey: Uint8Array,
+  masterKey: Uint8Array
 ): Promise<void> {
   const now = Date.now()
   const updates: string[] = ['updated_at = ?']
@@ -261,7 +261,7 @@ export async function emptyTrash(db: sqlite3.Database): Promise<void> {
 export async function searchNotesByTitle(
   db: sqlite3.Database,
   query: string,
-  masterKey: Uint8Array,
+  masterKey: Uint8Array
 ): Promise<NoteListItem[]> {
   const all = await listNotes(db, masterKey, { trashed: false })
   const lower = query.toLowerCase()
@@ -277,7 +277,7 @@ export async function createTag(db: sqlite3.Database, input: CreateTagInput): Pr
     id,
     input.name,
     input.color,
-    now,
+    now
   ])
   return { id, name: input.name, color: input.color, createdAt: now }
 }
@@ -313,18 +313,18 @@ export async function deleteTag(db: sqlite3.Database, id: string): Promise<void>
 export async function addTagToNote(
   db: sqlite3.Database,
   noteId: string,
-  tagId: string,
+  tagId: string
 ): Promise<void> {
   await dbRun(db, 'INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)', [
     noteId,
-    tagId,
+    tagId
   ])
 }
 
 export async function removeTagFromNote(
   db: sqlite3.Database,
   noteId: string,
-  tagId: string,
+  tagId: string
 ): Promise<void> {
   await dbRun(db, 'DELETE FROM note_tags WHERE note_id = ? AND tag_id = ?', [noteId, tagId])
 }
@@ -335,7 +335,7 @@ export async function getNoteTags(db: sqlite3.Database, noteId: string): Promise
     `SELECT t.id, t.name, t.color, t.created_at as createdAt
      FROM tags t JOIN note_tags nt ON t.id = nt.tag_id
      WHERE nt.note_id = ?`,
-    [noteId],
+    [noteId]
   )
 }
 
@@ -344,7 +344,17 @@ export async function getNoteCountPerTag(db: sqlite3.Database): Promise<Record<s
     db,
     `SELECT nt.tag_id, COUNT(*) as count FROM note_tags nt
      JOIN notes n ON n.id = nt.note_id
-     WHERE n.is_trashed = 0 GROUP BY nt.tag_id`,
+     WHERE n.is_trashed = 0 GROUP BY nt.tag_id`
   )
   return Object.fromEntries(rows.map((r) => [r.tag_id, r.count]))
+}
+
+export async function getAllNoteTags(
+  db: sqlite3.Database
+): Promise<Array<{ noteId: string; tagId: string }>> {
+  return dbAll<{ noteId: string; tagId: string }>(
+    db,
+    `SELECT note_id as noteId, tag_id as tagId FROM note_tags
+     WHERE note_id IN (SELECT id FROM notes WHERE is_trashed = 0)`
+  )
 }
