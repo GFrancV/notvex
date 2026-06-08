@@ -34,7 +34,15 @@ import { Separator } from './ui/separator'
 export function Sidebar(): JSX.Element {
   const { tags, tagCounts, loadTags, loadTagCounts, notes, setStatus, setActiveNoteId, setNotes } =
     useVaultStore()
-  const { activeTags, showTrash, toggleActiveTag, clearActiveTags, setShowTrash } = useUiStore()
+  const {
+    activeTags,
+    showTrash,
+    showPinned,
+    toggleActiveTag,
+    clearActiveTags,
+    setShowTrash,
+    setShowPinned
+  } = useUiStore()
 
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
@@ -150,21 +158,19 @@ export function Sidebar(): JSX.Element {
             icon={<FileText className="h-3.5 w-3.5" />}
             label="All Notes"
             count={allNotesCount}
-            active={activeTags.length === 0 && !showTrash}
+            active={activeTags.length === 0 && !showTrash && !showPinned}
             onClick={() => {
               clearActiveTags()
               setShowTrash(false)
+              setShowPinned(false)
             }}
           />
           <NavItem
             icon={<Pin className="h-3.5 w-3.5" />}
             label="Pinned"
             count={pinnedCount}
-            active={false}
-            onClick={() => {
-              clearActiveTags()
-              setShowTrash(false)
-            }}
+            active={showPinned}
+            onClick={() => setShowPinned(true)}
           />
           <NavItem
             icon={<Trash2 className="h-3.5 w-3.5" />}

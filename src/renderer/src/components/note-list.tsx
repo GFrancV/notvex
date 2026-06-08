@@ -25,16 +25,16 @@ const SEARCH_DEBOUNCE = 300
 export function NoteList(): JSX.Element {
   const { notes, activeNoteId, setActiveNoteId, loadNotes, loadTagCounts, noteTagsMap } =
     useVaultStore()
-  const { searchQuery, setSearchQuery, activeTags, showTrash } = useUiStore()
+  const { searchQuery, setSearchQuery, activeTags, showTrash, showPinned } = useUiStore()
 
   const [contextMenuNote, setContextMenuNote] = useState<NoteListItem | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(-1)
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(0)
 
-  // Load all notes when trash/active-tags view changes
+  // Load all notes when trash/pinned/active-tags view changes
   useEffect(() => {
     void loadNotes({ trashed: showTrash })
-  }, [showTrash, loadNotes])
+  }, [showTrash, showPinned, loadNotes])
 
   // Debounced IPC search — only when no tag filter active (tag filter handled client-side)
   useEffect(() => {
@@ -52,9 +52,17 @@ export function NoteList(): JSX.Element {
     }, SEARCH_DEBOUNCE)
   }, [searchQuery, showTrash, activeTags, loadNotes])
 
-  // Client-side filtering: multi-tag AND + search-on-top-of-tags
+  // Client-side filtering: pinned view, multi-tag AND, and search-on-top-of-tags
   const filteredNotes = useMemo(() => {
     let result = notes
+    if (showPinned) {
+      result = result.filter((n) => n.isPinned)
+      if (searchQuery.trim()) {
+        const lower = searchQuery.toLowerCase()
+        result = result.filter((n) => n.title.toLowerCase().includes(lower))
+      }
+      return result
+    }
     if (activeTags.length > 0) {
       result = result.filter((n) =>
         activeTags.every((tagId) => (noteTagsMap[n.id] ?? []).includes(tagId))
@@ -65,9 +73,9 @@ export function NoteList(): JSX.Element {
       }
     }
     return result
-  }, [notes, activeTags, noteTagsMap, searchQuery])
+  }, [notes, showPinned, activeTags, noteTagsMap, searchQuery])
 
-  const displayedNotes = activeTags.length > 0 ? filteredNotes : notes
+  const displayedNotes = showPinned || activeTags.length > 0 ? filteredNotes : notes
 
   const createNote = async (): Promise<void> => {
     const res = await notvex.notes.create({ title: 'Untitled', content: '' })
@@ -121,6 +129,7 @@ export function NoteList(): JSX.Element {
 
   const emptyMessage = (): string => {
     if (showTrash) return 'Trash is empty'
+    if (showPinned) return 'No pinned notes'
     if (activeTags.length > 0) return 'No notes with these tags'
     if (searchQuery) return 'No results'
     return 'No notes yet'
@@ -141,7 +150,7 @@ export function NoteList(): JSX.Element {
           </InputGroupAddon>
         </InputGroup>
 
-        {!showTrash && (
+        {!showTrash && !showPinned && (
           <Button
             variant="ghost"
             size="xs"
