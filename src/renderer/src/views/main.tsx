@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { type JSX, useEffect } from 'react'
 
 import { CommandPalette } from '../components/command-palette'
 import { NoteEditor } from '../components/note-editor'
 import { NoteList } from '../components/note-list'
 import { Sidebar } from '../components/sidebar'
+import { Toaster } from '../components/ui/sonner'
 import { notvex } from '../lib/ipc'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
@@ -97,6 +98,7 @@ export function Main(): JSX.Element {
         <NoteEditor />
         <CommandPalette />
       </div>
+      <Toaster position="bottom-right" />
     </div>
   )
 }
