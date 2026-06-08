@@ -49,6 +49,11 @@ export interface TagPatch {
   color?: string
 }
 
+export interface NoteTagPair {
+  noteId: string
+  tagId: string
+}
+
 export interface VaultStatus {
   isOpen: boolean
   vaultPath: string | null
@@ -75,7 +80,7 @@ export interface NotvexAPI {
     openWithRecovery(filePath: string, mnemonic: string): Promise<IpcResult<boolean>>
     changePassword(
       currentPassword: string,
-      newPassword: string,
+      newPassword: string
     ): Promise<IpcResult<ChangePasswordResult>>
     close(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
@@ -103,6 +108,7 @@ export interface NotvexAPI {
     remove(noteId: string, tagId: string): Promise<IpcResult<null>>
     list(noteId: string): Promise<IpcResult<Tag[]>>
     counts(): Promise<IpcResult<Record<string, number>>>
+    all(): Promise<IpcResult<NoteTagPair[]>>
   }
   prefs: {
     get(key?: string): Promise<IpcResult<Prefs | Prefs[keyof Prefs]>>

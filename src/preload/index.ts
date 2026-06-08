@@ -9,6 +9,7 @@ export type {
   Note,
   NoteFilter,
   NoteListItem,
+  NoteTagPair,
   NotePatch,
   NotvexAPI,
   Prefs,
@@ -53,7 +54,8 @@ const api: NotvexAPI = {
     add: (n, t) => ipcRenderer.invoke('note-tags:add', n, t),
     remove: (n, t) => ipcRenderer.invoke('note-tags:remove', n, t),
     list: (n) => ipcRenderer.invoke('note-tags:list', n),
-    counts: () => ipcRenderer.invoke('note-tags:counts')
+    counts: () => ipcRenderer.invoke('note-tags:counts'),
+    all: () => ipcRenderer.invoke('note-tags:all')
   },
   prefs: {
     get: (key) => ipcRenderer.invoke('prefs:get', key),
