@@ -1,14 +1,31 @@
-import React, { useEffect, useState } from 'react'
+import React, { type JSX, useEffect, useState } from 'react'
 
-import { FileText, Lock, Pin, Settings, Trash2 } from 'lucide-react'
+import {
+  FileText,
+  MoreHorizontalIcon,
+  PenIcon,
+  Pin,
+  PlusIcon,
+  Settings,
+  Trash2,
+  Trash2Icon
+} from 'lucide-react'
 
-import type { Tag } from '../../../shared/types'
+import type { Tag } from '@shared/types'
 import { notvex } from '../lib/ipc'
 import { cn } from '../lib/utils'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
 import { ChangePasswordDialog } from './change-password-dialog'
+import { TagCreateModal } from './tags/TagCreateModal'
+import { TagDeleteModal } from './tags/TagDeleteModal'
 import { Button } from './ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu'
 import { Label } from './ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { ScrollArea } from './ui/scroll-area'
@@ -17,12 +34,16 @@ import { Separator } from './ui/separator'
 export function Sidebar(): JSX.Element {
   const { tags, tagCounts, loadTags, loadTagCounts, notes, setStatus, setActiveNoteId, setNotes } =
     useVaultStore()
-  const { activeTagFilter, showTrash, setActiveTagFilter, setShowTrash } = useUiStore()
+  const { activeTags, showTrash, toggleActiveTag, clearActiveTags, setShowTrash } = useUiStore()
 
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [autoLockMinutes, setAutoLockMinutes] = useState(15)
   const [vaultPath, setVaultPath] = useState<string | null>(null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createModalKey, setCreateModalKey] = useState(0)
+  const [editingTag, setEditingTag] = useState<Tag | null>(null)
+  const [deletingTag, setDeletingTag] = useState<Tag | null>(null)
 
   useEffect(() => {
     void loadTags()
@@ -53,31 +74,20 @@ export function Sidebar(): JSX.Element {
   const trashCount = notes.filter((n) => n.isTrashed).length
 
   return (
-    <div className="flex w-60 shrink-0 flex-col border-r border-[#1e1e1e] bg-[#0f0f0f]">
+    <div className="bg-sidebar text-sidebar-foreground border-sidebar-border flex w-60 shrink-0 flex-col">
       {/* App header */}
       <div className="titlebar-drag flex items-center justify-between px-4 py-4">
-        <span className="titlebar-no-drag text-sm font-semibold text-[#e5e5e5] select-none">
-          Notvex
-        </span>
+        <span className="titlebar-no-drag text-sm font-semibold select-none">Notvex</span>
         <div className="titlebar-no-drag flex items-center gap-1">
-          <button
-            onClick={(): void => {
-              void handleLock()
-            }}
-            title="Lock vault (Ctrl+L)"
-            className="rounded p-1 text-[#737373] transition-colors hover:bg-[#1a1a1a] hover:text-[#e5e5e5]"
-          >
-            <Lock className="h-3.5 w-3.5" />
-          </button>
           <Popover open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
             <PopoverTrigger asChild>
-              <button className="rounded p-1 text-[#737373] transition-colors hover:bg-[#1a1a1a] hover:text-[#e5e5e5]">
-                <Settings className="h-3.5 w-3.5" />
-              </button>
+              <Button variant="ghost" size="sm">
+                <Settings />
+              </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 space-y-4 p-4">
               <div>
-                <p className="mb-3 text-sm font-medium text-[#e5e5e5]">Settings</p>
+                <p className="mb-3 text-sm font-medium">Settings</p>
               </div>
               <div className="space-y-2">
                 <Label>Auto-lock after</Label>
@@ -124,7 +134,7 @@ export function Sidebar(): JSX.Element {
                   void handleLock()
                 }}
               >
-                <Lock className="mr-2 h-3.5 w-3.5" /> Lock vault
+                Lock vault
               </Button>
             </PopoverContent>
           </Popover>
@@ -140,9 +150,9 @@ export function Sidebar(): JSX.Element {
             icon={<FileText className="h-3.5 w-3.5" />}
             label="All Notes"
             count={allNotesCount}
-            active={!activeTagFilter && !showTrash}
+            active={activeTags.length === 0 && !showTrash}
             onClick={() => {
-              setActiveTagFilter(null)
+              clearActiveTags()
               setShowTrash(false)
             }}
           />
@@ -152,7 +162,7 @@ export function Sidebar(): JSX.Element {
             count={pinnedCount}
             active={false}
             onClick={() => {
-              setActiveTagFilter(null)
+              clearActiveTags()
               setShowTrash(false)
             }}
           />
@@ -168,12 +178,25 @@ export function Sidebar(): JSX.Element {
         {/* Tags section */}
         <div className="px-2 py-1">
           <div className="flex items-center justify-between px-2 py-1.5">
-            <span className="text-xs font-semibold tracking-wider text-[#737373] uppercase">
-              Tags
-            </span>
+            <span className="text-xs font-semibold tracking-wider uppercase">Tags</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setCreateModalKey((k) => k + 1)
+                setCreateModalOpen(true)
+              }}
+              title="New tag"
+              className="text-muted-foreground"
+            >
+              <PlusIcon className="size-3" />
+            </Button>
           </div>
           {tags.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-[#737373]">No tags yet</p>
+            <div className="px-2 py-1">
+              <p className="text-muted-foreground text-xs">No tags yet</p>
+              <p className="text-muted-foreground text-xs">Click + to create one</p>
+            </div>
           ) : (
             <div className="space-y-0.5">
               {tags.map((tag) => (
@@ -181,8 +204,10 @@ export function Sidebar(): JSX.Element {
                   key={tag.id}
                   tag={tag}
                   count={tagCounts[tag.id] ?? 0}
-                  active={activeTagFilter === tag.id}
-                  onClick={() => setActiveTagFilter(tag.id)}
+                  active={activeTags.includes(tag.id)}
+                  onClick={(e) => toggleActiveTag(tag.id, e.ctrlKey || e.metaKey)}
+                  onEdit={() => setEditingTag(tag)}
+                  onDelete={() => setDeletingTag(tag)}
                 />
               ))}
             </div>
@@ -191,15 +216,28 @@ export function Sidebar(): JSX.Element {
       </ScrollArea>
 
       {/* Status indicator */}
-      <div className="flex items-center gap-2 border-t border-[#1e1e1e] px-4 py-3">
-        <div className="h-2 w-2 rounded-full bg-emerald-500" />
-        <span className="text-xs text-[#737373]">Vault unlocked</span>
+      <div className="flex items-center gap-2 border border-t px-4 py-3">
+        <div className="bg-primary h-2 w-2 rounded-full" />
+        <span className="text-muted-foreground text-xs">Vault unlocked</span>
       </div>
 
       <ChangePasswordDialog
         open={changePasswordOpen}
         onClose={() => setChangePasswordOpen(false)}
       />
+
+      <TagCreateModal
+        key={createModalKey}
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+      />
+      <TagCreateModal
+        key={editingTag?.id ?? 'edit-none'}
+        open={!!editingTag}
+        editTag={editingTag}
+        onClose={() => setEditingTag(null)}
+      />
+      <TagDeleteModal open={!!deletingTag} tag={deletingTag} onClose={() => setDeletingTag(null)} />
     </div>
   )
 }
@@ -238,26 +276,55 @@ function TagItem({
   tag,
   count,
   active,
-  onClick
+  onClick,
+  onEdit,
+  onDelete
 }: {
   tag: Tag
   count: number
   active: boolean
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
+  onEdit: () => void
+  onDelete: () => void
 }): JSX.Element {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
-        active
-          ? 'bg-[#1e1e1e] text-[#e5e5e5]'
-          : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]'
-      )}
-    >
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
-      <span className="flex-1 text-left text-xs">{tag.name}</span>
-      {count > 0 && <span className="text-xs text-[#737373]">{count}</span>}
-    </button>
+    <div className="group relative">
+      <button
+        onClick={onClick}
+        className={cn(
+          'flex w-full items-center gap-2.5 rounded-md py-1.5 pr-8 pl-2 text-xs transition-colors',
+          active
+            ? 'bg-[#1e1e1e] text-[#e5e5e5]'
+            : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]'
+        )}
+      >
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
+        <span className="flex-1 text-left">{tag.name}</span>
+        {count > 0 && <span className="text-xs text-[#737373]">{count}</span>}
+      </button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <MoreHorizontalIcon className="size-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-32">
+          <DropdownMenuItem onClick={onEdit}>
+            <PenIcon className="size-4" />
+            Edit tag
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={onDelete}>
+            <Trash2Icon className="size-4" />
+            Delete tag
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }
