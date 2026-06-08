@@ -9,6 +9,7 @@ import {
   deleteNote,
   deleteTag,
   emptyTrash,
+  getAllNoteTags,
   getNote,
   getNoteCountPerTag,
   getNoteTags,
@@ -379,6 +380,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       requireVault()
       touchActivity()
       return ok(await getNoteCountPerTag(getDb()))
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('note-tags:all', async () => {
+    try {
+      requireVault()
+      touchActivity()
+      return ok(await getAllNoteTags(getDb()))
     } catch (e) {
       return fail(e)
     }
