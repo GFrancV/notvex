@@ -1,22 +1,39 @@
-import React, { useCallback, useEffect } from 'react'
+import { type JSX, useCallback, useEffect } from 'react'
 
-import { Command } from 'cmdk'
-import { Eye, FileText, Lock, Plus, Trash2 } from 'lucide-react'
+import { EyeIcon, FileTextIcon, LockIcon, PlusIcon, TagIcon, XIcon } from 'lucide-react'
 
-import type { NoteListItem } from '../../../shared/types'
 import { notvex } from '../lib/ipc'
 import { useUiStore } from '../store/ui.store'
 import { useVaultStore } from '../store/vault.store'
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut
+} from './ui/command'
 
 export function CommandPalette(): JSX.Element | null {
-  const { commandPaletteOpen, setCommandPaletteOpen, toggleEditorMode, setShowTrash } = useUiStore()
+  const {
+    commandPaletteOpen,
+    setCommandPaletteOpen,
+    toggleEditorMode,
+    setShowTrash,
+    setTagSelectorNoteId,
+    setRemoveTagNoteId
+  } = useUiStore()
   const {
     notes,
     setStatus,
     setActiveNoteId,
     loadNotes,
     setNotes,
-    setActiveNoteId: selectNote
+    setActiveNoteId: selectNote,
+    activeNoteId,
+    noteTagsMap
   } = useVaultStore()
 
   useEffect(() => {
@@ -54,113 +71,66 @@ export function CommandPalette(): JSX.Element | null {
     setNotes([])
   }
 
-  if (!commandPaletteOpen) return null
+  const noteHasTags = activeNoteId ? (noteTagsMap[activeNoteId] ?? []).length > 0 : false
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[20vh] backdrop-blur-sm"
-      role="none"
-      onClick={() => setCommandPaletteOpen(false)}
-    >
-      <div
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] shadow-2xl"
-        role="none"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Command className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-[#737373]">
-          <div className="flex items-center border-b border-[#2a2a2a] px-3">
-            <Command.Input
-              placeholder="Search notes, run commands…"
-              className="flex h-12 w-full bg-transparent text-sm text-[#e5e5e5] placeholder:text-[#737373] focus:outline-none"
-            />
-          </div>
+    <CommandDialog open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen}>
+      <CommandInput placeholder="Search notes, run commands…" />
+      <CommandList>
+        <CommandEmpty>No results found.</CommandEmpty>
+        <CommandGroup heading="Commands">
+          <CommandItem onSelect={() => run(handleNewNote)}>
+            <PlusIcon />
+            <span>New Note</span>
+            <CommandShortcut>Ctrl+N</CommandShortcut>
+          </CommandItem>
+          <CommandItem onSelect={() => run(toggleEditorMode)}>
+            <EyeIcon />
+            <span>Toggle Reading View</span>
+            <CommandShortcut>Ctrl+Shift+E</CommandShortcut>
+          </CommandItem>
+          <CommandItem onSelect={() => run(() => setShowTrash(true))}>
+            <PlusIcon />
+            <span>Show Trash</span>
+          </CommandItem>
+          <CommandItem onSelect={() => run(handleLock)}>
+            <LockIcon />
+            <span>Lock Vault</span>
+            <CommandShortcut>Ctrl+L</CommandShortcut>
+          </CommandItem>
+          {activeNoteId && (
+            <CommandItem onSelect={() => run(() => setTagSelectorNoteId(activeNoteId))}>
+              <TagIcon />
+              <span>Tag note with...</span>
+              <CommandShortcut>Ctrl+L</CommandShortcut>
+            </CommandItem>
+          )}
+          {activeNoteId && noteHasTags && (
+            <CommandItem onSelect={() => run(() => setRemoveTagNoteId(activeNoteId))}>
+              <XIcon />
+              <span>Remove tag from note...</span>
+            </CommandItem>
+          )}
+        </CommandGroup>
 
-          <Command.List className="max-h-80 overflow-y-auto p-2">
-            <Command.Empty className="py-8 text-center text-sm text-[#737373]">
-              No results found.
-            </Command.Empty>
-
-            {/* Commands */}
-            <Command.Group heading="Commands">
-              <PaletteItem
-                icon={<Plus className="h-4 w-4" />}
-                label="New Note"
-                shortcut="Ctrl+N"
-                onSelect={() => run(handleNewNote)}
-              />
-              <PaletteItem
-                icon={<Eye className="h-4 w-4" />}
-                label="Toggle Reading View"
-                shortcut="Ctrl+Shift+E"
-                onSelect={() => run(toggleEditorMode)}
-              />
-              <PaletteItem
-                icon={<Trash2 className="h-4 w-4" />}
-                label="Show Trash"
-                onSelect={() => run(() => setShowTrash(true))}
-              />
-              <PaletteItem
-                icon={<Lock className="h-4 w-4" />}
-                label="Lock Vault"
-                shortcut="Ctrl+L"
-                onSelect={() => run(handleLock)}
-              />
-            </Command.Group>
-
-            {/* Recent notes */}
-            {notes.filter((n) => !n.isTrashed).length > 0 && (
-              <Command.Group heading="Notes">
-                {notes
-                  .filter((n) => !n.isTrashed)
-                  .slice(0, 8)
-                  .map((note) => (
-                    <NoteItem
-                      key={note.id}
-                      note={note}
-                      onSelect={() => run(() => selectNote(note.id))}
-                    />
-                  ))}
-              </Command.Group>
-            )}
-          </Command.List>
-        </Command>
-      </div>
-    </div>
-  )
-}
-
-function PaletteItem({
-  icon,
-  label,
-  shortcut,
-  onSelect
-}: {
-  icon: React.ReactNode
-  label: string
-  shortcut?: string
-  onSelect: () => void
-}): JSX.Element {
-  return (
-    <Command.Item
-      onSelect={onSelect}
-      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-[#e5e5e5] transition-colors aria-selected:bg-[#222]"
-    >
-      <span className="text-[#737373]">{icon}</span>
-      <span className="flex-1">{label}</span>
-      {shortcut && <kbd className="font-mono text-xs text-[#737373]">{shortcut}</kbd>}
-    </Command.Item>
-  )
-}
-
-function NoteItem({ note, onSelect }: { note: NoteListItem; onSelect: () => void }): JSX.Element {
-  return (
-    <Command.Item
-      value={note.title}
-      onSelect={onSelect}
-      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-[#e5e5e5] transition-colors aria-selected:bg-[#222]"
-    >
-      <FileText className="h-4 w-4 text-[#737373]" />
-      <span className="flex-1 truncate">{note.title || 'Untitled'}</span>
-    </Command.Item>
+        {/* Recent notes */}
+        {notes.filter((n) => !n.isTrashed).length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Notes">
+              {notes
+                .filter((n) => !n.isTrashed)
+                .slice(0, 8)
+                .map((note) => (
+                  <CommandItem key={note.id} onSelect={() => run(() => selectNote(note.id))}>
+                    <FileTextIcon />
+                    <span>{note.title || 'Untitled'}</span>
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+          </>
+        )}
+      </CommandList>
+    </CommandDialog>
   )
 }
