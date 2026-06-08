@@ -12,7 +12,7 @@ import {
   PilcrowIcon,
   QuoteIcon
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import type { JSX, ReactNode } from 'react'
 
 import { toolbarActions } from '@/lib/editor/formatting'
 import {
@@ -32,7 +32,7 @@ interface EditorContextMenuProps {
   children: ReactNode
 }
 
-export function EditorContextMenu({ editorView, children }: EditorContextMenuProps) {
+export function EditorContextMenu({ editorView, children }: EditorContextMenuProps): JSX.Element {
   const act =
     (fn: (v: EditorView) => void): (() => void) =>
     () => {
