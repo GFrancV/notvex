@@ -9,8 +9,8 @@ export type {
   Note,
   NoteFilter,
   NoteListItem,
-  NoteTagPair,
   NotePatch,
+  NoteTagPair,
   NotvexAPI,
   Prefs,
   Tag,
@@ -29,6 +29,8 @@ const api: NotvexAPI = {
     open: (filePath, pw) => ipcRenderer.invoke('vault:open', filePath, pw),
     openWithRecovery: (filePath, m) => ipcRenderer.invoke('vault:open-with-recovery', filePath, m),
     changePassword: (cur, next) => ipcRenderer.invoke('vault:change-password', cur, next),
+    rotateCredentials: (pw) => ipcRenderer.invoke('vault:rotate-credentials', pw),
+    confirmRecoverySaved: () => ipcRenderer.invoke('vault:confirm-recovery-saved'),
     close: () => ipcRenderer.invoke('vault:close'),
     status: () => ipcRenderer.invoke('vault:status'),
     chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode)
