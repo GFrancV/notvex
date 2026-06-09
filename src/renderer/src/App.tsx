@@ -3,11 +3,12 @@ import { type JSX, useEffect } from 'react'
 import { notvex } from './lib/ipc'
 import { useVaultStore } from './store/vault.store'
 import { Main } from './views/main'
+import { PostRecoveryReset } from './views/post-recovery-reset'
 import { Setup } from './views/setup'
 import { Unlock } from './views/unlock'
 
 export default function App(): JSX.Element {
-  const { status, setStatus } = useVaultStore()
+  const { status, needsRecoveryReset, setStatus } = useVaultStore()
 
   useEffect(() => {
     const init = async (): Promise<void> => {
@@ -42,5 +43,6 @@ export default function App(): JSX.Element {
 
   if (status === 'uninitialized') return <Setup />
   if (status === 'locked') return <Unlock />
+  if (needsRecoveryReset) return <PostRecoveryReset />
   return <Main />
 }
