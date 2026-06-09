@@ -1,12 +1,22 @@
-import { useState } from 'react'
+import { type JSX, useState } from 'react'
 
-import { Shield, FolderOpen, Copy, Check, Eye, EyeOff } from 'lucide-react'
+import { AlertTriangleIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, ShieldIcon } from 'lucide-react'
 
-import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
-import { notvex } from '../lib/ipc'
-import { useVaultStore } from '../store/vault.store'
+import { PasswordStrengthBar } from '@/components/password-strength-bar'
+import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput
+} from '@/components/ui/input-group'
+import { notvex } from '@/lib/ipc'
+import { useVaultStore } from '@/store/vault.store'
 
 type Step = 'location' | 'password' | 'recovery'
 
@@ -18,11 +28,14 @@ export function Setup(): JSX.Element {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicCopied, setMnemonicCopied] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const passwordsMatch = password === confirm
+  const confirmTouched = confirm.length > 0
 
   const handleChooseFile = async (): Promise<void> => {
     const res = await notvex.vault.chooseFile('new')
@@ -35,7 +48,7 @@ export function Setup(): JSX.Element {
       setError('Password must be at least 12 characters.')
       return
     }
-    if (password !== confirm) {
+    if (!passwordsMatch) {
       setError('Passwords do not match.')
       return
     }
@@ -50,35 +63,29 @@ export function Setup(): JSX.Element {
     setStep('recovery')
   }
 
-  const copyMnemonic = async (): Promise<void> => {
-    await navigator.clipboard.writeText(mnemonic)
-    setMnemonicCopied(true)
-    setTimeout(() => setMnemonicCopied(false), 2000)
-  }
-
   const handleFinish = (): void => {
     setStatus('unlocked')
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#111111] p-8">
+    <div className="bg-background flex min-h-screen items-center justify-center p-8">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-emerald-600/30 bg-emerald-600/20">
-            <Shield className="h-7 w-7 text-emerald-400" />
+          <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border">
+            <ShieldIcon className="text-primary h-7 w-7" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Notvex</h1>
-            <p className="mt-1 text-sm text-[#737373]">Create your secure vault</p>
+            <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
+            <p className="text-muted mt-1 text-sm">Create your secure vault</p>
           </div>
         </div>
 
         {/* Step: Location */}
         {step === 'location' && (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label>Vault file</Label>
+          <FieldGroup>
+            <Field>
+              <FieldLabel>Vault file</FieldLabel>
               <div className="flex gap-2">
                 <Input
                   value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
@@ -94,68 +101,83 @@ export function Setup(): JSX.Element {
                     void handleChooseFile()
                   }}
                 >
-                  <FolderOpen className="h-4 w-4" />
+                  <FolderOpenIcon className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-xs text-[#737373]">
-                Your vault will be saved as a single <code className="text-emerald-400">.nvx</code>{' '}
+              <FieldDescription className="text-muted text-xs">
+                Your vault will be saved as a single <code className="text-primary">.nvx</code>{' '}
                 file. Copy it to back up everything.
-              </p>
-            </div>
+              </FieldDescription>
+            </Field>
 
             <Button className="w-full" disabled={!vaultPath} onClick={() => setStep('password')}>
               Continue
             </Button>
-          </div>
+          </FieldGroup>
         )}
 
         {/* Step: Password */}
         {step === 'password' && (
           <div className="space-y-6">
-            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
-              <p className="text-xs text-[#737373]">
-                <span className="text-[#a3a3a3]">File:</span> {vaultPath}
+            <div className="bg-sidebar rounded-lg border p-3">
+              <p className="text-muted text-xs">
+                <span className="text-muted-foreground">File:</span> {vaultPath}
               </p>
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">Master password</Label>
-                <div className="relative">
-                  <Input
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="password">Master password</FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="At least 12 characters"
-                    className="pr-10"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute top-1/2 right-3 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton onClick={() => setShowPassword((v) => !v)}>
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
+                {password.length > 0 && (
+                  <FieldDescription>
+                    <PasswordStrengthBar password={password} />
+                  </FieldDescription>
+                )}
+              </Field>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirm">Confirm password</Label>
-                <Input
-                  id="confirm"
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  placeholder="Repeat password"
-                  onKeyDown={(e): void => {
-                    if (e.key === 'Enter') void handleCreate()
-                  }}
-                />
-              </div>
-            </div>
+              <Field data-invalid={confirmTouched && !passwordsMatch}>
+                <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    id="confirm"
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="Repeat password"
+                    onKeyDown={(e): void => {
+                      if (e.key === 'Enter') void handleCreate()
+                    }}
+                    aria-invalid={confirmTouched && !passwordsMatch}
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton onClick={() => setShowConfirm((v) => !v)}>
+                      {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
+                {confirmTouched && !passwordsMatch && (
+                  <FieldDescription className="text-destructive">
+                    ✕ Passwords do not match
+                  </FieldDescription>
+                )}
+              </Field>
+            </FieldGroup>
 
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && <p className="text-destructive text-sm">{error}</p>}
 
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setStep('location')}>
@@ -172,7 +194,7 @@ export function Setup(): JSX.Element {
               </Button>
             </div>
 
-            <p className="text-center text-xs text-[#737373]">
+            <p className="text-muted text-center text-xs">
               This derives your encryption key using Argon2id. May take a few seconds.
             </p>
           </div>
@@ -181,46 +203,28 @@ export function Setup(): JSX.Element {
         {/* Step: Recovery key */}
         {step === 'recovery' && (
           <div className="space-y-6">
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-              <p className="mb-1 text-sm font-medium text-amber-300">Save your recovery key</p>
-              <p className="text-xs text-amber-300/70">
+            <Alert className="border-warning/30 bg-warning/10 border">
+              <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
+              <AlertTitle className="text-amber-300">Save your recovery key</AlertTitle>
+              <AlertDescription className="text-amber-300/70">
                 If you lose your password, this is the only way to recover your notes. Write it down
                 or store it in a password manager. It will never be shown again.
-              </p>
-            </div>
+              </AlertDescription>
+            </Alert>
 
-            <div className="space-y-2">
-              <div className="relative rounded-lg border border-[#2a2a2a] bg-[#0f0f0f] p-4">
-                <p className="font-mono text-sm leading-relaxed break-all text-emerald-300">
-                  {mnemonic}
-                </p>
-                <button
-                  onClick={(): void => {
-                    void copyMnemonic()
-                  }}
-                  className="absolute top-3 right-3 rounded p-1 text-[#737373] hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
-                >
-                  {mnemonicCopied ? (
-                    <Check className="h-4 w-4 text-emerald-400" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
+            <RecoveryWordsGrid mnemonic={mnemonic} />
 
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-0.5 accent-emerald-500"
+            <Field orientation="horizontal">
+              <Checkbox
+                id="setup-confirm-recovery"
                 checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
+                onCheckedChange={(c) => setConfirmed(c === true)}
               />
-              <span className="text-sm text-[#a3a3a3]">
+              <FieldLabel htmlFor="setup-confirm-recovery">
                 I have saved my recovery key in a secure location. I understand that if I lose both
                 my password and this key, my notes are irrecoverable.
-              </span>
-            </label>
+              </FieldLabel>
+            </Field>
 
             <Button className="w-full" disabled={!confirmed} onClick={handleFinish}>
               Start using Notvex
