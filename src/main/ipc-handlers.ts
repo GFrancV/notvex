@@ -33,6 +33,7 @@ import {
   isVaultOpen,
   openVault,
   openVaultWithRecovery,
+  rotateVaultCredentials,
   syncContainer,
   vaultExistsAt
 } from './vault/vault'
@@ -164,6 +165,21 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       }
     }
   )
+
+  ipcMain.handle('vault:rotate-credentials', async (_e, newPassword: string) => {
+    try {
+      requireVault()
+      touchActivity()
+      const result = await rotateVaultCredentials(newPassword)
+      return ok(result)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:confirm-recovery-saved', () => {
+    return ok(null)
+  })
 
   ipcMain.handle('vault:close', async () => {
     try {

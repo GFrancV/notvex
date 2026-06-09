@@ -33,7 +33,7 @@ import {
   hashForVerify,
   initSodium,
   memzero,
-  type Argon2Params,
+  type Argon2Params
 } from './crypto'
 import { allocSecure, freeSecure } from './memlock'
 import { generateMnemonic, mnemonicToMasterKey, validateMnemonic } from './recovery'
@@ -83,7 +83,7 @@ async function applyKey(database: sqlite3.Database, key: Uint8Array): Promise<vo
   await new Promise<void>((resolve, reject) => {
     database.serialize(() => {
       database.run(`PRAGMA key = "x'${hex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve(),
+        err ? reject(err) : resolve()
       )
     })
   })
@@ -100,24 +100,24 @@ function storeKey(rawKey: Uint8Array): Buffer {
 
 function encryptMasterKey(
   masterKeyBuf: Uint8Array,
-  wrapKey: Uint8Array,
+  wrapKey: Uint8Array
 ): { ciphertext: string; nonce: string } {
   const { ciphertext, nonce } = encryptField(Buffer.from(masterKeyBuf).toString('hex'), wrapKey)
   return {
     ciphertext: Buffer.from(ciphertext).toString('hex'),
-    nonce: Buffer.from(nonce).toString('hex'),
+    nonce: Buffer.from(nonce).toString('hex')
   }
 }
 
 function decryptMasterKey(
   ciphertextHex: string,
   nonceHex: string,
-  wrapKey: Uint8Array,
+  wrapKey: Uint8Array
 ): Uint8Array {
   const hex = decryptField(
     new Uint8Array(Buffer.from(ciphertextHex, 'hex')),
     new Uint8Array(Buffer.from(nonceHex, 'hex')),
-    wrapKey,
+    wrapKey
   )
   return new Uint8Array(Buffer.from(hex, 'hex'))
 }
@@ -183,7 +183,7 @@ export async function createVault(filePath: string, password: string): Promise<C
     `
     INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, verify_hash, recovery_verify_hash, created_at)
     VALUES (1, 1, ?, ?, ?, '', ?)`,
-    [Buffer.from(salt), JSON.stringify(params), verifyHash, Date.now()],
+    [Buffer.from(salt), JSON.stringify(params), verifyHash, Date.now()]
   )
 
   const mnemonic = generateMnemonic()
@@ -201,7 +201,7 @@ export async function createVault(filePath: string, password: string): Promise<C
     argon2_params: params,
     verify_hash: verifyHash,
     recovery_encrypted_master_key: recCipher,
-    recovery_nonce: recNonce,
+    recovery_nonce: recNonce
   }
   writeContainer(filePath, JSON.stringify(sidecar), dbBytes)
 
@@ -274,7 +274,7 @@ export async function openVaultWithRecovery(filePath: string, mnemonic: string):
     rawKey = decryptMasterKey(
       sidecar.recovery_encrypted_master_key,
       sidecar.recovery_nonce,
-      recoveryKey,
+      recoveryKey
     )
   } catch {
     memzero(recoveryKey)
@@ -311,7 +311,7 @@ export async function openVaultWithRecovery(filePath: string, mnemonic: string):
 
 export async function changePassword(
   currentPassword: string,
-  newPassword: string,
+  newPassword: string
 ): Promise<{ mnemonic: string }> {
   if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
@@ -350,7 +350,7 @@ export async function changePassword(
       // Step 4 — update vault_meta with new salt and verify hash
       await dbRun(db, `UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1`, [
         Buffer.from(newSalt),
-        newVerifyHash,
+        newVerifyHash
       ])
 
       // Step 5 — re-encrypt all note ciphertexts with the new key.
@@ -367,25 +367,25 @@ export async function changePassword(
       const notes = await dbAll<RawNote>(
         db,
         'SELECT id, title, title_iv, content, content_iv FROM notes',
-        [],
+        []
       )
 
       for (const note of notes) {
         const titlePlain = decryptField(
           new Uint8Array(note.title),
           new Uint8Array(note.title_iv),
-          masterKey,
+          masterKey
         )
         const contentPlain = decryptField(
           new Uint8Array(note.content),
           new Uint8Array(note.content_iv),
-          masterKey,
+          masterKey
         )
 
         const { ciphertext: newTitle, nonce: newTitleIv } = encryptField(titlePlain, newRawKey)
         const { ciphertext: newContent, nonce: newContentIv } = encryptField(
           contentPlain,
-          newRawKey,
+          newRawKey
         )
 
         await dbRun(
@@ -396,8 +396,8 @@ export async function changePassword(
             Buffer.from(newTitleIv),
             Buffer.from(newContent),
             Buffer.from(newContentIv),
-            note.id,
-          ],
+            note.id
+          ]
         )
       }
 
@@ -422,7 +422,7 @@ export async function changePassword(
       argon2_salt: Buffer.from(newSalt).toString('hex'),
       verify_hash: newVerifyHash,
       recovery_encrypted_master_key: recCipher,
-      recovery_nonce: recNonce,
+      recovery_nonce: recNonce
     }
     const dbBytes = readFileSync(tempDbPath)
     writeContainer(currentVaultPath, JSON.stringify(newSidecar), dbBytes)
@@ -440,7 +440,119 @@ export async function changePassword(
     try {
       await new Promise<void>((resolve, reject) => {
         db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve(),
+          e ? reject(e) : resolve()
+        )
+      })
+    } catch {
+      await closeVault()
+    }
+    throw err
+  }
+}
+
+export async function rotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
+  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+    throw new Error('Vault is not open')
+  }
+
+  const newSalt = generateSalt()
+  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params)
+  const newVerifyHash = hashForVerify(newRawKey)
+
+  const oldKeyHex = masterKey.toString('hex')
+
+  const newHex = Buffer.from(newRawKey).toString('hex')
+  await new Promise<void>((resolve, reject) => {
+    db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) => (err ? reject(err) : resolve()))
+  })
+
+  try {
+    await dbRun(db, 'BEGIN TRANSACTION')
+
+    try {
+      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1`, [
+        Buffer.from(newSalt),
+        newVerifyHash
+      ])
+
+      interface RawNote {
+        id: string
+        title: Buffer
+        title_iv: Buffer
+        content: Buffer
+        content_iv: Buffer
+      }
+      const notes = await dbAll<RawNote>(
+        db,
+        'SELECT id, title, title_iv, content, content_iv FROM notes',
+        []
+      )
+
+      for (const note of notes) {
+        const titlePlain = decryptField(
+          new Uint8Array(note.title),
+          new Uint8Array(note.title_iv),
+          masterKey
+        )
+        const contentPlain = decryptField(
+          new Uint8Array(note.content),
+          new Uint8Array(note.content_iv),
+          masterKey
+        )
+
+        const { ciphertext: newTitle, nonce: newTitleIv } = encryptField(titlePlain, newRawKey)
+        const { ciphertext: newContent, nonce: newContentIv } = encryptField(
+          contentPlain,
+          newRawKey
+        )
+
+        await dbRun(
+          db,
+          `UPDATE notes SET title = ?, title_iv = ?, content = ?, content_iv = ? WHERE id = ?`,
+          [
+            Buffer.from(newTitle),
+            Buffer.from(newTitleIv),
+            Buffer.from(newContent),
+            Buffer.from(newContentIv),
+            note.id
+          ]
+        )
+      }
+
+      await dbRun(db, 'COMMIT')
+    } catch (txErr) {
+      await dbRun(db, 'ROLLBACK').catch(() => {})
+      throw txErr
+    }
+
+    await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
+
+    const mnemonic = generateMnemonic()
+    const recoveryKey = mnemonicToMasterKey(mnemonic)
+    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, recoveryKey)
+    memzero(recoveryKey)
+
+    const newSidecar: VaultSidecar = {
+      ...currentSidecar,
+      argon2_salt: Buffer.from(newSalt).toString('hex'),
+      verify_hash: newVerifyHash,
+      recovery_encrypted_master_key: recCipher,
+      recovery_nonce: recNonce
+    }
+    const dbBytes = readFileSync(tempDbPath)
+    writeContainer(currentVaultPath, JSON.stringify(newSidecar), dbBytes)
+
+    const newSecureKey = storeKey(newRawKey)
+    freeSecure(masterKey)
+    masterKey = newSecureKey
+    currentSidecar = newSidecar
+
+    return { mnemonic }
+  } catch (err) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
+          e ? reject(e) : resolve()
         )
       })
     } catch {
