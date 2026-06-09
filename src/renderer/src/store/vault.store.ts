@@ -7,12 +7,14 @@ export type VaultStatus = 'checking' | 'uninitialized' | 'locked' | 'unlocked'
 
 interface VaultStore {
   status: VaultStatus
+  needsRecoveryReset: boolean
   notes: NoteListItem[]
   tags: Tag[]
   tagCounts: Record<string, number>
   noteTagsMap: Record<string, string[]>
   activeNoteId: string | null
   setStatus: (s: VaultStatus) => void
+  setNeedsRecoveryReset: (value: boolean) => void
   setNotes: (notes: NoteListItem[]) => void
   setTags: (tags: Tag[]) => void
   setTagCounts: (counts: Record<string, number>) => void
@@ -32,6 +34,7 @@ interface VaultStore {
 
 export const useVaultStore = create<VaultStore>((set, get) => ({
   status: 'checking',
+  needsRecoveryReset: false,
   notes: [],
   tags: [],
   tagCounts: {},
@@ -39,6 +42,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   activeNoteId: null,
 
   setStatus: (status): void => set({ status }),
+  setNeedsRecoveryReset: (needsRecoveryReset): void => set({ needsRecoveryReset }),
   setNotes: (notes): void => set({ notes }),
   setTags: (tags): void => set({ tags }),
   setTagCounts: (tagCounts): void => set({ tagCounts }),
