@@ -1,13 +1,15 @@
 import { type JSX, useState } from 'react'
 
-import { AlertTriangleIcon, Check, Copy, EyeIcon, EyeOffIcon } from 'lucide-react'
+import { AlertTriangleIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 
-import { notvex } from '../lib/ipc'
-import { passwordStrength } from '../lib/utils'
+import { notvex } from '@/lib/ipc'
+import { PasswordStrengthBar } from './password-strength-bar'
+import { RecoveryWordsGrid } from './recovery-words-grid'
 import { Alert, AlertDescription } from './ui/alert'
 import { Button } from './ui/button'
+import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
-import { Field, FieldDescription, FieldLabel } from './ui/field'
+import { Field, FieldLabel } from './ui/field'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 
 interface ChangePasswordDialogProps {
@@ -16,14 +18,6 @@ interface ChangePasswordDialogProps {
 }
 
 type Step = 'form' | 'mnemonic'
-
-const STRENGTH_COLORS = {
-  weak: 'bg-red-500',
-  medium: 'bg-amber-500',
-  strong: 'bg-emerald-500'
-}
-
-const STRENGTH_FILL = { weak: 1, medium: 2, strong: 3 }
 
 export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProps): JSX.Element {
   const [step, setStep] = useState<Step>('form')
@@ -36,11 +30,7 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicCopied, setMnemonicCopied] = useState(false)
   const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
-
-  const strength = passwordStrength(newPw)
-  const fillCount = STRENGTH_FILL[strength]
 
   const validationError = (): string => {
     if (!currentPw || !newPw || !confirmPw) return 'All fields are required'
@@ -70,12 +60,6 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
     setStep('mnemonic')
   }
 
-  const copyMnemonic = async (): Promise<void> => {
-    await navigator.clipboard.writeText(mnemonic)
-    setMnemonicCopied(true)
-    setTimeout(() => setMnemonicCopied(false), 2000)
-  }
-
   const handleClose = (): void => {
     setStep('form')
     setCurrentPw('')
@@ -87,7 +71,6 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
     setError('')
     setLoading(false)
     setMnemonic('')
-    setMnemonicCopied(false)
     setMnemonicConfirmed(false)
     onClose()
   }
@@ -144,20 +127,7 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
                   </Button>
                 </InputGroupAddon>
               </InputGroup>
-              {newPw && (
-                <FieldDescription>
-                  <div className="mt-1 flex gap-1">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className={`h-1 flex-1 rounded-full transition-colors ${
-                          i <= fillCount ? STRENGTH_COLORS[strength] : 'bg-[#2a2a2a]'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </FieldDescription>
-              )}
+              {newPw.length > 0 && <PasswordStrengthBar password={newPw} />}
             </Field>
 
             {/* Confirm new password */}
@@ -211,33 +181,18 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
               </AlertDescription>
             </Alert>
 
-            <div className="relative rounded-lg border bg-[#0f0f0f] p-4">
-              <p className="text-primary pr-5.5 font-mono text-sm leading-relaxed break-all">
-                {mnemonic}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(): void => {
-                  void copyMnemonic()
-                }}
-                className="absolute top-1 right-1"
-              >
-                {mnemonicCopied ? <Check className="text-primary" /> : <Copy />}
-              </Button>
-            </div>
+            <RecoveryWordsGrid mnemonic={mnemonic} />
 
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                className="accent-primary mt-0.5"
+            <Field orientation="horizontal">
+              <Checkbox
+                id="cpd-confirm-recovery"
                 checked={mnemonicConfirmed}
-                onChange={(e) => setMnemonicConfirmed(e.target.checked)}
+                onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
               />
-              <span className="text-muted-foreground text-sm">
+              <FieldLabel htmlFor="cpd-confirm-recovery">
                 I have saved my new recovery key in a secure location.
-              </span>
-            </label>
+              </FieldLabel>
+            </Field>
 
             <Button className="w-full" disabled={!mnemonicConfirmed} onClick={handleClose}>
               Done
