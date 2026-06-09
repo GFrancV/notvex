@@ -24,7 +24,7 @@ function truncatePath(path: string, maxLen = 54): string {
 }
 
 export function Unlock(): JSX.Element {
-  const { setStatus, refreshAll } = useVaultStore()
+  const { setStatus, setNeedsRecoveryReset, refreshAll } = useVaultStore()
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [vaultExists, setVaultExists] = useState<boolean | null>(null)
@@ -51,8 +51,9 @@ export function Unlock(): JSX.Element {
     })()
   }, [])
 
-  async function afterUnlock(): Promise<void> {
+  async function afterUnlock(viaRecovery = false): Promise<void> {
     await refreshAll()
+    if (viaRecovery) setNeedsRecoveryReset(true)
     setStatus('unlocked')
   }
 
@@ -87,7 +88,7 @@ export function Unlock(): JSX.Element {
       setError('Invalid recovery key.')
       return
     }
-    await afterUnlock()
+    await afterUnlock(true)
   }
 
   const handleOpenOther = async (): Promise<void> => {
@@ -120,12 +121,12 @@ export function Unlock(): JSX.Element {
   const wordCount = words.length
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#111111] p-8">
+    <div className="bg-background flex min-h-screen items-center justify-center p-8">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-emerald-600/30 bg-emerald-600/20">
-            <ShieldIcon className="h-7 w-7 text-emerald-400" />
+          <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border">
+            <ShieldIcon className="text-primary h-7 w-7" />
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
@@ -154,7 +155,7 @@ export function Unlock(): JSX.Element {
               <Button
                 variant="outline"
                 size="sm"
-                className="text-muted shrink-0 hover:text-[#a3a3a3]"
+                className="text-muted hover:text-foreground shrink-0"
                 onClick={(): void => {
                   void handleOpenOther()
                 }}
@@ -163,21 +164,21 @@ export function Unlock(): JSX.Element {
                 <span className="sr-only">Open other</span>
               </Button>
             </div>
-            {pathError && <p className="mt-1 text-xs text-red-400">✕ {pathError}</p>}
+            {pathError && <p className="text-destructive mt-1 text-xs">✕ {pathError}</p>}
           </div>
         )}
 
         {/* Checking */}
         {vaultExists === null && (
           <div className="flex justify-center py-8">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#2a2a2a] border-t-emerald-500" />
+            <div className="border-t-primary border-border h-6 w-6 animate-spin rounded-full border-2" />
           </div>
         )}
 
         {/* Vault file not found */}
         {vaultExists === false && (
-          <div className="space-y-4 rounded-lg border border-[#2a2a2a] p-4">
-            <p className="text-sm text-[#737373]">
+          <div className="space-y-4 rounded-lg border p-4">
+            <p className="text-muted text-sm">
               The vault file could not be found at the saved location.
             </p>
             <Button
@@ -207,7 +208,6 @@ export function Unlock(): JSX.Element {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
-                      className="pr-10"
                       onKeyDown={(e): void => {
                         if (e.key === 'Enter') void handlePasswordUnlock()
                       }}
@@ -220,7 +220,7 @@ export function Unlock(): JSX.Element {
                   </InputGroup>
                 </Field>
 
-                {error && <p className="text-sm text-red-400">{error}</p>}
+                {error && <p className="text-destructive text-sm">{error}</p>}
 
                 <Button
                   className="w-full"
@@ -281,10 +281,6 @@ export function Unlock(): JSX.Element {
                 >
                   {loading ? 'Recovering…' : 'Recover Access'}
                 </Button>
-
-                <p className="text-center text-xs text-amber-500">
-                  ⚠ After recovery, set a new password immediately in Settings
-                </p>
 
                 <p className="text-center">
                   <button
