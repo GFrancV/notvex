@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { type JSX, useEffect } from 'react'
 
 import { notvex } from './lib/ipc'
 import { useVaultStore } from './store/vault.store'
@@ -11,17 +11,21 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     const init = async (): Promise<void> => {
-      // Check if a vault exists at the stored path
-      const hasVaultRes = await notvex.vault.hasVault()
-      if (!hasVaultRes.success || !hasVaultRes.data) {
+      const prefsRes = await notvex.prefs.get('vaultPath')
+      const prefsData = prefsRes.success ? prefsRes.data : null
+      const savedPath = typeof prefsData === 'string' ? prefsData : null
+
+      if (!savedPath) {
         setStatus('uninitialized')
         return
       }
+
       // Check if it's already open (shouldn't be on startup, but handle gracefully)
       const statusRes = await notvex.vault.status()
       if (statusRes.success && statusRes.data.isOpen) {
         setStatus('unlocked')
       } else {
+        // Unlock view handles the "file missing" case internally
         setStatus('locked')
       }
     }

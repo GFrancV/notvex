@@ -5,6 +5,7 @@ interface UiStore {
   searchQuery: string
   activeTags: string[]
   showTrash: boolean
+  showPinned: boolean
   commandPaletteOpen: boolean
   settingsOpen: boolean
   tagSelectorNoteId: string | null
@@ -15,6 +16,7 @@ interface UiStore {
   toggleActiveTag: (id: string, multi: boolean) => void
   clearActiveTags: () => void
   setShowTrash: (v: boolean) => void
+  setShowPinned: (v: boolean) => void
   setCommandPaletteOpen: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
   setTagSelectorNoteId: (id: string | null) => void
@@ -26,6 +28,7 @@ export const useUiStore = create<UiStore>((set) => ({
   searchQuery: '',
   activeTags: [],
   showTrash: false,
+  showPinned: false,
   commandPaletteOpen: false,
   settingsOpen: false,
   tagSelectorNoteId: null,
@@ -38,13 +41,15 @@ export const useUiStore = create<UiStore>((set) => ({
   toggleActiveTag: (id, multi): void =>
     set((s) => {
       const isActive = s.activeTags.includes(id)
-      if (isActive && s.activeTags.length === 1) return { activeTags: [], showTrash: false }
+      if (isActive && s.activeTags.length === 1)
+        return { activeTags: [], showTrash: false, showPinned: false }
       if (isActive) return { activeTags: s.activeTags.filter((t) => t !== id) }
-      if (multi) return { activeTags: [...s.activeTags, id], showTrash: false }
-      return { activeTags: [id], showTrash: false }
+      if (multi) return { activeTags: [...s.activeTags, id], showTrash: false, showPinned: false }
+      return { activeTags: [id], showTrash: false, showPinned: false }
     }),
   clearActiveTags: (): void => set({ activeTags: [] }),
-  setShowTrash: (showTrash): void => set({ showTrash, activeTags: [] }),
+  setShowTrash: (showTrash): void => set({ showTrash, activeTags: [], showPinned: false }),
+  setShowPinned: (showPinned): void => set({ showPinned, activeTags: [], showTrash: false }),
   setCommandPaletteOpen: (commandPaletteOpen): void => set({ commandPaletteOpen }),
   setSettingsOpen: (settingsOpen): void => set({ settingsOpen }),
   setTagSelectorNoteId: (tagSelectorNoteId): void => set({ tagSelectorNoteId }),

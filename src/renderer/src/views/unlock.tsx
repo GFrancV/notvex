@@ -1,29 +1,54 @@
-import { useState, useEffect } from 'react'
+import { type JSX, useEffect, useState } from 'react'
 
-import { Shield, Eye, EyeOff, Key } from 'lucide-react'
+import { EyeIcon, EyeOffIcon, FolderOpenIcon, ShieldIcon } from 'lucide-react'
 
-import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { notvex } from '../lib/ipc'
-import { useVaultStore } from '../store/vault.store'
+import { Button } from '@/components/ui/button'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput
+} from '@/components/ui/input-group'
+import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { notvex } from '@/lib/ipc'
+import { useVaultStore } from '@/store/vault.store'
+
+type UnlockMode = 'password' | 'recovery'
+
+function truncatePath(path: string, maxLen = 54): string {
+  if (path.length <= maxLen) return path
+  const half = Math.floor((maxLen - 3) / 2)
+  return path.slice(0, half) + '…' + path.slice(path.length - half)
+}
 
 export function Unlock(): JSX.Element {
   const { setStatus, refreshAll } = useVaultStore()
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
+  const [vaultExists, setVaultExists] = useState<boolean | null>(null)
+  const [mode, setMode] = useState<UnlockMode>('password')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
   const [error, setError] = useState('')
+  const [pathError, setPathError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState<'password' | 'recovery'>('password')
 
   useEffect(() => {
-    void notvex.prefs.get('vaultPath').then((res) => {
-      if (res.success && res.data) setVaultPath(res.data as string)
-    })
+    void (async (): Promise<void> => {
+      const res = await notvex.prefs.get('vaultPath')
+      const data = res.success ? res.data : null
+      const path = typeof data === 'string' ? data : null
+      setVaultPath(path)
+      if (path) {
+        const check = await notvex.vault.hasVault(path)
+        setVaultExists(check.success && check.data)
+      } else {
+        setVaultExists(false)
+      }
+    })()
   }, [])
 
   async function afterUnlock(): Promise<void> {
@@ -65,105 +90,215 @@ export function Unlock(): JSX.Element {
     await afterUnlock()
   }
 
+  const handleOpenOther = async (): Promise<void> => {
+    const res = await notvex.vault.chooseFile('existing')
+    if (!res.success || !res.data) return
+    const selected = res.data
+    const check = await notvex.vault.hasVault(selected)
+    if (!check.success || !check.data) {
+      setPathError('This file is not a valid Notvex vault')
+      return
+    }
+    await notvex.prefs.set('vaultPath', selected)
+    setVaultPath(selected)
+    setPathError('')
+    setVaultExists(true)
+    setError('')
+  }
+
+  const switchToRecovery = (): void => {
+    setMode('recovery')
+    setError('')
+  }
+
+  const switchToPassword = (): void => {
+    setMode('password')
+    setError('')
+  }
+
+  const words = mnemonic.trim() === '' ? [] : mnemonic.trim().split(/\s+/)
+  const wordCount = words.length
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#111111] p-8">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-emerald-600/30 bg-emerald-600/20">
-            <Shield className="h-7 w-7 text-emerald-400" />
+            <ShieldIcon className="h-7 w-7 text-emerald-400" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-[#e5e5e5]">Notvex</h1>
-            <p className="mt-1 text-sm text-[#737373]">Unlock your vault</p>
+            <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
+            <p className="text-muted mt-1 text-sm">
+              {vaultExists === true && mode === 'recovery'
+                ? 'Account Recovery'
+                : 'Unlock your vault'}
+            </p>
           </div>
         </div>
 
+        {/* Vault selector */}
         {vaultPath && (
-          <p className="mb-4 truncate text-center text-xs text-[#737373]">{vaultPath}</p>
+          <div className="mb-5">
+            <div className="flex items-center justify-between gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-muted cursor-default text-xs">
+                      {truncatePath(vaultPath)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{vaultPath}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-muted shrink-0 hover:text-[#a3a3a3]"
+                onClick={(): void => {
+                  void handleOpenOther()
+                }}
+              >
+                <FolderOpenIcon />
+                <span className="sr-only">Open other</span>
+              </Button>
+            </div>
+            {pathError && <p className="mt-1 text-xs text-red-400">✕ {pathError}</p>}
+          </div>
         )}
 
-        <Tabs
-          value={tab}
-          onValueChange={(v) => {
-            setTab(v as typeof tab)
-            setError('')
-          }}
-        >
-          <TabsList className="mb-6 w-full">
-            <TabsTrigger value="password" className="flex-1 gap-1.5">
-              <Key className="h-3.5 w-3.5" /> Password
-            </TabsTrigger>
-            <TabsTrigger value="recovery" className="flex-1 gap-1.5">
-              <Shield className="h-3.5 w-3.5" /> Recovery
-            </TabsTrigger>
-          </TabsList>
+        {/* Checking */}
+        {vaultExists === null && (
+          <div className="flex justify-center py-8">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#2a2a2a] border-t-emerald-500" />
+          </div>
+        )}
 
-          {/* Password tab */}
-          <TabsContent value="password" className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="unlock-password">Master password</Label>
-              <div className="relative">
-                <Input
-                  id="unlock-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="pr-10"
-                  onKeyDown={(e): void => {
-                    if (e.key === 'Enter') void handlePasswordUnlock()
+        {/* Vault file not found */}
+        {vaultExists === false && (
+          <div className="space-y-4 rounded-lg border border-[#2a2a2a] p-4">
+            <p className="text-sm text-[#737373]">
+              The vault file could not be found at the saved location.
+            </p>
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={(): void => setStatus('uninitialized')}
+            >
+              Create new vault
+            </Button>
+          </div>
+        )}
+
+        {/* Unlock form */}
+        {vaultExists === true && (
+          <div
+            key={mode}
+            className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-4 duration-200"
+          >
+            {mode === 'password' ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="unlock-password">Master password</FieldLabel>
+                  <InputGroup>
+                    <InputGroupInput
+                      id="unlock-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="pr-10"
+                      onKeyDown={(e): void => {
+                        if (e.key === 'Enter') void handlePasswordUnlock()
+                      }}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton onClick={() => setShowPassword((v) => !v)}>
+                        {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                </Field>
+
+                {error && <p className="text-sm text-red-400">{error}</p>}
+
+                <Button
+                  className="w-full"
+                  onClick={(): void => {
+                    void handlePasswordUnlock()
                   }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-[#737373] hover:text-[#a3a3a3]"
+                  disabled={loading || !password}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
+                  {loading ? 'Unlocking…' : 'Unlock'}
+                </Button>
 
-            {error && <p className="text-sm text-red-400">{error}</p>}
+                <p className="text-center">
+                  <button
+                    type="button"
+                    onClick={switchToRecovery}
+                    className="text-muted text-xs hover:underline"
+                  >
+                    Forgot your password? Use recovery key
+                  </button>
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-muted text-sm">
+                  Enter your 24 recovery words to regain access to your vault.
+                </p>
 
-            <Button
-              className="w-full"
-              onClick={(): void => {
-                void handlePasswordUnlock()
-              }}
-              disabled={loading || !password}
-            >
-              {loading ? 'Unlocking…' : 'Unlock'}
-            </Button>
-          </TabsContent>
+                <Field>
+                  <Textarea
+                    value={mnemonic}
+                    onChange={(e) => setMnemonic(e.target.value)}
+                    placeholder="Enter your 24-word recovery phrase…"
+                    rows={4}
+                    className="h-26 resize-none font-mono"
+                  />
+                  <FieldDescription>
+                    {mnemonic.trim() !== '' && (
+                      <p
+                        className={`text-right text-xs ${wordCount === 24 ? 'text-primary' : 'text-destructive'}`}
+                      >
+                        {wordCount}/24 words
+                      </p>
+                    )}
+                    <p className="text-muted text-xs">
+                      Separate each word with a space or new line.
+                    </p>
+                  </FieldDescription>
+                </Field>
 
-          {/* Recovery tab */}
-          <TabsContent value="recovery" className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="mnemonic">24-word recovery key</Label>
-              <textarea
-                id="mnemonic"
-                value={mnemonic}
-                onChange={(e) => setMnemonic(e.target.value)}
-                placeholder="Enter your 24 recovery words separated by spaces..."
-                className="flex min-h-[96px] w-full resize-none rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 font-mono text-sm text-[#e5e5e5] placeholder:text-[#737373] focus-visible:ring-1 focus-visible:ring-emerald-500 focus-visible:outline-none"
-              />
-            </div>
+                {error && <p className="text-destructive text-sm">{error}</p>}
 
-            {error && <p className="text-sm text-red-400">{error}</p>}
+                <Button
+                  className="w-full"
+                  onClick={(): void => {
+                    void handleRecoveryUnlock()
+                  }}
+                  disabled={loading || wordCount !== 24}
+                >
+                  {loading ? 'Recovering…' : 'Recover Access'}
+                </Button>
 
-            <Button
-              className="w-full"
-              onClick={(): void => {
-                void handleRecoveryUnlock()
-              }}
-              disabled={loading || mnemonic.trim().split(/\s+/).length < 24}
-            >
-              {loading ? 'Unlocking…' : 'Unlock with recovery key'}
-            </Button>
-          </TabsContent>
-        </Tabs>
+                <p className="text-center text-xs text-amber-500">
+                  ⚠ After recovery, set a new password immediately in Settings
+                </p>
+
+                <p className="text-center">
+                  <button
+                    type="button"
+                    onClick={switchToPassword}
+                    className="text-muted text-xs hover:underline"
+                  >
+                    ← Back to unlock
+                  </button>
+                </p>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
