@@ -19,6 +19,7 @@ import { ChangePasswordDialog } from './change-password-dialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
+import { VaultSwitcher } from './VaultSwitcher'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -233,10 +234,9 @@ export function Sidebar(): JSX.Element {
         </div>
       </ScrollArea>
 
-      {/* Status indicator */}
-      <div className="flex items-center gap-2 border border-t px-4 py-3">
-        <div className="bg-primary h-2 w-2 rounded-full" />
-        <span className="text-muted-foreground text-xs">Vault unlocked</span>
+      {/* Vault switcher */}
+      <div className="border-t">
+        <VaultSwitcher />
       </div>
 
       <ChangePasswordDialog
