@@ -22,9 +22,12 @@ type Step = 'location' | 'password' | 'recovery'
 
 export function Setup(): JSX.Element {
   const setStatus = useVaultStore((s) => s.setStatus)
+  const pendingNewVaultPath = useVaultStore((s) => s.pendingNewVaultPath)
+  const setPendingNewVaultPath = useVaultStore((s) => s.setPendingNewVaultPath)
 
-  const [step, setStep] = useState<Step>('location')
-  const [vaultPath, setVaultPath] = useState('')
+  // When opened from the vault switcher the path is already chosen — skip the location step
+  const [step, setStep] = useState<Step>(pendingNewVaultPath ? 'password' : 'location')
+  const [vaultPath, setVaultPath] = useState(pendingNewVaultPath ?? '')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -64,7 +67,13 @@ export function Setup(): JSX.Element {
   }
 
   const handleFinish = (): void => {
+    setPendingNewVaultPath(null)
     setStatus('unlocked')
+  }
+
+  const handleBackToUnlock = (): void => {
+    setPendingNewVaultPath(null)
+    setStatus('locked')
   }
 
   return (
@@ -230,6 +239,20 @@ export function Setup(): JSX.Element {
               Start using Notvex
             </Button>
           </div>
+        )}
+
+        {/* Escape hatch when creating a new vault from the switcher — hidden once the
+            vault exists (recovery step) */}
+        {pendingNewVaultPath && step !== 'recovery' && (
+          <p className="mt-6 text-center">
+            <Button
+              variant="link"
+              className="text-muted h-auto p-0 text-xs font-normal"
+              onClick={handleBackToUnlock}
+            >
+              ← Back to unlock
+            </Button>
+          </p>
         )}
       </div>
     </div>

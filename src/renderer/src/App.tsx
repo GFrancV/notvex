@@ -8,7 +8,7 @@ import { Setup } from './views/setup'
 import { Unlock } from './views/unlock'
 
 export default function App(): JSX.Element {
-  const { status, needsRecoveryReset, setStatus } = useVaultStore()
+  const { status, needsRecoveryReset, pendingNewVaultPath, setStatus } = useVaultStore()
 
   useEffect(() => {
     const init = async (): Promise<void> => {
@@ -41,6 +41,7 @@ export default function App(): JSX.Element {
     )
   }
 
+  if (pendingNewVaultPath) return <Setup />
   if (status === 'uninitialized') return <Setup />
   if (status === 'locked') return <Unlock />
   if (needsRecoveryReset) return <PostRecoveryReset />
