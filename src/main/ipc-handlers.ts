@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import { readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename } from 'node:path'
 
 import type { BrowserWindow } from 'electron'
@@ -26,7 +26,7 @@ import {
   updateNote,
   updateTag
 } from './db/queries'
-import { getPref, getPrefs, setPref, setPrefs } from './prefs'
+import { getPref, getPrefs, recordVaultUsed, setPrefs } from './prefs'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -146,7 +146,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   ipcMain.handle('vault:create', async (_e, filePath: string, password: string) => {
     try {
       const result = await createVault(filePath, password)
-      setPref('vaultPath', filePath)
+      recordVaultUsed(filePath)
       touchActivity()
       return ok(result)
     } catch (e) {
@@ -165,7 +165,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         if (success) {
           unlockThrottle.failedAttempts = 0
           unlockThrottle.lockedUntil = 0
-          setPref('vaultPath', filePath)
+          recordVaultUsed(filePath)
           touchActivity()
         } else {
           unlockThrottle.failedAttempts += 1
@@ -198,7 +198,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
         const success = await openVaultWithRecovery(filePath, mnemonic, kfContents)
         if (success) {
-          setPref('vaultPath', filePath)
+          recordVaultUsed(filePath)
           touchActivity()
         }
         return ok(success)
@@ -242,6 +242,35 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   ipcMain.handle('vault:close', async () => {
     try {
       await closeVault()
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:recent-vaults', () => {
+    try {
+      let recents = getPref('recentVaultPaths')
+      const current = getPref('vaultPath')
+      // Seed for users whose vaultPath predates the recents list
+      if (recents.length === 0 && current) recents = [current]
+      return ok(recents.map((path) => ({ path, exists: existsSync(path) })))
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:switch', async (_e, filePath: string) => {
+    try {
+      // Validate before closeVault() so a bad target never locks the current vault
+      if (!existsSync(filePath)) {
+        return fail(`Vault not found at ${filePath}. It may have been moved or deleted.`)
+      }
+      if (!vaultExistsAt(filePath)) {
+        return fail('This file is not a valid Notvex vault')
+      }
+      await closeVault()
+      recordVaultUsed(filePath)
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -567,7 +596,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   ipcMain.handle('prefs:set', (_e, key: string, value: unknown) => {
     try {
-      setPrefs({ [key]: value })
+      // Route vaultPath writes through the recents list to keep vaultPath === recentVaultPaths[0]
+      if (key === 'vaultPath' && typeof value === 'string') {
+        recordVaultUsed(value)
+      } else {
+        setPrefs({ [key]: value })
+      }
       return ok(null)
     } catch (e) {
       return fail(e)
