@@ -1,6 +1,13 @@
-import { type JSX, useState } from 'react'
+import { type JSX, useEffect, useState } from 'react'
 
-import { AlertTriangleIcon, EyeIcon, EyeOffIcon, KeyRoundIcon, LockIcon } from 'lucide-react'
+import {
+  AlertTriangleIcon,
+  EyeIcon,
+  EyeOffIcon,
+  InfoIcon,
+  KeyRoundIcon,
+  LockIcon
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
@@ -33,6 +40,13 @@ export function PostRecoveryReset(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
   const [confirmed, setConfirmed] = useState(false)
+  const [hadKeyFile, setHadKeyFile] = useState(false)
+
+  useEffect(() => {
+    void notvex.vault.hasKeyFile().then((r) => {
+      setHadKeyFile(r.success ? r.data : false)
+    })
+  }, [])
 
   const passwordsMatch = newPassword === confirmPassword
   const confirmTouched = confirmPassword.length > 0
@@ -165,6 +179,16 @@ export function PostRecoveryReset(): JSX.Element {
             </Alert>
 
             <RecoveryWordsGrid mnemonic={mnemonic} />
+
+            {hadKeyFile && (
+              <Alert className="border-border border">
+                <InfoIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                <AlertDescription className="text-muted-foreground text-sm">
+                  Your key file has not changed. You will still need it along with your new password
+                  to unlock your vault.
+                </AlertDescription>
+              </Alert>
+            )}
 
             <Field orientation="horizontal">
               <Checkbox
