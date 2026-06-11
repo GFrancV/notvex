@@ -29,7 +29,7 @@ export function NoteList(): JSX.Element {
 
   const [contextMenuNote, setContextMenuNote] = useState<NoteListItem | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(0)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Load all notes when trash/pinned/active-tags view changes
   useEffect(() => {
