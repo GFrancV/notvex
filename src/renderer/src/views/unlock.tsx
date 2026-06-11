@@ -1,7 +1,8 @@
-import { type JSX, useEffect, useState } from 'react'
+import { type JSX, useEffect, useRef, useState } from 'react'
 
 import { EyeIcon, EyeOffIcon, FolderOpenIcon, ShieldIcon } from 'lucide-react'
 
+import { KeyFileInput } from '@/components/KeyFileInput'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import {
@@ -14,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { notvex } from '@/lib/ipc'
 import { useVaultStore } from '@/store/vault.store'
+import type { UnlockThrottleStatus } from '@shared/types'
 
 type UnlockMode = 'password' | 'recovery'
 
@@ -28,6 +30,11 @@ export function Unlock(): JSX.Element {
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [vaultExists, setVaultExists] = useState<boolean | null>(null)
+  const [hasKeyFile, setHasKeyFile] = useState(false)
+  const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
+  const [keyFilename, setKeyFilename] = useState<string | null>(null)
+  const [recoveryKeyFileContents, setRecoveryKeyFileContents] = useState<Uint8Array | null>(null)
+  const [recoveryKeyFilename, setRecoveryKeyFilename] = useState<string | null>(null)
   const [mode, setMode] = useState<UnlockMode>('password')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -35,6 +42,34 @@ export function Unlock(): JSX.Element {
   const [error, setError] = useState('')
   const [pathError, setPathError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [throttle, setThrottle] = useState<UnlockThrottleStatus | null>(null)
+  const [countdown, setCountdown] = useState(0)
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  function startCountdown(seconds: number): void {
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    setCountdown(seconds)
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!)
+          countdownRef.current = null
+          setThrottle((t) => (t ? { ...t, isThrottled: false, waitSeconds: 0 } : t))
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  async function refreshThrottleStatus(): Promise<void> {
+    const t = await notvex.vault.getUnlockThrottleStatus()
+    if (!t.success) return
+    setThrottle(t.data)
+    if (t.data.isThrottled && t.data.waitSeconds > 0) {
+      startCountdown(t.data.waitSeconds)
+    }
+  }
 
   useEffect(() => {
     void (async (): Promise<void> => {
@@ -44,11 +79,21 @@ export function Unlock(): JSX.Element {
       setVaultPath(path)
       if (path) {
         const check = await notvex.vault.hasVault(path)
-        setVaultExists(check.success && check.data)
+        const exists = check.success && check.data
+        setVaultExists(exists)
+        if (exists) {
+          const kfRes = await notvex.vault.hasKeyFile()
+          setHasKeyFile(kfRes.success ? kfRes.data : false)
+          await refreshThrottleStatus()
+        }
       } else {
         setVaultExists(false)
       }
     })()
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function afterUnlock(viaRecovery = false): Promise<void> {
@@ -59,16 +104,20 @@ export function Unlock(): JSX.Element {
 
   const handlePasswordUnlock = async (): Promise<void> => {
     if (!vaultPath) return
+    if (countdown > 0) return
     setError('')
     setLoading(true)
-    const res = await notvex.vault.open(vaultPath, password)
+    const res = await notvex.vault.open(vaultPath, password, keyFileContents ?? undefined)
     setLoading(false)
     if (!res.success) {
       setError(res.error)
+      await refreshThrottleStatus()
       return
     }
     if (!res.data) {
-      setError('Incorrect password.')
+      const errMsg = hasKeyFile ? 'Incorrect password or key file.' : 'Incorrect password.'
+      setError(errMsg)
+      await refreshThrottleStatus()
       return
     }
     await afterUnlock()
@@ -78,14 +127,18 @@ export function Unlock(): JSX.Element {
     if (!vaultPath) return
     setError('')
     setLoading(true)
-    const res = await notvex.vault.openWithRecovery(vaultPath, mnemonic.trim())
+    const res = await notvex.vault.openWithRecovery(
+      vaultPath,
+      mnemonic.trim(),
+      hasKeyFile ? (recoveryKeyFileContents ?? undefined) : undefined
+    )
     setLoading(false)
     if (!res.success) {
       setError(res.error)
       return
     }
     if (!res.data) {
-      setError('Invalid recovery key.')
+      setError(hasKeyFile ? 'Invalid recovery key or key file.' : 'Invalid recovery key.')
       return
     }
     await afterUnlock(true)
@@ -105,6 +158,13 @@ export function Unlock(): JSX.Element {
     setPathError('')
     setVaultExists(true)
     setError('')
+    const kfRes = await notvex.vault.hasKeyFile()
+    setHasKeyFile(kfRes.success ? kfRes.data : false)
+    setKeyFileContents(null)
+    setKeyFilename(null)
+    setRecoveryKeyFileContents(null)
+    setRecoveryKeyFilename(null)
+    await refreshThrottleStatus()
   }
 
   const switchToRecovery = (): void => {
@@ -119,6 +179,7 @@ export function Unlock(): JSX.Element {
 
   const words = mnemonic.trim() === '' ? [] : mnemonic.trim().split(/\s+/)
   const wordCount = words.length
+  const isThrottled = countdown > 0
 
   return (
     <div className="bg-background flex min-h-screen items-center justify-center p-8">
@@ -209,7 +270,7 @@ export function Unlock(): JSX.Element {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
                       onKeyDown={(e): void => {
-                        if (e.key === 'Enter') void handlePasswordUnlock()
+                        if (e.key === 'Enter' && !isThrottled) void handlePasswordUnlock()
                       }}
                     />
                     <InputGroupAddon align="inline-end">
@@ -220,14 +281,48 @@ export function Unlock(): JSX.Element {
                   </InputGroup>
                 </Field>
 
-                {error && <p className="text-destructive text-sm">{error}</p>}
+                {hasKeyFile && (
+                  <Field>
+                    <FieldLabel>Key file</FieldLabel>
+                    <KeyFileInput
+                      value={keyFilename}
+                      onChange={(c, f) => {
+                        setKeyFileContents(c)
+                        setKeyFilename(f)
+                      }}
+                      onClear={() => {
+                        setKeyFileContents(null)
+                        setKeyFilename(null)
+                      }}
+                    />
+                  </Field>
+                )}
+
+                {error && !isThrottled && <p className="text-destructive text-sm">{error}</p>}
+
+                {isThrottled && (
+                  <div className="space-y-1">
+                    <p className="text-destructive text-sm">
+                      Too many failed attempts. Please wait {countdown} second
+                      {countdown !== 1 ? 's' : ''} before trying again.
+                    </p>
+                    <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                      <div
+                        className="bg-destructive h-full rounded-full transition-all duration-1000"
+                        style={{
+                          width: `${throttle ? (countdown / throttle.waitSeconds) * 100 : 0}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <Button
                   className="w-full"
                   onClick={(): void => {
                     void handlePasswordUnlock()
                   }}
-                  disabled={loading || !password}
+                  disabled={loading || !password || isThrottled || (hasKeyFile && !keyFileContents)}
                 >
                   {loading ? 'Unlocking…' : 'Unlock'}
                 </Button>
@@ -247,6 +342,23 @@ export function Unlock(): JSX.Element {
                 <p className="text-muted text-sm">
                   Enter your 24 recovery words to regain access to your vault.
                 </p>
+
+                {hasKeyFile && (
+                  <Field>
+                    <FieldLabel>Key file</FieldLabel>
+                    <KeyFileInput
+                      value={recoveryKeyFilename}
+                      onChange={(c, f) => {
+                        setRecoveryKeyFileContents(c)
+                        setRecoveryKeyFilename(f)
+                      }}
+                      onClear={() => {
+                        setRecoveryKeyFileContents(null)
+                        setRecoveryKeyFilename(null)
+                      }}
+                    />
+                  </Field>
+                )}
 
                 <Field>
                   <Textarea
@@ -277,7 +389,7 @@ export function Unlock(): JSX.Element {
                   onClick={(): void => {
                     void handleRecoveryUnlock()
                   }}
-                  disabled={loading || wordCount !== 24}
+                  disabled={loading || wordCount !== 24 || (hasKeyFile && !recoveryKeyFileContents)}
                 >
                   {loading ? 'Recovering…' : 'Recover Access'}
                 </Button>
