@@ -1,3 +1,7 @@
+import { randomBytes } from 'crypto'
+import { readFileSync, writeFileSync } from 'fs'
+import { basename } from 'node:path'
+
 import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain, shell } from 'electron'
 
@@ -23,16 +27,20 @@ import {
   updateTag
 } from './db/queries'
 import { getPref, getPrefs, setPref, setPrefs } from './prefs'
+import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
   closeVault,
+  configureKeyFile,
   createVault,
   getDb,
+  getHasKeyFile,
   getMasterKey,
   getVaultPath,
   isVaultOpen,
   openVault,
   openVaultWithRecovery,
+  removeKeyFile,
   rotateVaultCredentials,
   syncContainer,
   vaultExistsAt
@@ -59,15 +67,19 @@ function requireVault(): void {
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
 let syncTimer: ReturnType<typeof setInterval> | null = null
-let mainWindowRef: BrowserWindow | null = null
 
 function touchActivity(): void {
   lastActivityAt = Date.now()
 }
 
+export async function lockVaultAndNotify(win: BrowserWindow): Promise<void> {
+  if (!isVaultOpen()) return
+  await closeVault()
+  win.webContents.send('vault:auto-locked')
+}
+
 function startAutoLockTimer(win: BrowserWindow): void {
   if (autoLockTimer) clearInterval(autoLockTimer)
-  mainWindowRef = win
   autoLockTimer = setInterval((): void => {
     void (async (): Promise<void> => {
       const minutes = getPref('autoLockMinutes')
@@ -75,8 +87,7 @@ function startAutoLockTimer(win: BrowserWindow): void {
       if (!isVaultOpen()) return
       const elapsed = (Date.now() - lastActivityAt) / 60000
       if (elapsed >= minutes) {
-        await closeVault()
-        mainWindowRef?.webContents.send('vault:auto-locked')
+        await lockVaultAndNotify(win)
       }
     })()
   }, 60_000)
@@ -97,6 +108,23 @@ export function stopAutoLockTimer(): void {
     clearInterval(syncTimer)
     syncTimer = null
   }
+}
+
+// ─── Unlock throttle ─────────────────────────────────────────────────────────
+
+interface ThrottleState {
+  failedAttempts: number
+  lockedUntil: number
+}
+
+const unlockThrottle: ThrottleState = { failedAttempts: 0, lockedUntil: 0 }
+
+function throttleDelaySeconds(attempts: number): number {
+  if (attempts <= 3) return 0
+  if (attempts === 4) return 5
+  if (attempts === 5) return 15
+  if (attempts === 6) return 30
+  return 60 * (attempts - 6)
 }
 
 // ─── Register all handlers ────────────────────────────────────────────────────
@@ -126,41 +154,71 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   })
 
-  ipcMain.handle('vault:open', async (_e, filePath: string, password: string) => {
-    try {
-      const success = await openVault(filePath, password)
-      if (success) {
-        setPref('vaultPath', filePath)
-        touchActivity()
+  ipcMain.handle(
+    'vault:open',
+    async (_e, filePath: string, password: string, keyFileContents?: Uint8Array) => {
+      try {
+        if (Date.now() < unlockThrottle.lockedUntil) {
+          return fail('Too many failed attempts')
+        }
+        const success = await openVault(filePath, password, keyFileContents)
+        if (success) {
+          unlockThrottle.failedAttempts = 0
+          unlockThrottle.lockedUntil = 0
+          setPref('vaultPath', filePath)
+          touchActivity()
+        } else {
+          unlockThrottle.failedAttempts += 1
+          const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
+          if (delaySecs > 0) {
+            unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
+          }
+        }
+        return ok(success)
+      } catch (e) {
+        return fail(e)
       }
-      return ok(success)
-    } catch (e) {
-      return fail(e)
     }
-  })
+  )
 
-  ipcMain.handle('vault:open-with-recovery', async (_e, filePath: string, mnemonic: string) => {
-    try {
-      const success = await openVaultWithRecovery(filePath, mnemonic)
-      if (success) {
-        setPref('vaultPath', filePath)
-        touchActivity()
-      }
-      return ok(success)
-    } catch (e) {
-      return fail(e)
-    }
+  ipcMain.handle('vault:unlock-throttle-status', () => {
+    const now = Date.now()
+    const waitMs = Math.max(0, unlockThrottle.lockedUntil - now)
+    return ok({
+      isThrottled: waitMs > 0,
+      waitSeconds: Math.ceil(waitMs / 1000),
+      failedAttempts: unlockThrottle.failedAttempts
+    })
   })
 
   ipcMain.handle(
+    'vault:open-with-recovery',
+    async (_e, filePath: string, mnemonic: string, keyFileContents?: Uint8Array) => {
+      try {
+        const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+        const success = await openVaultWithRecovery(filePath, mnemonic, kfContents)
+        if (success) {
+          setPref('vaultPath', filePath)
+          touchActivity()
+        }
+        return ok(success)
+      } catch (e) {
+        return fail(e)
+      }
+    }
+  )
+
+  ipcMain.handle(
     'vault:change-password',
-    async (_e, currentPassword: string, newPassword: string) => {
+    async (_e, currentPassword: string, newPassword: string, keyFileContents?: Uint8Array) => {
       try {
         requireVault()
         touchActivity()
-        const result = await changePassword(currentPassword, newPassword)
+        const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+        const result = await changePassword(currentPassword, newPassword, kfContents)
         return ok(result)
       } catch (e) {
+        if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
         return fail(e)
       }
     }
@@ -189,6 +247,91 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return fail(e)
     }
   })
+
+  ipcMain.handle('vault:clear-decrypted', () => {
+    // Main process has no accumulated plaintext — the belt-and-suspenders signal is enough.
+    return ok(null)
+  })
+
+  ipcMain.handle('vault:has-key-file', () => {
+    try {
+      return ok(getHasKeyFile())
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:generate-key-file', async () => {
+    try {
+      const result = await dialog.showSaveDialog(win, {
+        title: 'Save key file',
+        defaultPath: 'notvex.nvxkey',
+        filters: [{ name: 'Notvex Key File', extensions: ['nvxkey'] }]
+      })
+      if (result.canceled || !result.filePath) return ok(null)
+      const bytes = randomBytes(32)
+      writeFileSync(result.filePath, bytes)
+      const filename = basename(result.filePath)
+      return ok({ path: result.filePath, contents: new Uint8Array(bytes), filename })
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:select-key-file', async () => {
+    try {
+      const result = await dialog.showOpenDialog(win, {
+        title: 'Select key file',
+        properties: ['openFile'],
+        filters: [
+          { name: 'Notvex Key File', extensions: ['nvxkey'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      })
+      if (result.canceled || !result.filePaths[0]) return ok(null)
+      const filePath = result.filePaths[0]
+      const filename = basename(filePath)
+      const raw = readFileSync(filePath)
+      const sizeBytes = raw.length
+      const contents =
+        sizeBytes === 0 ? new Uint8Array(0) : new Uint8Array(raw.slice(0, KEY_FILE_MAX_BYTES))
+      return ok({ contents, filename, sizeBytes })
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle(
+    'vault:configure-key-file',
+    async (_e, password: string, keyFileContents: Uint8Array) => {
+      try {
+        requireVault()
+        touchActivity()
+        const kfContents = readKeyFileContents(keyFileContents)
+        const result = await configureKeyFile(password, kfContents)
+        return ok(result)
+      } catch (e) {
+        if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
+        return fail(e)
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'vault:remove-key-file',
+    async (_e, password: string, keyFileContents: Uint8Array) => {
+      try {
+        requireVault()
+        touchActivity()
+        const kfContents = readKeyFileContents(keyFileContents)
+        const result = await removeKeyFile(password, kfContents)
+        return ok(result)
+      } catch (e) {
+        if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
+        return fail(e)
+      }
+    }
+  )
 
   ipcMain.handle('vault:status', () => {
     return ok({ isOpen: isVaultOpen(), vaultPath: getVaultPath() })

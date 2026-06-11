@@ -24,7 +24,7 @@ export interface Argon2Params {
 export const DEFAULT_ARGON2_PARAMS: Argon2Params = {
   memory: 268435456, // sodium.crypto_pwhash_MEMLIMIT_MODERATE (256 MB)
   iterations: 3, // sodium.crypto_pwhash_OPSLIMIT_MODERATE
-  parallelism: 1,
+  parallelism: 1
 }
 
 export function generateSalt(): Uint8Array {
@@ -32,19 +32,56 @@ export function generateSalt(): Uint8Array {
   return sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES)
 }
 
+export const KEY_FILE_MAX_BYTES = 1024 * 1024 // 1 MB
+
+export function readKeyFileContents(rawContents: Uint8Array): Uint8Array {
+  if (rawContents.byteLength === 0) throw new Error('KEY_FILE_EMPTY')
+  if (rawContents.byteLength > KEY_FILE_MAX_BYTES) return rawContents.slice(0, KEY_FILE_MAX_BYTES)
+  return rawContents
+}
+
+export function hashKeyFile(contents: Buffer): string {
+  assertReady()
+  const hash = sodium.crypto_generichash(32, contents, new Uint8Array(0))
+  return Buffer.from(hash).toString('hex')
+}
+
+export function deriveRecoveryWrapKey(
+  mnemonicKey: Uint8Array,
+  keyFileContents?: Uint8Array
+): Uint8Array {
+  assertReady()
+  if (!keyFileContents) {
+    const copy = new Uint8Array(mnemonicKey.length)
+    copy.set(mnemonicKey)
+    return copy
+  }
+  // wrapKey = BLAKE2b( mnemonicKey || BLAKE2b(keyFileContents) )
+  const kfHash = sodium.crypto_generichash(32, keyFileContents, new Uint8Array(0))
+  const combined = new Uint8Array(mnemonicKey.length + kfHash.length)
+  combined.set(mnemonicKey)
+  combined.set(kfHash, mnemonicKey.length)
+  const wrapKey = sodium.crypto_generichash(32, combined, new Uint8Array(0))
+  sodium.memzero(kfHash)
+  sodium.memzero(combined)
+  return wrapKey
+}
+
 export function deriveKey(
   password: string,
   salt: Uint8Array,
   params: Argon2Params = DEFAULT_ARGON2_PARAMS,
+  keyFileHash?: string
 ): Uint8Array {
   assertReady()
+  const input = keyFileHash ? password + keyFileHash : password
   return sodium.crypto_pwhash(
     32,
-    password,
+    input,
     salt,
     params.iterations,
     params.memory,
-    sodium.crypto_pwhash_ALG_ARGON2ID13,
+    sodium.crypto_pwhash_ALG_ARGON2ID13
   )
 }
 
@@ -61,7 +98,7 @@ export function encryptField(plaintext: string, masterKey: Uint8Array): Encrypte
     null,
     null,
     nonce,
-    masterKey,
+    masterKey
   )
   return { ciphertext, nonce }
 }
@@ -69,7 +106,7 @@ export function encryptField(plaintext: string, masterKey: Uint8Array): Encrypte
 export function decryptField(
   ciphertext: Uint8Array,
   nonce: Uint8Array,
-  masterKey: Uint8Array,
+  masterKey: Uint8Array
 ): string {
   assertReady()
   const plaintext = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
@@ -77,7 +114,7 @@ export function decryptField(
     ciphertext,
     null,
     nonce,
-    masterKey,
+    masterKey
   )
   return sodium.to_string(plaintext)
 }
@@ -117,7 +154,7 @@ export function calibrateArgon2id(targetMs = 1500): Argon2Params {
     { memory: 134217728, iterations: 3, parallelism: 1 }, // 128 MB / 3 passes
     { memory: 134217728, iterations: 2, parallelism: 1 }, // 128 MB / 2 passes
     { memory: 67108864, iterations: 3, parallelism: 1 }, //  64 MB / 3 passes
-    { memory: 67108864, iterations: 2, parallelism: 1 }, //  64 MB / 2 passes  ← minimum
+    { memory: 67108864, iterations: 2, parallelism: 1 } //  64 MB / 2 passes  ← minimum
   ]
 
   for (const tier of tiers) {
