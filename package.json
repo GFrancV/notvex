@@ -16,7 +16,8 @@
     "lint": "eslint src --max-warnings 0",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{ts,mjs,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{ts,mjs,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{ts,mjs,json}\"",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.1",
@@ -106,6 +107,7 @@
     "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "react": "^19.2.1",
+    "react-doctor": "^0.5.1",
     "react-dom": "^19.2.1",
     "shadcn": "^4.10.0",
     "typescript": "^5.9.3",
