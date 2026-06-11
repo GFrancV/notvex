@@ -1,10 +1,11 @@
 import { join } from 'path'
 
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, powerMonitor, shell } from 'electron'
 
-import { registerIpcHandlers, stopAutoLockTimer } from './ipc-handlers'
+import { lockVaultAndNotify, registerIpcHandlers, stopAutoLockTimer } from './ipc-handlers'
+import { getPref } from './prefs'
 import { initSodium } from './vault/crypto'
-import { closeVault } from './vault/vault'
+import { closeVault, isVaultOpen } from './vault/vault'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -19,7 +20,7 @@ function createWindow(): void {
     titleBarOverlay: {
       color: '#111111',
       symbolColor: '#e5e5e5',
-      height: 32,
+      height: 32
     },
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.js'),
@@ -27,8 +28,8 @@ function createWindow(): void {
       nodeIntegration: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      sandbox: false, // must be false for preload to work
-    },
+      sandbox: false // must be false for preload to work
+    }
   })
 
   // Block navigation away from the app
@@ -52,6 +53,24 @@ function createWindow(): void {
   }
 
   registerIpcHandlers(mainWindow)
+
+  mainWindow.setContentProtection(!getPref('allowScreenCapture'))
+
+  powerMonitor.on('suspend', () => {
+    void lockVaultAndNotify(mainWindow!)
+  })
+  powerMonitor.on('lock-screen', () => {
+    void lockVaultAndNotify(mainWindow!)
+  })
+  powerMonitor.on('user-did-resign-active', () => {
+    void lockVaultAndNotify(mainWindow!)
+  })
+
+  mainWindow.on('minimize', () => {
+    if (getPref('lockOnMinimize') && isVaultOpen()) {
+      void lockVaultAndNotify(mainWindow!)
+    }
+  })
 }
 
 void app.whenReady().then(async (): Promise<void> => {
