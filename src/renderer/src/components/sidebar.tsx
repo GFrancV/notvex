@@ -1,22 +1,22 @@
 import React, { type JSX, useEffect, useState } from 'react'
 
 import {
-  FileText,
+  FileTextIcon,
   MoreHorizontalIcon,
   PenIcon,
-  Pin,
+  PinIcon,
   PlusIcon,
-  Settings,
-  Trash2,
+  SettingsIcon,
   Trash2Icon
 } from 'lucide-react'
 
+import { notvex } from '@/lib/ipc'
+import { cn } from '@/lib/utils'
+import { useUiStore } from '@/store/ui.store'
+import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
-import { notvex } from '../lib/ipc'
-import { cn } from '../lib/utils'
-import { useUiStore } from '../store/ui.store'
-import { useVaultStore } from '../store/vault.store'
 import { ChangePasswordDialog } from './change-password-dialog'
+import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
 import { Button } from './ui/button'
@@ -46,6 +46,7 @@ export function Sidebar(): JSX.Element {
 
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [securitySettingsOpen, setSecuritySettingsOpen] = useState(false)
   const [autoLockMinutes, setAutoLockMinutes] = useState(15)
   const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -90,7 +91,7 @@ export function Sidebar(): JSX.Element {
           <Popover open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="sm">
-                <Settings />
+                <SettingsIcon />
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 space-y-4 p-4">
@@ -132,6 +133,17 @@ export function Sidebar(): JSX.Element {
                 >
                   Change password
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-full justify-start px-2 text-xs text-[#a3a3a3] hover:text-[#e5e5e5]"
+                  onClick={() => {
+                    setSecuritySettingsOpen(true)
+                    setSettingsPopoverOpen(false)
+                  }}
+                >
+                  Security settings…
+                </Button>
               </div>
               <Separator />
               <Button
@@ -155,7 +167,7 @@ export function Sidebar(): JSX.Element {
       <ScrollArea className="flex-1">
         <nav className="space-y-0.5 p-2">
           <NavItem
-            icon={<FileText className="h-3.5 w-3.5" />}
+            icon={<FileTextIcon className="h-3.5 w-3.5" />}
             label="All Notes"
             count={allNotesCount}
             active={activeTags.length === 0 && !showTrash && !showPinned}
@@ -166,14 +178,14 @@ export function Sidebar(): JSX.Element {
             }}
           />
           <NavItem
-            icon={<Pin className="h-3.5 w-3.5" />}
+            icon={<PinIcon className="h-3.5 w-3.5" />}
             label="Pinned"
             count={pinnedCount}
             active={showPinned}
             onClick={() => setShowPinned(true)}
           />
           <NavItem
-            icon={<Trash2 className="h-3.5 w-3.5" />}
+            icon={<Trash2Icon className="h-3.5 w-3.5" />}
             label="Trash"
             count={trashCount}
             active={showTrash}
@@ -230,6 +242,11 @@ export function Sidebar(): JSX.Element {
       <ChangePasswordDialog
         open={changePasswordOpen}
         onClose={() => setChangePasswordOpen(false)}
+      />
+
+      <SecuritySettingsDialog
+        open={securitySettingsOpen}
+        onClose={() => setSecuritySettingsOpen(false)}
       />
 
       <TagCreateModal
