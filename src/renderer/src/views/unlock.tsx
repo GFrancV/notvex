@@ -26,7 +26,7 @@ function truncatePath(path: string, maxLen = 54): string {
 }
 
 export function Unlock(): JSX.Element {
-  const { setStatus, setNeedsRecoveryReset, refreshAll } = useVaultStore()
+  const { setStatus, setNeedsRecoveryReset, setPendingNewVaultPath, refreshAll } = useVaultStore()
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [vaultExists, setVaultExists] = useState<boolean | null>(null)
@@ -167,6 +167,13 @@ export function Unlock(): JSX.Element {
     await refreshThrottleStatus()
   }
 
+  const handleCreateNew = async (): Promise<void> => {
+    const res = await notvex.vault.chooseFile('new')
+    if (!res.success || !res.data) return
+    // Setup mounts on the password step with this path; its "Back to unlock" returns here
+    setPendingNewVaultPath(res.data)
+  }
+
   const switchToRecovery = (): void => {
     setMode('recovery')
     setError('')
@@ -245,7 +252,9 @@ export function Unlock(): JSX.Element {
             <Button
               variant="ghost"
               className="w-full"
-              onClick={(): void => setStatus('uninitialized')}
+              onClick={(): void => {
+                void handleCreateNew()
+              }}
             >
               Create new vault
             </Button>
@@ -335,6 +344,18 @@ export function Unlock(): JSX.Element {
                   >
                     Forgot your password? Use recovery key
                   </button>
+                </p>
+
+                <p className="text-center">
+                  <Button
+                    variant="link"
+                    className="text-muted h-auto p-0 text-xs font-normal"
+                    onClick={(): void => {
+                      void handleCreateNew()
+                    }}
+                  >
+                    Create a new vault
+                  </Button>
                 </p>
               </>
             ) : (
