@@ -1,8 +1,9 @@
-import { type JSX, useState } from 'react'
+import { type JSX, useEffect, useState } from 'react'
 
 import { AlertTriangleIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 
 import { notvex } from '@/lib/ipc'
+import { KeyFileInput } from './KeyFileInput'
 import { PasswordStrengthBar } from './password-strength-bar'
 import { RecoveryWordsGrid } from './recovery-words-grid'
 import { Alert, AlertDescription } from './ui/alert'
@@ -31,9 +32,20 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
   const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
+  const [hasKeyFile, setHasKeyFile] = useState(false)
+  const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
+  const [keyFilename, setKeyFilename] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    void notvex.vault.hasKeyFile().then((r) => {
+      setHasKeyFile(r.success ? r.data : false)
+    })
+  }, [open])
 
   const validationError = (): string => {
     if (!currentPw || !newPw || !confirmPw) return 'All fields are required'
+    if (hasKeyFile && !keyFileContents) return 'Key file is required'
     if (newPw.length < 12) return 'New password must be at least 12 characters'
     if (newPw === currentPw) return 'New password must differ from the current one'
     if (newPw !== confirmPw) return 'New passwords do not match'
@@ -50,7 +62,7 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
     }
     setError('')
     setLoading(true)
-    const res = await notvex.vault.changePassword(currentPw, newPw)
+    const res = await notvex.vault.changePassword(currentPw, newPw, keyFileContents ?? undefined)
     setLoading(false)
     if (!res.success) {
       setError(res.error)
@@ -72,6 +84,9 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
     setLoading(false)
     setMnemonic('')
     setMnemonicConfirmed(false)
+    setHasKeyFile(false)
+    setKeyFileContents(null)
+    setKeyFilename(null)
     onClose()
   }
 
@@ -109,6 +124,24 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
                 </InputGroupAddon>
               </InputGroup>
             </Field>
+
+            {/* Key file (only shown when vault has one configured) */}
+            {hasKeyFile && (
+              <Field>
+                <FieldLabel>Key file</FieldLabel>
+                <KeyFileInput
+                  value={keyFilename}
+                  onChange={(c, f) => {
+                    setKeyFileContents(c)
+                    setKeyFilename(f)
+                  }}
+                  onClear={() => {
+                    setKeyFileContents(null)
+                    setKeyFilename(null)
+                  }}
+                />
+              </Field>
+            )}
 
             {/* New password */}
             <Field>
