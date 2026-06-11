@@ -6,11 +6,15 @@ import { app } from 'electron'
 export interface Prefs {
   vaultPath: string | null
   autoLockMinutes: number
+  allowScreenCapture: boolean
+  lockOnMinimize: boolean
 }
 
 const DEFAULTS: Prefs = {
   vaultPath: null,
-  autoLockMinutes: 15
+  autoLockMinutes: 15,
+  allowScreenCapture: false,
+  lockOnMinimize: false
 }
 
 function prefsPath(): string {

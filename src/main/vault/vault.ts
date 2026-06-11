@@ -15,7 +15,9 @@
  *   VirtualLock/mlock so the OS cannot page it to disk.
  * - All intermediate key copies are zeroed immediately after use.
  */
-import { readFileSync, unlinkSync, writeFileSync } from 'fs'
+import { copyFileSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
+
+import { getPref } from '../prefs'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
@@ -28,11 +30,14 @@ import {
   calibrateArgon2id,
   decryptField,
   deriveKey,
+  deriveRecoveryWrapKey,
   encryptField,
   generateSalt,
   hashForVerify,
+  hashKeyFile,
   initSodium,
   memzero,
+  readKeyFileContents,
   type Argon2Params
 } from './crypto'
 import { allocSecure, freeSecure } from './memlock'
@@ -47,6 +52,7 @@ interface VaultSidecar {
   verify_hash: string
   recovery_encrypted_master_key: string
   recovery_nonce: string
+  hasKeyFile?: boolean
 }
 
 // ─── Module state ────────────────────────────────────────────────────────────
@@ -56,6 +62,7 @@ let masterKey: Buffer | null = null
 let currentVaultPath: string | null = null
 let currentSidecar: VaultSidecar | null = null
 let tempDbPath: string | null = null
+let pendingKeyFileContents: Uint8Array | null = null
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -187,9 +194,11 @@ export async function createVault(filePath: string, password: string): Promise<C
   )
 
   const mnemonic = generateMnemonic()
-  const recoveryKey = mnemonicToMasterKey(mnemonic)
-  const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(rawKey, recoveryKey)
-  memzero(recoveryKey)
+  const mnemonicKey = mnemonicToMasterKey(mnemonic)
+  const wrapKey = deriveRecoveryWrapKey(mnemonicKey, undefined)
+  memzero(mnemonicKey)
+  const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(rawKey, wrapKey)
+  memzero(wrapKey)
 
   // Close DB to flush all pages to the temp file, then pack the .nvx container
   await closeDatabase(database)
@@ -218,7 +227,11 @@ export async function createVault(filePath: string, password: string): Promise<C
   return { mnemonic }
 }
 
-export async function openVault(filePath: string, password: string): Promise<boolean> {
+export async function openVault(
+  filePath: string,
+  password: string,
+  keyFileContents?: Uint8Array
+): Promise<boolean> {
   await initSodium()
 
   if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
@@ -226,7 +239,9 @@ export async function openVault(filePath: string, password: string): Promise<boo
   const { sidecarJson, dbBytes } = readContainer(filePath)
   const sidecar = JSON.parse(sidecarJson) as VaultSidecar
   const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
-  const rawKey = deriveKey(password, salt, sidecar.argon2_params)
+  const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+  const kfHash = kfContents ? hashKeyFile(Buffer.from(kfContents)) : undefined
+  const rawKey = deriveKey(password, salt, sidecar.argon2_params, kfHash)
 
   if (hashForVerify(rawKey) !== sidecar.verify_hash) {
     memzero(rawKey)
@@ -256,10 +271,15 @@ export async function openVault(filePath: string, password: string): Promise<boo
   currentVaultPath = filePath
   currentSidecar = sidecar
   tempDbPath = tmp
+
   return true
 }
 
-export async function openVaultWithRecovery(filePath: string, mnemonic: string): Promise<boolean> {
+export async function openVaultWithRecovery(
+  filePath: string,
+  mnemonic: string,
+  keyFileContents?: Uint8Array
+): Promise<boolean> {
   await initSodium()
 
   if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
@@ -267,20 +287,32 @@ export async function openVaultWithRecovery(filePath: string, mnemonic: string):
 
   const { sidecarJson, dbBytes } = readContainer(filePath)
   const sidecar = JSON.parse(sidecarJson) as VaultSidecar
-  const recoveryKey = mnemonicToMasterKey(mnemonic)
+
+  if (sidecar.hasKeyFile && !keyFileContents) return false
+
+  // Derive the wrap key that was used to encrypt the recovery blob.
+  // When a key file is configured, the wrap key binds both factors:
+  // wrapKey = BLAKE2b(mnemonicKey || BLAKE2b(keyFileContents))
+  // If either factor is wrong the XChaCha20-Poly1305 MAC fails and decryption throws.
+  const mnemonicKey = mnemonicToMasterKey(mnemonic)
+  const wrapKey = deriveRecoveryWrapKey(
+    mnemonicKey,
+    sidecar.hasKeyFile ? keyFileContents : undefined
+  )
+  memzero(mnemonicKey)
 
   let rawKey: Uint8Array
   try {
     rawKey = decryptMasterKey(
       sidecar.recovery_encrypted_master_key,
       sidecar.recovery_nonce,
-      recoveryKey
+      wrapKey
     )
   } catch {
-    memzero(recoveryKey)
+    memzero(wrapKey)
     return false
   } finally {
-    memzero(recoveryKey)
+    memzero(wrapKey)
   }
 
   const tmp = makeTempDbPath()
@@ -306,32 +338,46 @@ export async function openVaultWithRecovery(filePath: string, mnemonic: string):
   currentVaultPath = filePath
   currentSidecar = sidecar
   tempDbPath = tmp
+  pendingKeyFileContents = keyFileContents ?? null
   return true
 }
 
 export async function changePassword(
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
+  keyFileContents?: Uint8Array
 ): Promise<{ mnemonic: string }> {
   if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
 
+  if (currentSidecar.hasKeyFile && !keyFileContents) {
+    throw new Error('Key file is required to change the password')
+  }
+
+  const kfHash = keyFileContents ? hashKeyFile(Buffer.from(keyFileContents)) : undefined
+  const backupPath = currentVaultPath + '.bak'
+  copyFileSync(currentVaultPath, backupPath)
+
   // Step 1 — verify current password
   const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
-  const testKey = deriveKey(currentPassword, salt, currentSidecar.argon2_params)
+  const testKey = deriveKey(currentPassword, salt, currentSidecar.argon2_params, kfHash)
   if (hashForVerify(testKey) !== currentSidecar.verify_hash) {
     memzero(testKey)
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
     throw new Error('Current password is incorrect')
   }
   memzero(testKey)
 
-  // Step 2 — derive new key with a fresh salt
+  // Step 2 — derive new key with a fresh salt (preserving key file in derivation)
   const newSalt = generateSalt()
-  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params)
+  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params, kfHash)
   const newVerifyHash = hashForVerify(newRawKey)
 
-  // Capture old key hex for rollback if steps after rekey fail
   const oldKeyHex = masterKey.toString('hex')
 
   // Step 3 — re-key SQLCipher in-place
@@ -342,8 +388,6 @@ export async function changePassword(
 
   try {
     // Steps 4-6 inside a single transaction so all data changes are atomic.
-    // If anything fails the DB rolls back to pre-transaction state; we then
-    // restore the SQLCipher key via a second PRAGMA rekey.
     await dbRun(db, 'BEGIN TRANSACTION')
 
     try {
@@ -353,10 +397,7 @@ export async function changePassword(
         newVerifyHash
       ])
 
-      // Step 5 — re-encrypt all note ciphertexts with the new key.
-      // PRAGMA rekey re-encrypted the SQLCipher pages, but title/content are
-      // application-level XChaCha20 ciphertexts that still use the old masterKey.
-      // They must be decrypted with the old key and re-encrypted with the new one.
+      // Step 5 — re-encrypt all note ciphertexts with the new key
       interface RawNote {
         id: string
         title: Buffer
@@ -410,13 +451,18 @@ export async function changePassword(
     // Step 6 — checkpoint WAL so readFileSync gets all committed data
     await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
 
-    // Step 7 — generate new recovery mnemonic, wrap new key
+    // Step 7 — generate new recovery mnemonic, wrap new key (bind key file when active)
     const mnemonic = generateMnemonic()
-    const recoveryKey = mnemonicToMasterKey(mnemonic)
-    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, recoveryKey)
-    memzero(recoveryKey)
+    const mnemonicKey = mnemonicToMasterKey(mnemonic)
+    const wrapKey = deriveRecoveryWrapKey(
+      mnemonicKey,
+      currentSidecar.hasKeyFile ? keyFileContents : undefined
+    )
+    memzero(mnemonicKey)
+    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    memzero(wrapKey)
 
-    // Step 8 — repack container atomically
+    // Step 8 — write new container to .new, then rename atomically
     const newSidecar: VaultSidecar = {
       ...currentSidecar,
       argon2_salt: Buffer.from(newSalt).toString('hex'),
@@ -424,8 +470,15 @@ export async function changePassword(
       recovery_encrypted_master_key: recCipher,
       recovery_nonce: recNonce
     }
+    const newContainerPath = currentVaultPath + '.new'
     const dbBytes = readFileSync(tempDbPath)
-    writeContainer(currentVaultPath, JSON.stringify(newSidecar), dbBytes)
+    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
+    renameSync(newContainerPath, currentVaultPath)
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
 
     // Step 9 — swap masterKey in memory
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
@@ -435,8 +488,17 @@ export async function changePassword(
 
     return { mnemonic }
   } catch (err) {
-    // Data changes rolled back by ROLLBACK above (if inside transaction).
-    // Restore the SQLCipher key so the on-disk container (still old key) remains openable.
+    try {
+      unlinkSync(currentVaultPath + '.new')
+    } catch {
+      /* ignore */
+    }
+    try {
+      copyFileSync(backupPath, currentVaultPath)
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
     try {
       await new Promise<void>((resolve, reject) => {
         db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
@@ -455,8 +517,14 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
     throw new Error('Vault is not open')
   }
 
+  const kfHash = pendingKeyFileContents
+    ? hashKeyFile(Buffer.from(pendingKeyFileContents))
+    : undefined
+  const backupPath = currentVaultPath + '.bak'
+  copyFileSync(currentVaultPath, backupPath)
+
   const newSalt = generateSalt()
-  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params)
+  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params, kfHash)
   const newVerifyHash = hashForVerify(newRawKey)
 
   const oldKeyHex = masterKey.toString('hex')
@@ -527,20 +595,39 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
 
     await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
 
+    const newHasKeyFile = pendingKeyFileContents !== null ? true : currentSidecar.hasKeyFile
     const mnemonic = generateMnemonic()
-    const recoveryKey = mnemonicToMasterKey(mnemonic)
-    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, recoveryKey)
-    memzero(recoveryKey)
+    const mnemonicKey = mnemonicToMasterKey(mnemonic)
+    const wrapKey = deriveRecoveryWrapKey(
+      mnemonicKey,
+      newHasKeyFile ? (pendingKeyFileContents ?? undefined) : undefined
+    )
+    memzero(mnemonicKey)
+    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    memzero(wrapKey)
 
     const newSidecar: VaultSidecar = {
       ...currentSidecar,
       argon2_salt: Buffer.from(newSalt).toString('hex'),
       verify_hash: newVerifyHash,
       recovery_encrypted_master_key: recCipher,
-      recovery_nonce: recNonce
+      recovery_nonce: recNonce,
+      hasKeyFile: newHasKeyFile
     }
+    const newContainerPath = currentVaultPath + '.new'
     const dbBytes = readFileSync(tempDbPath)
-    writeContainer(currentVaultPath, JSON.stringify(newSidecar), dbBytes)
+    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
+    renameSync(newContainerPath, currentVaultPath)
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+
+    if (pendingKeyFileContents) {
+      memzero(pendingKeyFileContents)
+      pendingKeyFileContents = null
+    }
 
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
@@ -549,6 +636,17 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
 
     return { mnemonic }
   } catch (err) {
+    try {
+      unlinkSync(currentVaultPath + '.new')
+    } catch {
+      /* ignore */
+    }
+    try {
+      copyFileSync(backupPath, currentVaultPath)
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
     try {
       await new Promise<void>((resolve, reject) => {
         db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
@@ -574,6 +672,10 @@ export function syncContainer(): void {
 }
 
 export async function closeVault(): Promise<void> {
+  if (pendingKeyFileContents) {
+    memzero(pendingKeyFileContents)
+    pendingKeyFileContents = null
+  }
   if (masterKey) {
     freeSecure(masterKey)
     masterKey = null
@@ -601,4 +703,285 @@ export async function closeVault(): Promise<void> {
   currentVaultPath = null
   currentSidecar = null
   tempDbPath = null
+}
+
+// Returns whether the vault was configured with a key file.
+// Reads from the sidecar (no open vault needed) so it works at unlock time.
+export function getHasKeyFile(filePath?: string): boolean {
+  const path = filePath ?? currentVaultPath ?? getPref('vaultPath')
+  if (!path || !vaultExistsAt(path)) return false
+  try {
+    const { sidecarJson } = readContainer(path)
+    const sidecar = JSON.parse(sidecarJson) as VaultSidecar
+    return sidecar.hasKeyFile ?? false
+  } catch {
+    return false
+  }
+}
+
+// Helper to re-encrypt all notes with a new key inside an open transaction.
+// Caller is responsible for BEGIN/COMMIT/ROLLBACK.
+async function reencryptNotes(oldKey: Uint8Array, newKey: Uint8Array): Promise<void> {
+  interface RawNote {
+    id: string
+    title: Buffer
+    title_iv: Buffer
+    content: Buffer
+    content_iv: Buffer
+  }
+  const notes = await dbAll<RawNote>(
+    db!,
+    'SELECT id, title, title_iv, content, content_iv FROM notes',
+    []
+  )
+  for (const note of notes) {
+    const titlePlain = decryptField(
+      new Uint8Array(note.title),
+      new Uint8Array(note.title_iv),
+      oldKey
+    )
+    const contentPlain = decryptField(
+      new Uint8Array(note.content),
+      new Uint8Array(note.content_iv),
+      oldKey
+    )
+    const { ciphertext: newTitle, nonce: newTitleIv } = encryptField(titlePlain, newKey)
+    const { ciphertext: newContent, nonce: newContentIv } = encryptField(contentPlain, newKey)
+    await dbRun(
+      db!,
+      'UPDATE notes SET title = ?, title_iv = ?, content = ?, content_iv = ? WHERE id = ?',
+      [
+        Buffer.from(newTitle),
+        Buffer.from(newTitleIv),
+        Buffer.from(newContent),
+        Buffer.from(newContentIv),
+        note.id
+      ]
+    )
+  }
+}
+
+// Add or change the key file on the open vault.
+// Derives a new master key = Argon2id(password + BLAKE2b(keyFile), newSalt),
+// re-encrypts all notes, updates the sidecar, and replaces the in-memory key.
+export async function configureKeyFile(
+  password: string,
+  keyFileContents: Uint8Array
+): Promise<{ mnemonic: string }> {
+  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+    throw new Error('Vault is not open')
+  }
+
+  const backupPath = currentVaultPath + '.bak'
+  copyFileSync(currentVaultPath, backupPath)
+
+  const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
+  const testKey = deriveKey(
+    password,
+    salt,
+    currentSidecar.argon2_params,
+    currentSidecar.hasKeyFile ? hashKeyFile(Buffer.from(keyFileContents)) : undefined
+  )
+  if (hashForVerify(testKey) !== currentSidecar.verify_hash) {
+    memzero(testKey)
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+    throw new Error('Incorrect password or key file')
+  }
+  memzero(testKey)
+
+  const kfHash = hashKeyFile(Buffer.from(keyFileContents))
+  const newSalt = generateSalt()
+  const newRawKey = deriveKey(password, newSalt, currentSidecar.argon2_params, kfHash)
+  const newVerifyHash = hashForVerify(newRawKey)
+  const oldKeyHex = masterKey.toString('hex')
+
+  const newHex = Buffer.from(newRawKey).toString('hex')
+  await new Promise<void>((resolve, reject) => {
+    db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) => (err ? reject(err) : resolve()))
+  })
+
+  try {
+    await dbRun(db, 'BEGIN TRANSACTION')
+    try {
+      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1', [
+        Buffer.from(newSalt),
+        newVerifyHash
+      ])
+      await reencryptNotes(masterKey, newRawKey)
+      await dbRun(db, 'COMMIT')
+    } catch (txErr) {
+      await dbRun(db, 'ROLLBACK').catch(() => {})
+      throw txErr
+    }
+
+    await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
+
+    const mnemonic = generateMnemonic()
+    const mnemonicKey = mnemonicToMasterKey(mnemonic)
+    const wrapKey = deriveRecoveryWrapKey(mnemonicKey, keyFileContents)
+    memzero(mnemonicKey)
+    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    memzero(wrapKey)
+
+    const newSidecar: VaultSidecar = {
+      ...currentSidecar,
+      argon2_salt: Buffer.from(newSalt).toString('hex'),
+      verify_hash: newVerifyHash,
+      recovery_encrypted_master_key: recCipher,
+      recovery_nonce: recNonce,
+      hasKeyFile: true
+    }
+    const newContainerPath = currentVaultPath + '.new'
+    const dbBytes = readFileSync(tempDbPath)
+    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
+    renameSync(newContainerPath, currentVaultPath)
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+
+    const newSecureKey = storeKey(newRawKey)
+    freeSecure(masterKey)
+    masterKey = newSecureKey
+    currentSidecar = newSidecar
+
+    return { mnemonic }
+  } catch (err) {
+    try {
+      unlinkSync(currentVaultPath + '.new')
+    } catch {
+      /* ignore */
+    }
+    try {
+      copyFileSync(backupPath, currentVaultPath)
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+    try {
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
+          e ? reject(e) : resolve()
+        )
+      })
+    } catch {
+      await closeVault()
+    }
+    throw err
+  }
+}
+
+// Remove the key file from the open vault.
+// Requires both the current password AND the current key file for verification.
+export async function removeKeyFile(
+  password: string,
+  keyFileContents: Uint8Array
+): Promise<{ mnemonic: string }> {
+  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+    throw new Error('Vault is not open')
+  }
+  if (!currentSidecar.hasKeyFile) throw new Error('No key file is configured')
+
+  const backupPath = currentVaultPath + '.bak'
+  copyFileSync(currentVaultPath, backupPath)
+
+  const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
+  const kfHash = hashKeyFile(Buffer.from(keyFileContents))
+  const testKey = deriveKey(password, salt, currentSidecar.argon2_params, kfHash)
+  if (hashForVerify(testKey) !== currentSidecar.verify_hash) {
+    memzero(testKey)
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+    throw new Error('Incorrect password or key file')
+  }
+  memzero(testKey)
+
+  const newSalt = generateSalt()
+  const newRawKey = deriveKey(password, newSalt, currentSidecar.argon2_params)
+  const newVerifyHash = hashForVerify(newRawKey)
+  const oldKeyHex = masterKey.toString('hex')
+
+  const newHex = Buffer.from(newRawKey).toString('hex')
+  await new Promise<void>((resolve, reject) => {
+    db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) => (err ? reject(err) : resolve()))
+  })
+
+  try {
+    await dbRun(db, 'BEGIN TRANSACTION')
+    try {
+      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1', [
+        Buffer.from(newSalt),
+        newVerifyHash
+      ])
+      await reencryptNotes(masterKey, newRawKey)
+      await dbRun(db, 'COMMIT')
+    } catch (txErr) {
+      await dbRun(db, 'ROLLBACK').catch(() => {})
+      throw txErr
+    }
+
+    await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
+
+    const mnemonic = generateMnemonic()
+    const mnemonicKey = mnemonicToMasterKey(mnemonic)
+    const wrapKey = deriveRecoveryWrapKey(mnemonicKey, undefined)
+    memzero(mnemonicKey)
+    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    memzero(wrapKey)
+
+    const newSidecar: VaultSidecar = {
+      ...currentSidecar,
+      argon2_salt: Buffer.from(newSalt).toString('hex'),
+      verify_hash: newVerifyHash,
+      recovery_encrypted_master_key: recCipher,
+      recovery_nonce: recNonce,
+      hasKeyFile: false
+    }
+    const newContainerPath = currentVaultPath + '.new'
+    const dbBytes = readFileSync(tempDbPath)
+    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
+    renameSync(newContainerPath, currentVaultPath)
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+
+    const newSecureKey = storeKey(newRawKey)
+    freeSecure(masterKey)
+    masterKey = newSecureKey
+    currentSidecar = newSidecar
+
+    return { mnemonic }
+  } catch (err) {
+    try {
+      unlinkSync(currentVaultPath + '.new')
+    } catch {
+      /* ignore */
+    }
+    try {
+      copyFileSync(backupPath, currentVaultPath)
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+    try {
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
+          e ? reject(e) : resolve()
+        )
+      })
+    } catch {
+      await closeVault()
+    }
+    throw err
+  }
 }
