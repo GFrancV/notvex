@@ -64,10 +64,31 @@ export interface CreateVaultResult {
 export interface ChangePasswordResult {
   mnemonic: string
 }
+export interface KeyFileOperationResult {
+  mnemonic: string
+}
+export interface KeyFileSelection {
+  contents: Uint8Array
+  filename: string
+  sizeBytes: number
+}
+export interface GeneratedKeyFile {
+  path: string
+  contents: Uint8Array
+  filename: string
+}
 
 export interface Prefs {
   vaultPath: string | null
   autoLockMinutes: number
+  allowScreenCapture: boolean
+  lockOnMinimize: boolean
+}
+
+export interface UnlockThrottleStatus {
+  isThrottled: boolean
+  waitSeconds: number
+  failedAttempts: number
 }
 
 export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
@@ -76,17 +97,39 @@ export interface NotvexAPI {
   vault: {
     hasVault(filePath?: string): Promise<IpcResult<boolean>>
     create(filePath: string, password: string): Promise<IpcResult<CreateVaultResult>>
-    open(filePath: string, password: string): Promise<IpcResult<boolean>>
-    openWithRecovery(filePath: string, mnemonic: string): Promise<IpcResult<boolean>>
+    open(
+      filePath: string,
+      password: string,
+      keyFileContents?: Uint8Array
+    ): Promise<IpcResult<boolean>>
+    openWithRecovery(
+      filePath: string,
+      mnemonic: string,
+      keyFileContents?: Uint8Array
+    ): Promise<IpcResult<boolean>>
     changePassword(
       currentPassword: string,
-      newPassword: string
+      newPassword: string,
+      keyFileContents?: Uint8Array
     ): Promise<IpcResult<ChangePasswordResult>>
     rotateCredentials(newPassword: string): Promise<IpcResult<ChangePasswordResult>>
     confirmRecoverySaved(): Promise<IpcResult<null>>
     close(): Promise<IpcResult<null>>
+    clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
     chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
+    selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
+    getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
+    hasKeyFile(): Promise<IpcResult<boolean>>
+    generateKeyFile(): Promise<IpcResult<GeneratedKeyFile | null>>
+    configureKeyFile(
+      password: string,
+      keyFileContents: Uint8Array
+    ): Promise<IpcResult<KeyFileOperationResult>>
+    removeKeyFile(
+      password: string,
+      keyFileContents: Uint8Array
+    ): Promise<IpcResult<KeyFileOperationResult>>
   }
   notes: {
     create(input: CreateNoteInput): Promise<IpcResult<NoteListItem>>

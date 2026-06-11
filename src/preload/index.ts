@@ -5,7 +5,10 @@ export type {
   CreateNoteInput,
   CreateTagInput,
   CreateVaultResult,
+  GeneratedKeyFile,
   IpcResult,
+  KeyFileOperationResult,
+  KeyFileSelection,
   Note,
   NoteFilter,
   NoteListItem,
@@ -15,6 +18,7 @@ export type {
   Prefs,
   Tag,
   TagPatch,
+  UnlockThrottleStatus,
   VaultStatus
 } from '../shared/types'
 
@@ -26,14 +30,26 @@ const api: NotvexAPI = {
   vault: {
     hasVault: (filePath) => ipcRenderer.invoke('vault:has-vault', filePath),
     create: (filePath, pw) => ipcRenderer.invoke('vault:create', filePath, pw),
-    open: (filePath, pw) => ipcRenderer.invoke('vault:open', filePath, pw),
-    openWithRecovery: (filePath, m) => ipcRenderer.invoke('vault:open-with-recovery', filePath, m),
-    changePassword: (cur, next) => ipcRenderer.invoke('vault:change-password', cur, next),
+    open: (filePath, pw, keyFileContents) =>
+      ipcRenderer.invoke('vault:open', filePath, pw, keyFileContents),
+    openWithRecovery: (filePath, m, keyFileContents) =>
+      ipcRenderer.invoke('vault:open-with-recovery', filePath, m, keyFileContents),
+    changePassword: (cur, next, keyFileContents) =>
+      ipcRenderer.invoke('vault:change-password', cur, next, keyFileContents),
     rotateCredentials: (pw) => ipcRenderer.invoke('vault:rotate-credentials', pw),
     confirmRecoverySaved: () => ipcRenderer.invoke('vault:confirm-recovery-saved'),
     close: () => ipcRenderer.invoke('vault:close'),
+    clearDecryptedContent: () => ipcRenderer.invoke('vault:clear-decrypted'),
     status: () => ipcRenderer.invoke('vault:status'),
-    chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode)
+    chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode),
+    selectKeyFile: () => ipcRenderer.invoke('vault:select-key-file'),
+    getUnlockThrottleStatus: () => ipcRenderer.invoke('vault:unlock-throttle-status'),
+    hasKeyFile: () => ipcRenderer.invoke('vault:has-key-file'),
+    generateKeyFile: () => ipcRenderer.invoke('vault:generate-key-file'),
+    configureKeyFile: (password, keyFileContents) =>
+      ipcRenderer.invoke('vault:configure-key-file', password, keyFileContents),
+    removeKeyFile: (password, keyFileContents) =>
+      ipcRenderer.invoke('vault:remove-key-file', password, keyFileContents)
   },
   notes: {
     create: (input) => ipcRenderer.invoke('notes:create', input),
