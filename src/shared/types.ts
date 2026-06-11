@@ -58,6 +58,10 @@ export interface VaultStatus {
   isOpen: boolean
   vaultPath: string | null
 }
+export interface RecentVault {
+  path: string
+  exists: boolean
+}
 export interface CreateVaultResult {
   mnemonic: string
 }
@@ -80,6 +84,7 @@ export interface GeneratedKeyFile {
 
 export interface Prefs {
   vaultPath: string | null
+  recentVaultPaths: string[]
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
@@ -117,6 +122,8 @@ export interface NotvexAPI {
     close(): Promise<IpcResult<null>>
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
+    switchTo(filePath: string): Promise<IpcResult<null>>
+    recentVaults(): Promise<IpcResult<RecentVault[]>>
     chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
     selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
     getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
