@@ -1,7 +1,7 @@
 @import 'tailwindcss';
-@plugin '@tailwindcss/typography';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+@plugin '@tailwindcss/typography';
 
 @theme {
   --color-background: var(--background);
@@ -46,28 +46,30 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --shadow-modal: 0 24px 60px -12px rgba(0, 0, 0, 0.85);
+  --shadow-dropdown: 0 22px 50px -10px rgba(0, 0, 0, 0.85);
 }
 
 :root {
   --radius: 0.625rem;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.215 0 0);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.235 0 0);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.701913 0.15768 160.4375);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  --secondary: oklch(0.315 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.5555 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.235 0 0);
+  --accent: oklch(0.265 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --success: oklch(69.6% 0.17 162.48);
-  --warning: oklch(76.9% 0.188 70.08);
+  --success: oklch(0.696 0.17 162.48);
+  --warning: oklch(0.769 0.188 70.08);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.235 0 0);
+  --border: oklch(0.285 0 0);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.701913 0.15768 160.4375 / 40%);
   --chart-1: oklch(0.488 0.243 264.376);
@@ -75,11 +77,11 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: oklch(0.215 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.701913 0.15768 160.4375);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.265 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.701913 0.15768 160.4375 / 40%);
@@ -119,11 +121,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
+  background: var(--border);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a4a;
+  background: var(--secondary);
 }
 
 /* Draggable titlebar region (macOS) */
