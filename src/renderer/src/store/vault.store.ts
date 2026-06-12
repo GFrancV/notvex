@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import type { CreateTagInput, NoteListItem, Tag, TagPatch } from '@shared/types'
+import type { CreateNoteInput, CreateTagInput, NoteListItem, Tag, TagPatch } from '@shared/types'
 import { notvex } from '../lib/ipc'
 
 export type VaultStatus = 'checking' | 'uninitialized' | 'locked' | 'unlocked'
@@ -23,6 +23,7 @@ interface VaultStore {
   setNoteTagsMap: (map: Record<string, string[]>) => void
   setActiveNoteId: (id: string | null) => void
   loadNotes: (filter?: { trashed?: boolean; tagId?: string }) => Promise<void>
+  createNote: (input?: CreateNoteInput) => Promise<NoteListItem>
   loadTags: () => Promise<void>
   loadTagCounts: () => Promise<void>
   loadNoteTagsMap: () => Promise<void>
@@ -56,6 +57,17 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   loadNotes: async (filter = {}): Promise<void> => {
     const res = await notvex.notes.list(filter)
     if (res.success) set({ notes: res.data })
+  },
+
+  createNote: async (input?: CreateNoteInput): Promise<NoteListItem> => {
+    const res = await notvex.notes.create(input ?? { title: 'Untitled', content: '' })
+    if (!res.success) {
+      throw new Error(res.error)
+    }
+
+    set((s) => ({ notes: [res.data, ...s.notes] }))
+
+    return res.data
   },
 
   loadTags: async (): Promise<void> => {
