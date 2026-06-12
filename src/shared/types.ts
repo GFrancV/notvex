@@ -18,6 +18,7 @@ export interface NoteListItem {
   createdAt: number
   updatedAt: number
   trashedAt: number | null
+  tags: Tag[]
 }
 
 export interface Tag {

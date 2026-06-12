@@ -72,6 +72,7 @@ export interface NoteListItem {
   createdAt: number
   updatedAt: number
   trashedAt: number | null
+  tags: Tag[]
 }
 
 export interface Tag {
@@ -152,7 +153,8 @@ export async function createNote(
     isTrashed: false,
     createdAt: now,
     updatedAt: now,
-    trashedAt: null
+    trashedAt: null,
+    tags: []
   }
 }
 
@@ -200,6 +202,29 @@ export async function listNotes(
   }
 
   const rows = await dbAll<RawNoteListItem>(db, sql, params)
+  if (rows.length === 0) return []
+
+  const noteIds = rows.map((r) => r.id)
+  const placeholders = noteIds.map(() => '?').join(', ')
+  const [noteTags, allTags] = await Promise.all([
+    dbAll<{ noteId: string; tagId: string }>(
+      db,
+      `SELECT note_id as noteId, tag_id as tagId FROM note_tags WHERE note_id IN (${placeholders})`,
+      noteIds
+    ),
+    dbAll<Tag>(db, 'SELECT id, name, color, created_at as createdAt FROM tags')
+  ])
+
+  const tagById = new Map(allTags.map((t) => [t.id, t]))
+  const tagsByNote = new Map<string, Tag[]>()
+  for (const { noteId, tagId } of noteTags) {
+    const tag = tagById.get(tagId)
+    if (!tag) continue
+    const arr = tagsByNote.get(noteId) ?? []
+    arr.push(tag)
+    tagsByNote.set(noteId, arr)
+  }
+
   return rows.map((row) => ({
     id: row.id,
     title: decryptField(new Uint8Array(row.title), new Uint8Array(row.title_iv), masterKey),
@@ -207,7 +232,8 @@ export async function listNotes(
     isTrashed: row.is_trashed === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    trashedAt: row.trashed_at
+    trashedAt: row.trashed_at,
+    tags: tagsByNote.get(row.id) ?? []
   }))
 }
 
