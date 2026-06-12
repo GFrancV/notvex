@@ -1,10 +1,11 @@
 import type { JSX } from 'react'
 
-import { X } from 'lucide-react'
+import { XIcon } from 'lucide-react'
 
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import { Button } from '../ui/button'
+import { TagChip } from './TagChip'
 
 export function TagFilter(): JSX.Element | null {
   const { activeTags, clearActiveTags } = useUiStore()
@@ -21,15 +22,12 @@ export function TagFilter(): JSX.Element | null {
   ).length
 
   return (
-    <div className="border-border flex items-center gap-1.5 border-b px-3 py-2 text-xs">
+    <div className="flex items-center gap-1.5 px-4 py-3 text-xs">
       <div className="flex flex-1 flex-wrap items-center gap-1.5">
         {activeTagObjects.map((tag) => (
-          <span key={tag.id} className="flex items-center gap-1" style={{ color: tag.color }}>
-            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
-            {tag.name}
-          </span>
+          <TagChip key={tag.id} tag={tag} />
         ))}
-        <span className="text-muted">
+        <span className="text-muted-foreground">
           ({count} note{count === 1 ? '' : 's'})
         </span>
       </div>
@@ -38,9 +36,9 @@ export function TagFilter(): JSX.Element | null {
         size="xs"
         onClick={clearActiveTags}
         title="Clear tag filter"
-        className="text-muted"
+        className="text-muted-foreground"
       >
-        <X className="size-3" />
+        <XIcon className="size-3" />
       </Button>
     </div>
   )
