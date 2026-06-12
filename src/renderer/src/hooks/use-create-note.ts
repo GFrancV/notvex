@@ -4,11 +4,8 @@ import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 
 export function useCreateNote(): () => Promise<void> {
-  const createNote = useVaultStore((s) => s.createNote)
-  const setActiveNoteId = useVaultStore((s) => s.setActiveNoteId)
-  const searchQuery = useUiStore((s) => s.searchQuery)
-  const setSearchQuery = useUiStore((s) => s.setSearchQuery)
-  const requestFocusTitle = useUiStore((s) => s.requestFocusTitle)
+  const { createNote, setActiveNoteId } = useVaultStore()
+  const { searchQuery, setSearchQuery, requestFocusTitle } = useUiStore()
 
   return useCallback(async () => {
     const title = searchQuery.trim()
