@@ -10,6 +10,8 @@ interface UiStore {
   settingsOpen: boolean
   tagSelectorNoteId: string | null
   removeTagNoteId: string | null
+  focusTitleRequest: number
+  focusSearchRequest: number
   setEditorMode: (mode: 'editing' | 'reading') => void
   toggleEditorMode: () => void
   setSearchQuery: (q: string) => void
@@ -21,6 +23,8 @@ interface UiStore {
   setSettingsOpen: (v: boolean) => void
   setTagSelectorNoteId: (id: string | null) => void
   setRemoveTagNoteId: (id: string | null) => void
+  requestFocusTitle: () => void
+  requestFocusSearch: () => void
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -33,6 +37,8 @@ export const useUiStore = create<UiStore>((set) => ({
   settingsOpen: false,
   tagSelectorNoteId: null,
   removeTagNoteId: null,
+  focusTitleRequest: 0,
+  focusSearchRequest: 0,
 
   setEditorMode: (editorMode): void => set({ editorMode }),
   toggleEditorMode: (): void =>
@@ -53,5 +59,7 @@ export const useUiStore = create<UiStore>((set) => ({
   setCommandPaletteOpen: (commandPaletteOpen): void => set({ commandPaletteOpen }),
   setSettingsOpen: (settingsOpen): void => set({ settingsOpen }),
   setTagSelectorNoteId: (tagSelectorNoteId): void => set({ tagSelectorNoteId }),
-  setRemoveTagNoteId: (removeTagNoteId): void => set({ removeTagNoteId })
+  setRemoveTagNoteId: (removeTagNoteId): void => set({ removeTagNoteId }),
+  requestFocusTitle: (): void => set((s) => ({ focusTitleRequest: s.focusTitleRequest + 1 })),
+  requestFocusSearch: (): void => set((s) => ({ focusSearchRequest: s.focusSearchRequest + 1 }))
 }))
