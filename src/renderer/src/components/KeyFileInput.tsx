@@ -1,90 +1,104 @@
 import { type JSX, useState } from 'react'
 
-import { KeyRoundIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
+import { CircleAlertIcon, FileKeyIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
+import millify from 'millify'
 
 import { notvex } from '@/lib/ipc'
-import { Field } from './ui/field'
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
+import { cn } from '@/lib/utils'
+import { InputGroup, InputGroupAddon, InputGroupButton } from './ui/input-group'
 
 interface KeyFileInputProps {
-  value: string | null
   onChange: (contents: Uint8Array, filename: string) => void
   onClear?: () => void
   disabled?: boolean
 }
 
-export function KeyFileInput({
-  value,
-  onChange,
-  onClear,
-  disabled
-}: KeyFileInputProps): JSX.Element {
-  const [attemptedFilename, setAttemptedFilename] = useState<string | null>(null)
-  const [sizeBytes, setSizeBytes] = useState<number | null>(null)
-  const [prevValue, setPrevValue] = useState(value)
-
-  if (prevValue !== value) {
-    setPrevValue(value)
-    if (value === null) {
-      setAttemptedFilename(null)
-      setSizeBytes(null)
-    }
-  }
+export function KeyFileInput({ onChange, onClear, disabled }: KeyFileInputProps): JSX.Element {
+  const [selectedFile, setSelectedFile] = useState<{
+    filename: string
+    sizeBytes: number
+  } | null>(null)
 
   const handleBrowse = async (): Promise<void> => {
     const res = await notvex.vault.selectKeyFile()
     if (!res.success || !res.data) return
-    const { contents, filename, sizeBytes: size } = res.data
-    setAttemptedFilename(filename)
-    setSizeBytes(size)
-    if (size > 0) {
+    const { contents, filename, sizeBytes } = res.data
+    setSelectedFile({
+      filename,
+      sizeBytes
+    })
+    if (sizeBytes > 0) {
       onChange(contents, filename)
     }
   }
 
   const handleClear = (): void => {
-    setAttemptedFilename(null)
-    setSizeBytes(null)
+    setSelectedFile(null)
     onClear?.()
   }
 
-  const displayName = attemptedFilename ?? value ?? ''
-  const hasFile = displayName !== ''
+  const isFileEmpty = selectedFile?.sizeBytes === 0
 
   return (
-    <Field>
-      <InputGroup>
+    <div className="space-y-2">
+      <InputGroup
+        className={cn(
+          'h-12',
+          selectedFile && !isFileEmpty && 'border-primary',
+          selectedFile && isFileEmpty && 'border-destructive'
+        )}
+      >
         <InputGroupAddon align="inline-start">
-          <KeyRoundIcon />
+          <FileKeyIcon
+            className={cn(
+              selectedFile && !isFileEmpty && 'text-primary',
+              selectedFile && isFileEmpty && 'text-destructive'
+            )}
+          />
         </InputGroupAddon>
-        <InputGroupInput
-          readOnly
-          value={hasFile ? displayName : ''}
-          placeholder="No file selected"
-          className="cursor-default"
-        />
+        <InputGroupAddon className="flex-1 cursor-default flex-col items-start justify-start gap-0">
+          {selectedFile ? (
+            <>
+              <span className="text-foreground">{selectedFile.filename}</span>
+              <span className="text-muted-foreground text-xs">
+                {millify(selectedFile.sizeBytes || 0, {
+                  units: ['B', 'KB', 'MB', 'GB', 'TB'],
+                  space: true
+                })}
+              </span>
+            </>
+          ) : (
+            'Key file...'
+          )}
+        </InputGroupAddon>
         <InputGroupAddon align="inline-end">
-          {hasFile && (
+          {selectedFile ? (
             <InputGroupButton onClick={handleClear} disabled={disabled}>
               <XIcon />
             </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              variant="outline"
+              onClick={(): void => void handleBrowse()}
+              disabled={disabled}
+            >
+              Browse
+            </InputGroupButton>
           )}
-          <InputGroupButton onClick={(): void => void handleBrowse()} disabled={disabled}>
-            Browse
-          </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
-      {sizeBytes === 0 && (
-        <p className="text-destructive flex items-center text-xs">
-          <XIcon className="mr-1 inline size-4" /> Key file is empty. Select a different file.
-        </p>
+
+      {selectedFile?.sizeBytes === 0 && (
+        <div role="alert" className="text-destructive flex items-center gap-1.5 text-xs">
+          <CircleAlertIcon className="size-3" /> Key file is empty. Select a different file.
+        </div>
       )}
-      {sizeBytes !== null && sizeBytes > 1_048_576 && (
-        <p className="text-warning flex items-center text-xs">
-          <TriangleAlertIcon className="mr-1 inline size-4" />
-          This file is larger than 1MB. Only the first 1MB will be used.
-        </p>
+      {selectedFile && selectedFile.sizeBytes > 1_048_576 && (
+        <div role="alert" className="text-warning flex items-center gap-1.5 text-xs">
+          <TriangleAlertIcon className="size-3" />
+          File is larger than 1MB. Only the first 1MB will be used.
+        </div>
       )}
-    </Field>
+    </div>
   )
 }
