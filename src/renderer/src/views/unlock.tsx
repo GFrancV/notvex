@@ -32,9 +32,7 @@ export function Unlock(): JSX.Element {
   const [vaultExists, setVaultExists] = useState<boolean | null>(null)
   const [hasKeyFile, setHasKeyFile] = useState(false)
   const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
-  const [keyFilename, setKeyFilename] = useState<string | null>(null)
   const [recoveryKeyFileContents, setRecoveryKeyFileContents] = useState<Uint8Array | null>(null)
-  const [recoveryKeyFilename, setRecoveryKeyFilename] = useState<string | null>(null)
   const [mode, setMode] = useState<UnlockMode>('password')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -161,9 +159,7 @@ export function Unlock(): JSX.Element {
     const kfRes = await notvex.vault.hasKeyFile()
     setHasKeyFile(kfRes.success ? kfRes.data : false)
     setKeyFileContents(null)
-    setKeyFilename(null)
     setRecoveryKeyFileContents(null)
-    setRecoveryKeyFilename(null)
     await refreshThrottleStatus()
   }
 
@@ -294,15 +290,8 @@ export function Unlock(): JSX.Element {
                   <Field>
                     <FieldLabel>Key file</FieldLabel>
                     <KeyFileInput
-                      value={keyFilename}
-                      onChange={(c, f) => {
-                        setKeyFileContents(c)
-                        setKeyFilename(f)
-                      }}
-                      onClear={() => {
-                        setKeyFileContents(null)
-                        setKeyFilename(null)
-                      }}
+                      onChange={(c) => setKeyFileContents(c)}
+                      onClear={() => setKeyFileContents(null)}
                     />
                   </Field>
                 )}
@@ -368,15 +357,8 @@ export function Unlock(): JSX.Element {
                   <Field>
                     <FieldLabel>Key file</FieldLabel>
                     <KeyFileInput
-                      value={recoveryKeyFilename}
-                      onChange={(c, f) => {
-                        setRecoveryKeyFileContents(c)
-                        setRecoveryKeyFilename(f)
-                      }}
-                      onClear={() => {
-                        setRecoveryKeyFileContents(null)
-                        setRecoveryKeyFilename(null)
-                      }}
+                      onChange={(c) => setRecoveryKeyFileContents(c)}
+                      onClear={() => setRecoveryKeyFileContents(null)}
                     />
                   </Field>
                 )}

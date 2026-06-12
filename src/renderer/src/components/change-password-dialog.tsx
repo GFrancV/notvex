@@ -34,7 +34,6 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
   const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
   const [hasKeyFile, setHasKeyFile] = useState(false)
   const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
-  const [keyFilename, setKeyFilename] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -86,7 +85,6 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
     setMnemonicConfirmed(false)
     setHasKeyFile(false)
     setKeyFileContents(null)
-    setKeyFilename(null)
     onClose()
   }
 
@@ -130,15 +128,8 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
               <Field>
                 <FieldLabel>Key file</FieldLabel>
                 <KeyFileInput
-                  value={keyFilename}
-                  onChange={(c, f) => {
-                    setKeyFileContents(c)
-                    setKeyFilename(f)
-                  }}
-                  onClear={() => {
-                    setKeyFileContents(null)
-                    setKeyFilename(null)
-                  }}
+                  onChange={(c) => setKeyFileContents(c)}
+                  onClear={() => setKeyFileContents(null)}
                 />
               </Field>
             )}

@@ -48,7 +48,6 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
   const [pendingKeyFileContents, setPendingKeyFileContents] = useState<Uint8Array | null>(null)
   const [pendingKeyFilename, setPendingKeyFilename] = useState<string | null>(null)
   const [removeKeyFileContents, setRemoveKeyFileContents] = useState<Uint8Array | null>(null)
-  const [removeKeyFilename, setRemoveKeyFilename] = useState<string | null>(null)
   const [removePassword, setRemovePassword] = useState('')
   const [removeError, setRemoveError] = useState('')
   const [removeLoading, setRemoveLoading] = useState(false)
@@ -131,7 +130,6 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
     }
     setHasKeyFile(false)
     setRemoveKeyFileContents(null)
-    setRemoveKeyFilename(null)
     setRemovePassword('')
     setPendingMnemonic(res.data.mnemonic)
     setMnemonicConfirmed(false)
@@ -145,7 +143,6 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
     setPendingKeyFilePassword('')
     setPendingKeyFileError('')
     setRemoveKeyFileContents(null)
-    setRemoveKeyFilename(null)
     setRemovePassword('')
     setRemoveError('')
     setPendingMnemonic('')
@@ -268,7 +265,6 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
                     onClick={() => {
                       setKeyFileStep('confirm-remove')
                       setRemoveKeyFileContents(null)
-                      setRemoveKeyFilename(null)
                       setRemovePassword('')
                       setRemoveError('')
                     }}
@@ -395,15 +391,8 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
                 <div className="space-y-1.5">
                   <Label className="text-xs">Key file</Label>
                   <KeyFileInput
-                    value={removeKeyFilename}
-                    onChange={(c, f) => {
-                      setRemoveKeyFileContents(c)
-                      setRemoveKeyFilename(f)
-                    }}
-                    onClear={() => {
-                      setRemoveKeyFileContents(null)
-                      setRemoveKeyFilename(null)
-                    }}
+                    onChange={(c) => setRemoveKeyFileContents(c)}
+                    onClear={() => setRemoveKeyFileContents(null)}
                   />
                 </div>
                 <div className="space-y-1.5">
