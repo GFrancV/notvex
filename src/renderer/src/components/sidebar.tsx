@@ -128,7 +128,7 @@ export function Sidebar(): React.ReactNode {
   const allNotesActive = activeTags.length === 0 && !showTrash && !showPinned
 
   return (
-    <ShadcnSidebar collapsible="none">
+    <ShadcnSidebar collapsible="none" className="border-sidebar-border border-r">
       <SidebarHeader className="gap-0 p-0">
         {/* App header */}
         <div className="titlebar-drag border-sidebar-border flex items-center justify-between border-b px-4 py-3">
