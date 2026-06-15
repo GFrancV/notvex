@@ -1,17 +1,21 @@
-import { type JSX, useEffect } from 'react'
+import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 
-import { CommandPalette } from '../components/command-palette'
-import { NoteEditor } from '../components/note-editor'
-import { NoteList } from '../components/note-list'
-import { Sidebar } from '../components/sidebar'
-import { Toaster } from '../components/ui/sonner'
-import { notvex } from '../lib/ipc'
-import { useUiStore } from '../store/ui.store'
-import { useVaultStore } from '../store/vault.store'
+import { CommandPalette } from '@/components/command-palette'
+import { NoteEditor } from '@/components/note-editor'
+import { NoteList } from '@/components/note-list'
+import { Sidebar } from '@/components/sidebar'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { Toaster } from '@/components/ui/sonner'
+import { useCreateNote } from '@/hooks/use-create-note'
+import { notvex } from '@/lib/ipc'
+import { useUiStore } from '@/store/ui.store'
+import { useVaultStore } from '@/store/vault.store'
 
-export function Main(): JSX.Element {
-  const { refreshAll, setActiveNoteId, loadNotes, setStatus, setNotes } = useVaultStore()
-  const { setShowTrash, toggleEditorMode } = useUiStore()
+export function Main(): ReactNode {
+  const { refreshAll, setActiveNoteId, setStatus, setNotes } = useVaultStore()
+  const { setShowTrash, toggleEditorMode, requestFocusSearch } = useUiStore()
+  const handleNewNote = useCreateNote()
 
   // Load initial data
   useEffect(() => {
@@ -34,70 +38,75 @@ export function Main(): JSX.Element {
       const mod = e.ctrlKey || e.metaKey
       if (!mod) return
 
-      void (async (): Promise<void> => {
+      if (e.shiftKey) {
         switch (e.key.toLowerCase()) {
-          case 'l':
+          case 'f':
             e.preventDefault()
+            requestFocusSearch()
+            return
+          case 't':
+            e.preventDefault()
+            setShowTrash(true)
+            return
+          case 'e':
+            e.preventDefault()
+            toggleEditorMode()
+            return
+          default:
+            break
+        }
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'l':
+          e.preventDefault()
+          void (async (): Promise<void> => {
             await notvex.vault.close()
             setStatus('locked')
             setActiveNoteId(null)
             setNotes([])
-            break
-
-          case 'n':
-            e.preventDefault()
-            {
-              const res = await notvex.notes.create({ title: 'Untitled', content: '' })
-              if (res.success) {
-                await loadNotes()
-                setActiveNoteId(res.data.id)
-              }
-            }
-            break
-
-          case 'k':
-            // Handled by CommandPalette component itself
-            break
-
-          default:
-            break
-        }
-
-        if (mod && e.shiftKey) {
-          switch (e.key.toLowerCase()) {
-            case 't':
-              e.preventDefault()
-              setShowTrash(true)
-              break
-            case 'e':
-              e.preventDefault()
-              toggleEditorMode()
-              break
-            default:
-              break
-          }
-        }
-      })()
+          })()
+          break
+        case 'n':
+          e.preventDefault()
+          void handleNewNote()
+          break
+        case 'k':
+          // Handled by CommandPalette component itself
+          break
+        default:
+          break
+      }
     }
 
     window.addEventListener('keydown', handler)
     return (): void => window.removeEventListener('keydown', handler)
-  }, [loadNotes, setStatus, setActiveNoteId, setNotes, toggleEditorMode, setShowTrash])
+  }, [
+    handleNewNote,
+    setStatus,
+    setActiveNoteId,
+    setNotes,
+    toggleEditorMode,
+    setShowTrash,
+    requestFocusSearch
+  ])
 
   return (
-    <div className="bg-background pt-8.5">
+    <div className="bg-background flex h-screen flex-col overflow-hidden">
       <div
         id="sidebar"
-        className="bg-background fixed top-0 z-1000 flex h-8.5 w-full items-center justify-center border-b"
+        className="bg-sidebar flex h-8.5 w-full shrink-0 items-center justify-center border-b"
       >
         <span>Notvex</span>
       </div>
-      <div style={{ height: 'calc(100vh - 2.125rem)' }} className="flex overflow-hidden">
+      <SidebarProvider className="min-h-0! flex-1 overflow-hidden">
         <Sidebar />
-        <NoteList />
-        <NoteEditor />
-        <CommandPalette />
-      </div>
+        <SidebarInset className="flex flex-row">
+          <NoteList />
+          <NoteEditor />
+        </SidebarInset>
+      </SidebarProvider>
+      <CommandPalette />
       <Toaster position="bottom-right" />
     </div>
   )

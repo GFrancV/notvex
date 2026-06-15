@@ -1,17 +1,23 @@
-import React, { type JSX, useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import {
-  FileTextIcon,
+  CheckIcon,
+  CopyIcon,
+  FileIcon,
+  LockIcon,
   MoreHorizontalIcon,
   PenIcon,
   PinIcon,
   PlusIcon,
+  SearchIcon,
   SettingsIcon,
-  Trash2Icon
+  Trash2Icon,
+  TrashIcon
 } from 'lucide-react'
 
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
+import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
-import { cn } from '@/lib/utils'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
@@ -19,20 +25,43 @@ import { ChangePasswordDialog } from './change-password-dialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
-import { VaultSwitcher } from './VaultSwitcher'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
-import { Label } from './ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import { ScrollArea } from './ui/scroll-area'
-import { Separator } from './ui/separator'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select'
+import {
+  Sidebar as ShadcnSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupAction,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator
+} from './ui/sidebar'
+import { VaultSwitcher } from './VaultSwitcher'
 
-export function Sidebar(): JSX.Element {
+export function Sidebar(): React.ReactNode {
   const { tags, tagCounts, loadTags, loadTagCounts, notes, setStatus, setActiveNoteId, setNotes } =
     useVaultStore()
   const {
@@ -42,8 +71,21 @@ export function Sidebar(): JSX.Element {
     toggleActiveTag,
     clearActiveTags,
     setShowTrash,
-    setShowPinned
+    setShowPinned,
+    searchQuery,
+    setSearchQuery
   } = useUiStore()
+  const handleNewNote = useCreateNote()
+
+  const { isCopied, copyToClipboard } = useCopyToClipboard()
+
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const focusSearchRequest = useUiStore((s) => s.focusSearchRequest)
+
+  useEffect(() => {
+    if (focusSearchRequest === 0) return
+    searchContainerRef.current?.querySelector('input')?.focus()
+  }, [focusSearchRequest])
 
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
@@ -74,151 +116,209 @@ export function Sidebar(): JSX.Element {
     setNotes([])
   }
 
-  const handleAutoLockChange = (minutes: number): void => {
-    setAutoLockMinutes(minutes)
-    void notvex.prefs.set('autoLockMinutes', minutes)
+  const handleAutoLockChange = (minutes: string): void => {
+    setAutoLockMinutes(Number(minutes))
+    void notvex.prefs.set('autoLockMinutes', Number(minutes))
   }
 
   const allNotesCount = notes.filter((n) => !n.isTrashed).length
   const pinnedCount = notes.filter((n) => n.isPinned && !n.isTrashed).length
   const trashCount = notes.filter((n) => n.isTrashed).length
 
+  const allNotesActive = activeTags.length === 0 && !showTrash && !showPinned
+
   return (
-    <div className="bg-sidebar text-sidebar-foreground border-sidebar-border flex w-60 shrink-0 flex-col">
-      {/* App header */}
-      <div className="titlebar-drag flex items-center justify-between px-4 py-4">
-        <span className="titlebar-no-drag text-sm font-semibold select-none">Notvex</span>
-        <div className="titlebar-no-drag flex items-center gap-1">
-          <Popover open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <SettingsIcon />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 space-y-4 p-4">
-              <div>
-                <p className="mb-3 text-sm font-medium">Settings</p>
-              </div>
-              <div className="space-y-2">
-                <Label>Auto-lock after</Label>
-                <select
-                  value={autoLockMinutes}
-                  onChange={(e) => handleAutoLockChange(Number(e.target.value))}
-                  className="w-full rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-1.5 text-sm text-[#e5e5e5] focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                >
-                  <option value={5}>5 minutes</option>
-                  <option value={15}>15 minutes</option>
-                  <option value={30}>30 minutes</option>
-                  <option value={60}>1 hour</option>
-                  <option value={0}>Never</option>
-                </select>
-              </div>
-              {vaultPath && (
-                <div className="space-y-1">
-                  <Label>Vault location</Label>
-                  <p className="text-xs break-all text-[#737373]">{vaultPath}</p>
-                </div>
-              )}
-              <div className="space-y-1">
-                <p className="text-xs font-medium tracking-wide text-[#737373] uppercase">
-                  Security
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-full justify-start px-2 text-xs text-[#a3a3a3] hover:text-[#e5e5e5]"
-                  onClick={() => {
-                    setChangePasswordOpen(true)
-                    setSettingsPopoverOpen(false)
-                  }}
-                >
-                  Change password
+    <ShadcnSidebar collapsible="none">
+      <SidebarHeader className="gap-0 p-0">
+        {/* App header */}
+        <div className="titlebar-drag border-sidebar-border flex items-center justify-between border-b px-4 py-3">
+          <span className="titlebar-no-drag text-lg font-bold select-none">Notvex</span>
+          <div className="titlebar-no-drag flex items-center gap-1">
+            <DropdownMenu open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="xs">
+                  <SettingsIcon />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-full justify-start px-2 text-xs text-[#a3a3a3] hover:text-[#e5e5e5]"
-                  onClick={() => {
-                    setSecuritySettingsOpen(true)
-                    setSettingsPopoverOpen(false)
-                  }}
-                >
-                  Security settings…
-                </Button>
-              </div>
-              <Separator />
-              <Button
-                variant="destructive"
-                size="sm"
-                className="w-full"
-                onClick={(): void => {
-                  void handleLock()
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="right" sideOffset={4} className="w-64">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Auto-lock</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                    <Select value={String(autoLockMinutes)} onValueChange={handleAutoLockChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a lock-out time" />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        <SelectGroup>
+                          <SelectItem value="0">Never</SelectItem>
+                          <SelectItem value="5">After 5 minutes</SelectItem>
+                          <SelectItem value="15">After 15 minutes</SelectItem>
+                          <SelectItem value="30">After 30 minutes</SelectItem>
+                          <SelectItem value="60">After 1 hour</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                {vaultPath && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Vault Location</DropdownMenuLabel>
+                      <DropdownMenuItem>
+                        <InputGroup onClick={(e) => e.stopPropagation()}>
+                          <InputGroupInput readOnly value={vaultPath} />
+                          <InputGroupAddon align="inline-end">
+                            <InputGroupButton
+                              onClick={() => void copyToClipboard(vaultPath)}
+                              title="Copy to Clipboard"
+                            >
+                              {isCopied ? <CheckIcon className="text-primary" /> : <CopyIcon />}
+                            </InputGroupButton>
+                          </InputGroupAddon>
+                        </InputGroup>
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Security</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    role="button"
+                    className="text-primary"
+                    onClick={() => {
+                      setChangePasswordOpen(true)
+                      setSettingsPopoverOpen(false)
+                    }}
+                  >
+                    Change password
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    role="button"
+                    className="text-primary"
+                    onClick={() => {
+                      setSecuritySettingsOpen(true)
+                      setSettingsPopoverOpen(false)
+                    }}
+                  >
+                    Security settings
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={(): void => {
+                      void handleLock()
+                    }}
+                    className="justify-center"
+                  >
+                    <LockIcon />
+                    Lock vault
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Search + new note */}
+        <div className="flex gap-1.5 px-3 py-2.5">
+          <div ref={searchContainerRef} className="w-full">
+            <InputGroup className="w-full">
+              <InputGroupInput
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleNewNote()
+                  }
+                }}
+                placeholder="Search ..."
+              />
+              <InputGroupAddon>
+                <SearchIcon />
+              </InputGroupAddon>
+            </InputGroup>
+          </div>
+
+          {!showTrash && !showPinned && (
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={(): void => {
+                void handleNewNote()
+              }}
+              title="New note (Ctrl+N)"
+              className="text-muted-foreground shrink-0"
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          )}
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        {/* Nav items */}
+        <SidebarGroup>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={allNotesActive}
+                onClick={() => {
+                  clearActiveTags()
+                  setShowTrash(false)
+                  setShowPinned(false)
                 }}
               >
-                Lock vault
-              </Button>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
+                <FileIcon />
+                All Notes
+              </SidebarMenuButton>
+              {allNotesCount > 0 && <SidebarMenuBadge>{allNotesCount}</SidebarMenuBadge>}
+            </SidebarMenuItem>
 
-      <Separator />
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={showPinned} onClick={() => setShowPinned(true)}>
+                <PinIcon />
+                Pinned
+              </SidebarMenuButton>
+              {pinnedCount > 0 && <SidebarMenuBadge>{pinnedCount}</SidebarMenuBadge>}
+            </SidebarMenuItem>
 
-      {/* Navigation */}
-      <ScrollArea className="flex-1">
-        <nav className="space-y-0.5 p-2">
-          <NavItem
-            icon={<FileTextIcon className="h-3.5 w-3.5" />}
-            label="All Notes"
-            count={allNotesCount}
-            active={activeTags.length === 0 && !showTrash && !showPinned}
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={showTrash} onClick={() => setShowTrash(true)}>
+                <TrashIcon />
+                Trash
+              </SidebarMenuButton>
+              {trashCount > 0 && <SidebarMenuBadge>{trashCount}</SidebarMenuBadge>}
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        {/* Tags */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Tags</SidebarGroupLabel>
+          <SidebarGroupAction
+            title="New tag"
             onClick={() => {
-              clearActiveTags()
-              setShowTrash(false)
-              setShowPinned(false)
+              setCreateModalKey((k) => k + 1)
+              setCreateModalOpen(true)
             }}
-          />
-          <NavItem
-            icon={<PinIcon className="h-3.5 w-3.5" />}
-            label="Pinned"
-            count={pinnedCount}
-            active={showPinned}
-            onClick={() => setShowPinned(true)}
-          />
-          <NavItem
-            icon={<Trash2Icon className="h-3.5 w-3.5" />}
-            label="Trash"
-            count={trashCount}
-            active={showTrash}
-            onClick={() => setShowTrash(true)}
-          />
-        </nav>
-
-        {/* Tags section */}
-        <div className="px-2 py-1">
-          <div className="flex items-center justify-between px-2 py-1.5">
-            <span className="text-xs font-semibold tracking-wider uppercase">Tags</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setCreateModalKey((k) => k + 1)
-                setCreateModalOpen(true)
-              }}
-              title="New tag"
-              className="text-muted-foreground"
-            >
-              <PlusIcon className="size-3" />
-            </Button>
-          </div>
-          {tags.length === 0 ? (
-            <div className="px-2 py-1">
-              <p className="text-muted-foreground text-xs">No tags yet</p>
-              <p className="text-muted-foreground text-xs">Click + to create one</p>
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {tags.map((tag) => (
+          >
+            <PlusIcon />
+          </SidebarGroupAction>
+          <SidebarMenu>
+            {tags.length === 0 ? (
+              <div className="px-2 py-1">
+                <p className="text-muted-foreground text-xs">No tags yet</p>
+                <p className="text-muted-foreground text-xs">Click + to create one</p>
+              </div>
+            ) : (
+              tags.map((tag) => (
                 <TagItem
                   key={tag.id}
                   tag={tag}
@@ -228,27 +328,24 @@ export function Sidebar(): JSX.Element {
                   onEdit={() => setEditingTag(tag)}
                   onDelete={() => setDeletingTag(tag)}
                 />
-              ))}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+              ))
+            )}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
 
-      {/* Vault switcher */}
-      <div className="border-t">
+      <SidebarFooter className="border-sidebar-border border-t">
         <VaultSwitcher />
-      </div>
+      </SidebarFooter>
 
       <ChangePasswordDialog
         open={changePasswordOpen}
         onClose={() => setChangePasswordOpen(false)}
       />
-
       <SecuritySettingsDialog
         open={securitySettingsOpen}
         onClose={() => setSecuritySettingsOpen(false)}
       />
-
       <TagCreateModal
         key={createModalKey}
         open={createModalOpen}
@@ -261,37 +358,7 @@ export function Sidebar(): JSX.Element {
         onClose={() => setEditingTag(null)}
       />
       <TagDeleteModal open={!!deletingTag} tag={deletingTag} onClose={() => setDeletingTag(null)} />
-    </div>
-  )
-}
-
-function NavItem({
-  icon,
-  label,
-  count,
-  active,
-  onClick
-}: {
-  icon: React.ReactNode
-  label: string
-  count: number
-  active: boolean
-  onClick: () => void
-}): JSX.Element {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
-        active
-          ? 'bg-[#1e1e1e] text-[#e5e5e5]'
-          : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]'
-      )}
-    >
-      {icon}
-      <span className="flex-1 text-left">{label}</span>
-      {count > 0 && <span className="text-xs text-[#737373]">{count}</span>}
-    </button>
+    </ShadcnSidebar>
   )
 }
 
@@ -309,33 +376,18 @@ function TagItem({
   onClick: (e: React.MouseEvent) => void
   onEdit: () => void
   onDelete: () => void
-}): JSX.Element {
+}): React.ReactNode {
   return (
-    <div className="group relative">
-      <button
-        onClick={onClick}
-        className={cn(
-          'flex w-full items-center gap-2.5 rounded-md py-1.5 pr-8 pl-2 text-xs transition-colors',
-          active
-            ? 'bg-[#1e1e1e] text-[#e5e5e5]'
-            : 'text-[#737373] hover:bg-[#1a1a1a] hover:text-[#a3a3a3]'
-        )}
-      >
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
-        <span className="flex-1 text-left">{tag.name}</span>
-        {count > 0 && <span className="text-xs text-[#737373]">{count}</span>}
-      </button>
-
+    <SidebarMenuItem className="group">
+      <SidebarMenuButton isActive={active} onClick={onClick}>
+        <span className="size-2 rounded-full" style={{ backgroundColor: tag.color }} />
+        {tag.name}
+      </SidebarMenuButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={(e) => e.stopPropagation()}
-            className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100"
-          >
-            <MoreHorizontalIcon className="size-3" />
-          </Button>
+          <SidebarMenuAction showOnHover onClick={(e) => e.stopPropagation()}>
+            <MoreHorizontalIcon />
+          </SidebarMenuAction>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-32">
           <DropdownMenuItem onClick={onEdit}>
@@ -348,6 +400,7 @@ function TagItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+      {count > 0 && <SidebarMenuBadge className="group-hover:hidden">{count}</SidebarMenuBadge>}
+    </SidebarMenuItem>
   )
 }
