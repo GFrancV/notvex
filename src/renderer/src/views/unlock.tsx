@@ -1,4 +1,4 @@
-import { type JSX, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { EyeIcon, EyeOffIcon, FolderOpenIcon, ShieldIcon } from 'lucide-react'
 
@@ -25,7 +25,7 @@ function truncatePath(path: string, maxLen = 54): string {
   return path.slice(0, half) + '…' + path.slice(path.length - half)
 }
 
-export function Unlock(): JSX.Element {
+export function Unlock(): ReactNode {
   const { setStatus, setNeedsRecoveryReset, setPendingNewVaultPath, refreshAll } = useVaultStore()
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
@@ -189,7 +189,7 @@ export function Unlock(): JSX.Element {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border">
+          <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border shadow-[0_0_40px_-6px_oklch(0.701913_0.15768_160.4375/0.5)]">
             <ShieldIcon className="text-primary h-7 w-7" />
           </div>
           <div className="text-center">
@@ -204,30 +204,24 @@ export function Unlock(): JSX.Element {
 
         {/* Vault selector */}
         {vaultPath && (
-          <div className="mb-5">
-            <div className="flex items-center justify-between gap-2">
+          <div className="mx-auto mb-5 text-center">
+            <Button
+              variant="outline"
+              onClick={handleOpenOther}
+              className="text-muted mx-auto text-xs"
+            >
+              <FolderOpenIcon />
+
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-muted cursor-default text-xs">
-                      {truncatePath(vaultPath)}
-                    </span>
+                    <span>{truncatePath(vaultPath)}</span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">{vaultPath}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-muted hover:text-foreground shrink-0"
-                onClick={(): void => {
-                  void handleOpenOther()
-                }}
-              >
-                <FolderOpenIcon />
-                <span className="sr-only">Open other</span>
-              </Button>
-            </div>
+            </Button>
+
             {pathError && <p className="text-destructive mt-1 text-xs">✕ {pathError}</p>}
           </div>
         )}
@@ -329,9 +323,9 @@ export function Unlock(): JSX.Element {
                   <button
                     type="button"
                     onClick={switchToRecovery}
-                    className="text-muted text-xs hover:underline"
+                    className="text-muted-foreground text-xs hover:underline"
                   >
-                    Forgot your password? Use recovery key
+                    Forgot your password? <span className="text-foreground">Use recovery key</span>
                   </button>
                 </p>
 
