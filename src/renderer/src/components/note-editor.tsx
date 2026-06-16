@@ -8,6 +8,7 @@ import {
   EllipsisIcon,
   EyeIcon,
   FileTextIcon,
+  Loader2Icon,
   PencilIcon,
   PinIcon,
   PlusIcon,
@@ -33,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
+import { Skeleton } from './ui/skeleton'
 
 const notvexEditorTheme = EditorView.theme({
   '&': { backgroundColor: 'var(--background) !important', height: '100%' },
@@ -80,6 +82,7 @@ export function NoteEditor(): ReactNode {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [editorView, setEditorView] = useState<EditorView | null>(null)
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false)
   const [removeTagSelectorOpen, setRemoveTagSelectorOpen] = useState(false)
@@ -112,11 +115,18 @@ export function NoteEditor(): ReactNode {
       setNote(null)
       setTitle('')
       setContent('')
+      setIsLoading(false)
       return
     }
     activeIdRef.current = activeNoteId
+    setIsLoading(true)
+    setNote(null)
+    setTitle('')
+    setContent('')
     void notvex.notes.get(activeNoteId).then((res) => {
-      if (res.success && res.data && activeIdRef.current === activeNoteId) {
+      if (activeIdRef.current !== activeNoteId) return
+      setIsLoading(false)
+      if (res.success && res.data) {
         setNote(res.data)
         setTitle(res.data.title)
         setContent(res.data.content)
@@ -205,14 +215,21 @@ export function NoteEditor(): ReactNode {
       <div className="shrink-0 px-6.5 pt-5 pb-3.5">
         {/* Title bar */}
         <div className="flex items-center gap-2">
-          <input
-            ref={titleInputRef}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleTitleBlur}
-            placeholder="Untitled"
-            className="placeholder:text-muted-foreground flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
-          />
+          {isLoading ? (
+            <div className="flex-1">
+              <Skeleton className="h-5 w-40 rounded" />
+            </div>
+          ) : (
+            <input
+              ref={titleInputRef}
+              aria-label="Note title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              placeholder="Untitled"
+              className="placeholder:text-muted-foreground flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
+            />
+          )}
           <div className="flex items-center gap-0.5">
             {saving && <span className="text-muted-foreground text-xs">Saving…</span>}
             <Button
@@ -310,10 +327,18 @@ export function NoteEditor(): ReactNode {
       </div>
 
       {/* Editor Toolbar */}
-      {editorMode !== 'reading' && <EditorToolbar editorView={editorView} />}
+      {editorMode !== 'reading' && !isLoading && <EditorToolbar editorView={editorView} />}
 
       {/* Editor / Reading view */}
-      <div className="flex min-h-0 min-w-0 flex-1">
+      <div className="relative flex min-h-0 min-w-0 flex-1">
+        {isLoading && (
+          <div className="bg-background absolute inset-0 z-50 flex items-center justify-center">
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2Icon className="size-4 animate-spin" />
+              Decrypting note…
+            </div>
+          </div>
+        )}
         {editorMode === 'reading' ? (
           <NoteReadingView content={content} />
         ) : (
