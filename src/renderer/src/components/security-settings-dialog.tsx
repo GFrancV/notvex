@@ -1,4 +1,4 @@
-import { type JSX, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 import {
   AlertTriangleIcon,
@@ -15,7 +15,7 @@ import { RecoveryWordsGrid } from './recovery-words-grid'
 import { Alert, AlertDescription } from './ui/alert'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Field, FieldLabel } from './ui/field'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
@@ -35,7 +35,7 @@ type KeyFileStep =
   | 'removing'
   | 'post-remove-mnemonic'
 
-export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
+export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
   const [lockOnMinimize, setLockOnMinimize] = useState(false)
   const [allowScreenCapture, setAllowScreenCapture] = useState(false)
   const [hasKeyFile, setHasKeyFile] = useState(false)
@@ -164,7 +164,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
         <div className="space-y-5 py-1">
           {/* ── Auto-lock ── */}
           <section className="space-y-3">
-            <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
               Auto-lock
             </p>
 
@@ -199,7 +199,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
 
           {/* ── Privacy ── */}
           <section className="space-y-3">
-            <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
               Privacy
             </p>
 
@@ -218,7 +218,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
 
           {/* ── Key file ── */}
           <section className="space-y-3">
-            <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
               Key file
             </p>
 
@@ -279,7 +279,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
               <div className="space-y-3 rounded-md border p-3">
                 <Alert className="border-warning/30 bg-warning/10 border">
                   <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-                  <AlertDescription className="text-xs text-amber-300">
+                  <AlertDescription className="text-warning text-xs">
                     Adding a key file will change your vault encryption.
                     <br />
                     Your current recovery codes will be <strong>invalidated</strong> and new ones
@@ -349,7 +349,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
               <div className="space-y-3">
                 <Alert className="border-warning/30 bg-warning/10 border">
                   <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-                  <AlertDescription className="text-xs text-amber-300">
+                  <AlertDescription className="text-warning text-xs">
                     Key file activated. Your recovery key has changed — save it now. It won&apos;t
                     be shown again.
                   </AlertDescription>
@@ -431,7 +431,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
               <div className="space-y-3">
                 <Alert className="border-warning/30 bg-warning/10 border">
                   <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-                  <AlertDescription className="text-xs text-amber-300">
+                  <AlertDescription className="text-warning text-xs">
                     Key file removed. Your recovery key has changed — save it now. It won&apos;t be
                     shown again.
                   </AlertDescription>
@@ -463,7 +463,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
 
           {/* ── Unlock attempts ── */}
           <section className="space-y-3">
-            <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
               Unlock attempts
             </p>
 
@@ -476,8 +476,6 @@ export function SecuritySettingsDialog({ open, onClose }: Props): JSX.Element {
             </SettingRow>
           </section>
         </div>
-
-        <DialogFooter showCloseButton />
       </DialogContent>
     </Dialog>
   )
@@ -493,7 +491,7 @@ function SettingRow({
   description?: string
   readonly?: boolean
   children: React.ReactNode
-}): JSX.Element {
+}): ReactNode {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="flex-1 space-y-0.5">
@@ -505,7 +503,7 @@ function SettingRow({
   )
 }
 
-function ReadonlyCheck(): JSX.Element {
+function ReadonlyCheck(): ReactNode {
   return (
     <div className="bg-primary/20 border-primary/30 flex h-4 w-4 items-center justify-center rounded border">
       <CheckIcon className="text-primary h-3 w-3" />

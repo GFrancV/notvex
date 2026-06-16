@@ -1,4 +1,4 @@
-import { type JSX, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 import { AlertTriangleIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 
@@ -20,7 +20,7 @@ interface ChangePasswordDialogProps {
 
 type Step = 'form' | 'mnemonic'
 
-export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProps): JSX.Element {
+export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProps): ReactNode {
   const [step, setStep] = useState<Step>('form')
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -197,9 +197,9 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
 
         {step === 'mnemonic' && (
           <div className="mt-2 space-y-4">
-            <Alert className="border border-amber-500/30 bg-amber-500/10">
-              <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-              <AlertDescription className="text-amber-300">
+            <Alert className="border-warning/30 bg-warning/10 border">
+              <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
+              <AlertDescription className="text-warning">
                 Your recovery key has changed. The previous key is no longer valid. Save this new
                 one — it will not be shown again.
               </AlertDescription>
