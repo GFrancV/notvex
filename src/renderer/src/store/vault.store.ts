@@ -147,15 +147,20 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   addTagToNote: async (noteId, tagId): Promise<void> => {
     const prevMap = get().noteTagsMap
     const prevCounts = get().tagCounts
+    const prevNotes = get().notes
     const current = prevMap[noteId] ?? []
     if (current.includes(tagId)) return
+    const tag = get().tags.find((t) => t.id === tagId)
     set((s) => ({
       noteTagsMap: { ...s.noteTagsMap, [noteId]: [...current, tagId] },
-      tagCounts: { ...s.tagCounts, [tagId]: (s.tagCounts[tagId] ?? 0) + 1 }
+      tagCounts: { ...s.tagCounts, [tagId]: (s.tagCounts[tagId] ?? 0) + 1 },
+      notes: tag
+        ? s.notes.map((n) => (n.id === noteId ? { ...n, tags: [...n.tags, tag] } : n))
+        : s.notes
     }))
     const res = await notvex.noteTags.add(noteId, tagId)
     if (!res.success) {
-      set({ noteTagsMap: prevMap, tagCounts: prevCounts })
+      set({ noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
       throw new Error(res.error)
     }
   },
@@ -163,16 +168,20 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   removeTagFromNote: async (noteId, tagId): Promise<void> => {
     const prevMap = get().noteTagsMap
     const prevCounts = get().tagCounts
+    const prevNotes = get().notes
     set((s) => ({
       noteTagsMap: {
         ...s.noteTagsMap,
         [noteId]: (s.noteTagsMap[noteId] ?? []).filter((t) => t !== tagId)
       },
-      tagCounts: { ...s.tagCounts, [tagId]: Math.max(0, (s.tagCounts[tagId] ?? 1) - 1) }
+      tagCounts: { ...s.tagCounts, [tagId]: Math.max(0, (s.tagCounts[tagId] ?? 1) - 1) },
+      notes: s.notes.map((n) =>
+        n.id === noteId ? { ...n, tags: n.tags.filter((t) => t.id !== tagId) } : n
+      )
     }))
     const res = await notvex.noteTags.remove(noteId, tagId)
     if (!res.success) {
-      set({ noteTagsMap: prevMap, tagCounts: prevCounts })
+      set({ noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
       throw new Error(res.error)
     }
   }
