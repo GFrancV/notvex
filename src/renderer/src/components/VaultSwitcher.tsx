@@ -1,4 +1,4 @@
-import { type JSX, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
 
 import {
   AlertTriangleIcon,
@@ -35,7 +35,7 @@ function isSamePath(a: string | null, b: string): boolean {
   return a !== null && a.toLowerCase() === b.toLowerCase()
 }
 
-export function VaultSwitcher(): JSX.Element {
+export function VaultSwitcher(): ReactNode {
   const { setStatus, setActiveNoteId, setNotes, setPendingNewVaultPath } = useVaultStore()
 
   const [currentPath, setCurrentPath] = useState<string | null>(null)
@@ -88,7 +88,10 @@ export function VaultSwitcher(): JSX.Element {
   return (
     <DropdownMenu onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-auto w-full justify-start rounded-none px-4 py-3">
+        <Button
+          variant="ghost"
+          className="h-9.5 w-full justify-start gap-2.25 rounded-none px-2.75"
+        >
           <LockOpenIcon className="text-primary size-3.5 shrink-0" />
           <span className="text-muted-foreground min-w-0 flex-1 truncate text-left text-xs">
             {currentPath ? displayName(currentPath) : 'Vault unlocked'}
@@ -96,11 +99,9 @@ export function VaultSwitcher(): JSX.Element {
           <ChevronsUpDownIcon className="text-muted-foreground size-3 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-64">
+      <DropdownMenuContent side="right" align="end" sideOffset={4} className="w-64">
         <TooltipProvider>
-          <DropdownMenuLabel className="text-muted-foreground text-xs">
-            Recent vaults
-          </DropdownMenuLabel>
+          <DropdownMenuLabel>Recent vaults</DropdownMenuLabel>
           {recents.map((vault) => {
             const isCurrent = isSamePath(currentPath, vault.path)
             return (
@@ -119,7 +120,7 @@ export function VaultSwitcher(): JSX.Element {
                     }}
                   >
                     <span className="min-w-0 flex-1 truncate">{displayName(vault.path)}</span>
-                    {isCurrent && <CheckIcon className="ml-auto size-4 shrink-0" />}
+                    {isCurrent && <CheckIcon className="text-primary ml-auto size-4 shrink-0" />}
                     {!vault.exists && (
                       <AlertTriangleIcon className="text-warning ml-auto size-3.5 shrink-0" />
                     )}
@@ -130,19 +131,11 @@ export function VaultSwitcher(): JSX.Element {
             )
           })}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              void handleOpenOther()
-            }}
-          >
+          <DropdownMenuItem onSelect={handleOpenOther}>
             <FolderOpenIcon className="size-4" />
             Open vault...
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              void handleCreateNew()
-            }}
-          >
+          <DropdownMenuItem onSelect={handleCreateNew}>
             <PlusIcon className="size-4" />
             Create new vault...
           </DropdownMenuItem>
