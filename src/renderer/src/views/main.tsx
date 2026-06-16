@@ -101,7 +101,7 @@ export function Main(): ReactNode {
       </div>
       <SidebarProvider className="min-h-0! flex-1 overflow-hidden">
         <Sidebar />
-        <SidebarInset className="flex flex-row">
+        <SidebarInset className="flex min-w-0 flex-row">
           <NoteList />
           <NoteEditor />
         </SidebarInset>
