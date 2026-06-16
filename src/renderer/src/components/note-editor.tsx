@@ -1,26 +1,27 @@
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
 import CodeMirror from '@uiw/react-codemirror'
 import {
-  EllipsisVerticalIcon,
-  Eye,
-  FileText,
-  Pencil,
+  EllipsisIcon,
+  EyeIcon,
+  FileTextIcon,
+  PencilIcon,
   PinIcon,
   PlusIcon,
   Trash2Icon
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { livePreviewPlugin, livePreviewTheme } from '@/lib/editor/live-preview'
+import { notvex } from '@/lib/ipc'
+import { useUiStore } from '@/store/ui.store'
+import { useVaultStore } from '@/store/vault.store'
 import type { Note, Tag } from '@shared/types'
-import { livePreviewPlugin, livePreviewTheme } from '../lib/editor/live-preview'
-import { notvex } from '../lib/ipc'
-import { useUiStore } from '../store/ui.store'
-import { useVaultStore } from '../store/vault.store'
 import { EditorContextMenu } from './editor-context-menu'
+import { EditorToolbar } from './editor/EditorToolbar'
 import { NoteReadingView } from './note-reading-view'
 import { TagChip } from './tags/TagChip'
 import { TagSelector } from './tags/TagSelector'
@@ -34,24 +35,30 @@ import {
 } from './ui/dropdown-menu'
 
 const notvexEditorTheme = EditorView.theme({
-  '&': { backgroundColor: '#111111 !important', height: '100%' },
-  '.cm-scroller': { backgroundColor: '#111111' },
+  '&': { backgroundColor: 'var(--background) !important', height: '100%' },
+  '.cm-scroller': { backgroundColor: 'var(--background)' },
   '.cm-content': {
     fontFamily: '"JetBrains Mono","Fira Code","Consolas",monospace',
     fontSize: '14px',
-    lineHeight: '1.75',
-    padding: '16px 20px'
+    lineHeight: '1.7',
+    padding: '24px 26px',
+    color: 'var(--foreground)'
   },
+  '.cm-line': { overflowWrap: 'anywhere' },
   '.cm-gutters': { display: 'none' },
-  '.cm-cursor': { borderLeftColor: '#10b981 !important' },
-  '.cm-selectionBackground': { backgroundColor: '#10b98130 !important' },
-  '&.cm-focused .cm-selectionBackground': { backgroundColor: '#10b98140 !important' },
+  '.cm-cursor': { borderLeftColor: 'var(--primary) !important' },
+  '.cm-selectionBackground': {
+    backgroundColor: 'oklch(0.701913 0.15768 160.4375 / 0.2) !important'
+  },
+  '&.cm-focused .cm-selectionBackground': {
+    backgroundColor: 'oklch(0.701913 0.15768 160.4375 / 0.25) !important'
+  },
   '.cm-activeLine': { backgroundColor: '#ffffff05' }
 })
 
 const AUTOSAVE_DELAY = 500
 
-export function NoteEditor(): JSX.Element {
+export function NoteEditor(): ReactNode {
   const {
     activeNoteId,
     loadNotes,
@@ -96,6 +103,8 @@ export function NoteEditor(): JSX.Element {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const activeIdRef = useRef<string | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const lastFocusTitleRef = useRef(0)
 
   useEffect(() => {
     if (!activeNoteId) {
@@ -115,6 +124,14 @@ export function NoteEditor(): JSX.Element {
           editorViewRef.current.dispatch({
             selection: { anchor: 0 },
             scrollIntoView: true
+          })
+        }
+        const currentRequest = useUiStore.getState().focusTitleRequest
+        if (currentRequest > lastFocusTitleRef.current) {
+          lastFocusTitleRef.current = currentRequest
+          requestAnimationFrame(() => {
+            titleInputRef.current?.focus()
+            titleInputRef.current?.select()
           })
         }
       }
@@ -174,7 +191,7 @@ export function NoteEditor(): JSX.Element {
     return (
       <div className="text-muted-foreground flex flex-1 items-center justify-center select-none">
         <div className="text-center">
-          <FileText className="mx-auto mb-3 h-12 w-12 opacity-20" />
+          <FileTextIcon className="mx-auto mb-3 h-12 w-12 opacity-20" />
           <p className="text-sm">Select a note or create a new one</p>
           <p className="mt-1 text-xs opacity-60">Ctrl+N to create</p>
         </div>
@@ -183,115 +200,120 @@ export function NoteEditor(): JSX.Element {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col border-l">
-      {/* Title bar */}
-      <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={(): void => {
-            void handleTitleBlur()
-          }}
-          placeholder="Untitled"
-          className="placeholder:text-muted-foreground flex-1 bg-transparent text-base font-semibold focus:outline-none"
-        />
-        <div className="flex items-center gap-1">
-          {saving && <span className="text-muted-foreground text-xs">Saving…</span>}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(): void => {
-              void handlePin()
-            }}
-            title={note?.isPinned ? 'Unpin' : 'Pin'}
-            className={note?.isPinned ? 'text-primary' : 'text-muted-foreground'}
-          >
-            <PinIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleEditorMode}
-            title={editorMode === 'editing' ? 'Reading view (Ctrl+Shift+E)' : 'Edit (Ctrl+Shift+E)'}
-            className={editorMode === 'reading' ? 'text-primary' : 'text-muted-forground'}
-          >
-            {editorMode === 'editing' ? (
-              <Eye className="h-4 w-4" />
-            ) : (
-              <Pencil className="h-4 w-4" />
-            )}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground">
-                <EllipsisVerticalIcon className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => void handleTrash()}
-                  title="Move to trash"
-                >
-                  <Trash2Icon className="size-4" />
-                  Delete file
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Tags row */}
-      {note && (
-        <div className="flex min-h-8.5 shrink-0 flex-wrap items-center gap-1.5 border-b px-4 py-1.5">
-          {assignedTags.map((tag) => (
-            <TagChip
-              key={tag.id}
-              tag={tag}
-              onRemove={() =>
-                void removeTagFromNote(activeNoteId, tag.id).catch((e: Error) =>
-                  toast.error(e.message)
-                )
-              }
-            />
-          ))}
-          <div className="relative">
+    <div className="flex min-w-0 flex-1 flex-col">
+      {/* Header */}
+      <div className="shrink-0 px-6.5 pt-5 pb-3.5">
+        {/* Title bar */}
+        <div className="flex items-center gap-2">
+          <input
+            ref={titleInputRef}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            placeholder="Untitled"
+            className="placeholder:text-muted-foreground flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
+          />
+          <div className="flex items-center gap-0.5">
+            {saving && <span className="text-muted-foreground text-xs">Saving…</span>}
             <Button
               variant="ghost"
-              size="xs"
-              onClick={() => setTagSelectorOpen(true)}
-              className="text-muted-foreground"
+              size="icon"
+              onClick={handlePin}
+              title={note?.isPinned ? 'Unpin' : 'Pin'}
+              className={note?.isPinned ? 'text-primary' : 'text-muted-foreground'}
             >
-              <PlusIcon className="size-3" /> Add tag
+              <PinIcon className={`size-4 ${note?.isPinned ? 'fill-primary text-primary' : ''}`} />
             </Button>
-            {showTagSelector && (
-              <div className="absolute top-full left-0 z-50 mt-1">
-                <TagSelector noteId={activeNoteId} onClose={handleTagSelectorClose} />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleEditorMode}
+              title={
+                editorMode === 'editing' ? 'Reading view (Ctrl+Shift+E)' : 'Edit (Ctrl+Shift+E)'
+              }
+              className={editorMode === 'reading' ? 'text-primary' : 'text-muted-forground'}
+            >
+              {editorMode === 'editing' ? (
+                <EyeIcon className="h-4 w-4" />
+              ) : (
+                <PencilIcon className="h-4 w-4" />
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground">
+                  <EllipsisIcon className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={handleTrash}
+                    title="Move to trash"
+                  >
+                    <Trash2Icon className="size-4" />
+                    Delete file
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Tags row */}
+        {note && (
+          <div className="mt-1 flex min-h-8.5 shrink-0 flex-wrap items-center gap-2">
+            {assignedTags.map((tag) => (
+              <TagChip
+                key={tag.id}
+                tag={tag}
+                onRemove={() =>
+                  void removeTagFromNote(activeNoteId, tag.id).catch((e: Error) =>
+                    toast.error(e.message)
+                  )
+                }
+              />
+            ))}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setTagSelectorOpen(true)}
+                className="text-muted-foreground border border-dashed"
+              >
+                <PlusIcon className="size-3" /> Add tag
+              </Button>
+              {showTagSelector && (
+                <div className="absolute top-full left-0 z-50 mt-1">
+                  <TagSelector noteId={activeNoteId} onClose={handleTagSelectorClose} />
+                </div>
+              )}
+            </div>
+            {/* Remove-tag selector (for command palette) */}
+            {showRemoveSelector && assignedTags.length > 0 && (
+              <div className="absolute z-50 mt-8">
+                <RemoveTagSelector
+                  tags={assignedTags}
+                  onRemove={(tagId) => {
+                    void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
+                      toast.error(e.message)
+                    )
+                    handleRemoveSelectorClose()
+                  }}
+                  onClose={handleRemoveSelectorClose}
+                />
               </div>
             )}
           </div>
-          {/* Remove-tag selector (for command palette) */}
-          {showRemoveSelector && assignedTags.length > 0 && (
-            <div className="absolute z-50 mt-8">
-              <RemoveTagSelector
-                tags={assignedTags}
-                onRemove={(tagId) => {
-                  void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
-                    toast.error(e.message)
-                  )
-                  handleRemoveSelectorClose()
-                }}
-                onClose={handleRemoveSelectorClose}
-              />
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Editor Toolbar */}
+      {editorMode !== 'reading' && <EditorToolbar editorView={editorView} />}
 
       {/* Editor / Reading view */}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         {editorMode === 'reading' ? (
           <NoteReadingView content={content} />
         ) : (
@@ -304,7 +326,8 @@ export function NoteEditor(): JSX.Element {
                 oneDark,
                 notvexEditorTheme,
                 livePreviewPlugin,
-                livePreviewTheme
+                livePreviewTheme,
+                EditorView.lineWrapping
               ]}
               onChange={handleContentChange}
               onCreateEditor={(view) => {
@@ -342,7 +365,7 @@ function RemoveTagSelector({
   tags: Tag[]
   onRemove: (tagId: string) => void
   onClose: () => void
-}): JSX.Element {
+}): ReactNode {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
