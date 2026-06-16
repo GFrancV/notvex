@@ -2,9 +2,10 @@ import { type JSX, useCallback, useEffect } from 'react'
 
 import { EyeIcon, FileTextIcon, LockIcon, PlusIcon, TagIcon, XIcon } from 'lucide-react'
 
-import { notvex } from '../lib/ipc'
-import { useUiStore } from '../store/ui.store'
-import { useVaultStore } from '../store/vault.store'
+import { useCreateNote } from '@/hooks/use-create-note'
+import { notvex } from '@/lib/ipc'
+import { useUiStore } from '@/store/ui.store'
+import { useVaultStore } from '@/store/vault.store'
 import {
   CommandDialog,
   CommandEmpty,
@@ -29,12 +30,12 @@ export function CommandPalette(): JSX.Element | null {
     notes,
     setStatus,
     setActiveNoteId,
-    loadNotes,
     setNotes,
     setActiveNoteId: selectNote,
     activeNoteId,
     noteTagsMap
   } = useVaultStore()
+  const handleNewNote = useCreateNote()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -55,14 +56,6 @@ export function CommandPalette(): JSX.Element | null {
     },
     [setCommandPaletteOpen]
   )
-
-  const handleNewNote = async (): Promise<void> => {
-    const res = await notvex.notes.create({ title: 'Untitled', content: '' })
-    if (res.success) {
-      await loadNotes()
-      setActiveNoteId(res.data.id)
-    }
-  }
 
   const handleLock = async (): Promise<void> => {
     await notvex.vault.close()
