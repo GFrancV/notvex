@@ -8,6 +8,7 @@ class BulletWidget extends WidgetType {
   toDOM(): HTMLElement {
     const span = document.createElement('span')
     span.textContent = '•'
+    span.className = 'cm-md-bullet'
     span.style.marginRight = '4px'
     return span
   }
@@ -73,6 +74,7 @@ const italicMark = Decoration.mark({ class: 'cm-md-italic' })
 const inlineCodeMark = Decoration.mark({ class: 'cm-md-inlinecode' })
 const linkMark = Decoration.mark({ class: 'cm-md-link' })
 const blockquoteLine = Decoration.line({ class: 'cm-md-blockquote' })
+const codeBlockLine = Decoration.line({ class: 'cm-md-codeblock' })
 
 const headingLines = [1, 2, 3, 4, 5, 6].map((n) =>
   Decoration.line({ class: `cm-md-heading cm-md-h${n}` })
@@ -157,8 +159,12 @@ function buildDecorations(view: EditorView): DecorationSet {
         }
 
         case 'CodeMark': {
-          if (cursorInRange(from, to)) return
-          if (node.node.parent?.name === 'InlineCode') {
+          const parent = node.node.parent
+          if (parent?.name === 'FencedCode') {
+            if (cursorInRange(parent.from, parent.to)) return
+            entries.push({ from, to, dec: hide })
+          } else if (parent?.name === 'InlineCode') {
+            if (cursorInRange(from, to)) return
             entries.push({ from, to, dec: hide })
           }
           break
@@ -171,6 +177,18 @@ function buildDecorations(view: EditorView): DecorationSet {
           for (let ln = startLine; ln <= endLine; ln++) {
             const ls = doc.line(ln).from
             entries.push({ from: ls, to: ls, dec: blockquoteLine })
+          }
+          break
+        }
+
+        case 'FencedCode':
+        case 'CodeBlock': {
+          if (cursorInRange(from, to)) return
+          const startLine = doc.lineAt(from).number
+          const endLine = doc.lineAt(Math.max(from, to - 1)).number
+          for (let ln = startLine; ln <= endLine; ln++) {
+            const ls = doc.line(ln).from
+            entries.push({ from: ls, to: ls, dec: codeBlockLine })
           }
           break
         }
@@ -303,33 +321,42 @@ export const livePreviewTheme = EditorView.theme({
   '.cm-md-h3': { fontSize: '1.25em', fontWeight: 'bold', lineHeight: '1.3' },
   '.cm-md-h4': { fontSize: '1.1em', fontWeight: 'bold' },
   '.cm-md-h5': { fontSize: '1em', fontWeight: 'bold' },
-  '.cm-md-h6': { fontSize: '0.9em', fontWeight: 'bold', color: '#a3a3a3' },
+  '.cm-md-h6': { fontSize: '0.9em', fontWeight: 'bold', color: 'var(--muted-foreground)' },
   '.cm-md-bold': { fontWeight: 'bold' },
   '.cm-md-italic': { fontStyle: 'italic' },
   '.cm-md-inlinecode': {
     fontFamily: '"JetBrains Mono","Fira Code",monospace',
-    backgroundColor: '#2a2a2a',
+    backgroundColor: 'var(--card)',
     borderRadius: '3px',
     padding: '0 3px'
   },
-  '.cm-md-link': { color: '#10b981', textDecoration: 'underline', cursor: 'pointer' },
+  '.cm-md-link': { color: 'var(--success)', textDecoration: 'underline', cursor: 'pointer' },
   '.cm-md-blockquote': {
-    borderLeft: '3px solid #404040',
+    borderLeft: '3px solid var(--primary)',
     paddingLeft: '12px',
-    color: '#a3a3a3',
-    fontStyle: 'italic'
+    color: 'var(--muted-foreground)',
+    fontStyle: 'italic',
+    backgroundColor: 'var(--card)'
   },
+  '.cm-md-codeblock': {
+    backgroundColor: 'var(--card)',
+    paddingLeft: '15px',
+    paddingRight: '15px',
+    fontSize: '12.5px',
+    fontFamily: 'var(--font-mono)'
+  },
+  '.cm-md-bullet': { color: 'var(--primary)' },
   '.cm-md-hr': {
     display: 'inline-block',
     width: '100%',
     height: '1px',
-    backgroundColor: '#404040',
+    backgroundColor: 'var(--border)',
     verticalAlign: 'middle'
   },
   '.cm-task-checkbox': {
     cursor: 'pointer',
     marginRight: '6px',
-    accentColor: '#10b981',
+    accentColor: 'var(--success)',
     verticalAlign: 'middle'
   }
 })
