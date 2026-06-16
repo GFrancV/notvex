@@ -1,4 +1,4 @@
-import { type JSX } from 'react'
+import { type ReactNode } from 'react'
 
 import { passwordStrength } from '@/lib/utils'
 
@@ -6,13 +6,13 @@ interface PasswordStrengthBarProps {
   password: string
 }
 
-export function PasswordStrengthBar({ password }: PasswordStrengthBarProps): JSX.Element {
+export function PasswordStrengthBar({ password }: PasswordStrengthBarProps): ReactNode {
   const strength = passwordStrength(password)
 
   const segments = [
     strength === 'weak' ? 'bg-destructive' : strength === 'medium' ? 'bg-warning' : 'bg-success',
-    strength === 'medium' ? 'bg-warning' : strength === 'strong' ? 'bg-success' : 'bg-[#2a2a2a]',
-    strength === 'strong' ? 'bg-success' : 'bg-[#2a2a2a]'
+    strength === 'medium' ? 'bg-warning' : strength === 'strong' ? 'bg-success' : 'bg-secondary',
+    strength === 'strong' ? 'bg-success' : 'bg-secondary'
   ]
 
   const label =
@@ -26,10 +26,10 @@ export function PasswordStrengthBar({ password }: PasswordStrengthBarProps): JSX
 
   const labelColor =
     strength === 'weak'
-      ? 'text-red-400'
+      ? 'text-destructive'
       : strength === 'medium'
-        ? 'text-yellow-400'
-        : 'text-emerald-400'
+        ? 'text-warning'
+        : 'text-success'
 
   return (
     <div className="space-y-1">
