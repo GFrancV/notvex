@@ -41,7 +41,9 @@ export function EditorContextMenu({ editorView, children }: EditorContextMenuPro
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger className="h-full w-full overflow-auto">{children}</ContextMenuTrigger>
+      <ContextMenuTrigger className="h-full w-full min-w-0 overflow-auto">
+        {children}
+      </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuSub>
           <ContextMenuSubTrigger>
