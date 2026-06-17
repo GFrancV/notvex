@@ -295,6 +295,7 @@ export async function searchNotesByTitle(
 }
 
 // ─── Tag queries ─────────────────────────────────────────────────────────────
+// Tag names are intentionally not application-layer encrypted. See migrations.ts migration_v1.
 
 export async function createTag(db: sqlite3.Database, input: CreateTagInput): Promise<Tag> {
   const id = newId()
