@@ -26,7 +26,7 @@ import {
   updateNote,
   updateTag
 } from './db/queries'
-import { getPref, getPrefs, recordVaultUsed, setPrefs } from './prefs'
+import { getPref, getPrefs, recordVaultUsed, setPrefs, type Prefs } from './prefs'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -118,6 +118,7 @@ interface ThrottleState {
 }
 
 const unlockThrottle: ThrottleState = { failedAttempts: 0, lockedUntil: 0 }
+let isUnlocking = false
 
 function throttleDelaySeconds(attempts: number): number {
   if (attempts <= 3) return 0
@@ -125,6 +126,23 @@ function throttleDelaySeconds(attempts: number): number {
   if (attempts === 5) return 15
   if (attempts === 6) return 30
   return 60 * (attempts - 6)
+}
+
+function checkAndSetThrottle(): IpcResult<never> | null {
+  if (isUnlocking) return fail('Unlock already in progress')
+  if (Date.now() < unlockThrottle.lockedUntil) {
+    const waitSecs = Math.ceil((unlockThrottle.lockedUntil - Date.now()) / 1000)
+    return fail(`Too many failed attempts. Try again in ${waitSecs}s`)
+  }
+  return null
+}
+
+// ─── Prefs validators ─────────────────────────────────────────────────────────
+
+const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = {
+  autoLockMinutes: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 480,
+  allowScreenCapture: (v) => typeof v === 'boolean',
+  lockOnMinimize: (v) => typeof v === 'boolean'
 }
 
 // ─── Register all handlers ────────────────────────────────────────────────────
@@ -158,23 +176,26 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     'vault:open',
     async (_e, filePath: string, password: string, keyFileContents?: Uint8Array) => {
       try {
-        if (Date.now() < unlockThrottle.lockedUntil) {
-          return fail('Too many failed attempts')
-        }
-        const success = await openVault(filePath, password, keyFileContents)
-        if (success) {
-          unlockThrottle.failedAttempts = 0
-          unlockThrottle.lockedUntil = 0
-          recordVaultUsed(filePath)
-          touchActivity()
-        } else {
-          unlockThrottle.failedAttempts += 1
-          const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
-          if (delaySecs > 0) {
-            unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
+        const throttleErr = checkAndSetThrottle()
+        if (throttleErr) return throttleErr
+        isUnlocking = true
+        try {
+          const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+          const success = await openVault(filePath, password, kfContents)
+          if (success) {
+            unlockThrottle.failedAttempts = 0
+            unlockThrottle.lockedUntil = 0
+            recordVaultUsed(filePath)
+            touchActivity()
+          } else {
+            unlockThrottle.failedAttempts += 1
+            const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
+            if (delaySecs > 0) unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
           }
+          return ok(success)
+        } finally {
+          isUnlocking = false
         }
-        return ok(success)
       } catch (e) {
         return fail(e)
       }
@@ -182,26 +203,43 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   )
 
   ipcMain.handle('vault:unlock-throttle-status', () => {
-    const now = Date.now()
-    const waitMs = Math.max(0, unlockThrottle.lockedUntil - now)
-    return ok({
-      isThrottled: waitMs > 0,
-      waitSeconds: Math.ceil(waitMs / 1000),
-      failedAttempts: unlockThrottle.failedAttempts
-    })
+    try {
+      const now = Date.now()
+      const waitMs = Math.max(0, unlockThrottle.lockedUntil - now)
+      return ok({
+        isThrottled: waitMs > 0,
+        waitSeconds: Math.ceil(waitMs / 1000),
+        failedAttempts: unlockThrottle.failedAttempts
+      })
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle(
     'vault:open-with-recovery',
     async (_e, filePath: string, mnemonic: string, keyFileContents?: Uint8Array) => {
       try {
-        const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
-        const success = await openVaultWithRecovery(filePath, mnemonic, kfContents)
-        if (success) {
-          recordVaultUsed(filePath)
-          touchActivity()
+        const throttleErr = checkAndSetThrottle()
+        if (throttleErr) return throttleErr
+        isUnlocking = true
+        try {
+          const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+          const success = await openVaultWithRecovery(filePath, mnemonic, kfContents)
+          if (success) {
+            unlockThrottle.failedAttempts = 0
+            unlockThrottle.lockedUntil = 0
+            recordVaultUsed(filePath)
+            touchActivity()
+          } else {
+            unlockThrottle.failedAttempts += 1
+            const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
+            if (delaySecs > 0) unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
+          }
+          return ok(success)
+        } finally {
+          isUnlocking = false
         }
-        return ok(success)
       } catch (e) {
         return fail(e)
       }
@@ -236,7 +274,11 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   })
 
   ipcMain.handle('vault:confirm-recovery-saved', () => {
-    return ok(null)
+    try {
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('vault:close', async () => {
@@ -264,7 +306,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     try {
       // Validate before closeVault() so a bad target never locks the current vault
       if (!existsSync(filePath)) {
-        return fail(`Vault not found at ${filePath}. It may have been moved or deleted.`)
+        return fail('Vault not found. It may have been moved or deleted.')
       }
       if (!vaultExistsAt(filePath)) {
         return fail('This file is not a valid Notvex vault')
@@ -278,8 +320,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   })
 
   ipcMain.handle('vault:clear-decrypted', () => {
-    // Main process has no accumulated plaintext — the belt-and-suspenders signal is enough.
-    return ok(null)
+    try {
+      // Main process has no accumulated plaintext — the belt-and-suspenders signal is enough.
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('vault:has-key-file', () => {
@@ -322,8 +368,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       const filename = basename(filePath)
       const raw = readFileSync(filePath)
       const sizeBytes = raw.length
-      const contents =
-        sizeBytes === 0 ? new Uint8Array(0) : new Uint8Array(raw.slice(0, KEY_FILE_MAX_BYTES))
+      if (sizeBytes === 0) return fail('The selected key file is empty')
+      const contents = new Uint8Array(raw.subarray(0, KEY_FILE_MAX_BYTES))
       return ok({ contents, filename, sizeBytes })
     } catch (e) {
       return fail(e)
@@ -363,7 +409,11 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   )
 
   ipcMain.handle('vault:status', () => {
-    return ok({ isOpen: isVaultOpen(), vaultPath: getVaultPath() })
+    try {
+      return ok({ isOpen: isVaultOpen(), vaultPath: getVaultPath() })
+    } catch (e) {
+      return fail(e)
+    }
   })
 
   ipcMain.handle('vault:choose-file', async (_e, mode: 'new' | 'existing') => {
@@ -599,9 +649,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       // Route vaultPath writes through the recents list to keep vaultPath === recentVaultPaths[0]
       if (key === 'vaultPath' && typeof value === 'string') {
         recordVaultUsed(value)
-      } else {
-        setPrefs({ [key]: value })
+        return ok(null)
       }
+      const validator = PREFS_VALIDATORS[key as keyof Prefs]
+      if (!validator) return fail(`Unknown preference key: ${key}`)
+      if (!validator(value)) return fail(`Invalid value for preference: ${key}`)
+      setPrefs({ [key]: value } as Partial<Prefs>)
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -609,8 +662,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   })
 
   ipcMain.handle('shell:open-external', async (_e, url: string) => {
-    if (/^https?:\/\//.test(url)) {
+    try {
+      if (!/^https?:\/\//.test(url)) return fail('URL must start with http:// or https://')
       await shell.openExternal(url)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
     }
   })
 }
