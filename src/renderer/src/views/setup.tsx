@@ -151,11 +151,7 @@ export function Setup(): ReactNode {
                     </InputGroupButton>
                   </InputGroupAddon>
                 </InputGroup>
-                {password.length > 0 && (
-                  <FieldDescription>
-                    <PasswordStrengthBar password={password} />
-                  </FieldDescription>
-                )}
+                {password.length > 0 && <PasswordStrengthBar password={password} />}
               </Field>
 
               <Field data-invalid={confirmTouched && !passwordsMatch}>

@@ -110,9 +110,7 @@ export function PostRecoveryReset(): ReactNode {
                     </InputGroupButton>
                   </InputGroupAddon>
                 </InputGroup>
-                <FieldDescription>
-                  {newPassword.length > 0 && <PasswordStrengthBar password={newPassword} />}
-                </FieldDescription>
+                {newPassword.length > 0 && <PasswordStrengthBar password={newPassword} />}
               </Field>
 
               <Field data-invalid={confirmTouched && !passwordsMatch}>
