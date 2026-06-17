@@ -1,4 +1,4 @@
-import { type JSX, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 import {
   AlertTriangleIcon,
@@ -28,7 +28,7 @@ import { useVaultStore } from '@/store/vault.store'
 
 type Step = 'password' | 'recovery'
 
-export function PostRecoveryReset(): JSX.Element {
+export function PostRecoveryReset(): ReactNode {
   const setNeedsRecoveryReset = useVaultStore((s) => s.setNeedsRecoveryReset)
 
   const [step, setStep] = useState<Step>('password')
@@ -74,12 +74,13 @@ export function PostRecoveryReset(): JSX.Element {
   }
 
   return (
-    <div className="bg-background flex min-h-screen items-center justify-center p-8">
+    <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
+      <div className="titlebar-drag absolute top-0 right-0 left-0 h-11" />
       <div className="w-full max-w-md">
         {step === 'password' ? (
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
-              <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border">
+              <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border shadow-[0_0_40px_-6px_oklch(0.701913_0.15768_160.4375/0.5)]">
                 <LockIcon className="text-primary h-7 w-7" />
               </div>
               <div className="text-center">
@@ -157,7 +158,7 @@ export function PostRecoveryReset(): JSX.Element {
         ) : (
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
-              <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border">
+              <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border shadow-[0_0_40px_-6px_oklch(0.701913_0.15768_160.4375/0.5)]">
                 <KeyRoundIcon className="text-primary h-7 w-7" />
               </div>
               <div className="text-center">
@@ -172,7 +173,7 @@ export function PostRecoveryReset(): JSX.Element {
 
             <Alert className="border-warning/30 bg-warning/10 border">
               <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-              <AlertDescription className="text-amber-300">
+              <AlertDescription className="text-warning">
                 Your recovery key has changed. The previous key is no longer valid. Save this new
                 one — it will not be shown again.
               </AlertDescription>
