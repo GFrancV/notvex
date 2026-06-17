@@ -20,7 +20,9 @@ export interface Argon2Params {
   parallelism: number
 }
 
-// Hardcoded to avoid reading sodium constants before sodium.ready
+// Hardcoded to avoid reading sodium constants before sodium.ready.
+// Safety-net default: production callers always pass explicit params from
+// calibrateArgon2id() (vault creation) or from the vault sidecar (unlock).
 export const DEFAULT_ARGON2_PARAMS: Argon2Params = {
   memory: 268435456, // sodium.crypto_pwhash_MEMLIMIT_MODERATE (256 MB)
   iterations: 3, // sodium.crypto_pwhash_OPSLIMIT_MODERATE
@@ -119,10 +121,28 @@ export function decryptField(
   return sodium.to_string(plaintext)
 }
 
-export function hashForVerify(masterKey: Uint8Array): string {
+// Binary-safe encrypt/decrypt for key material. Identical cipher to encryptField
+// (XChaCha20-Poly1305 IETF) but operates on raw bytes rather than UTF-8 strings.
+export function encryptBytes(plaintext: Uint8Array, key: Uint8Array): EncryptedField {
   assertReady()
-  const hash = sodium.crypto_generichash(32, masterKey, new Uint8Array(0))
-  return sodium.to_hex(hash)
+  const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
+  const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+    plaintext,
+    null,
+    null,
+    nonce,
+    key
+  )
+  return { ciphertext, nonce }
+}
+
+export function decryptBytes(
+  ciphertext: Uint8Array,
+  nonce: Uint8Array,
+  key: Uint8Array
+): Uint8Array {
+  assertReady()
+  return sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(null, ciphertext, null, nonce, key)
 }
 
 export function memzero(buf: Uint8Array): void {

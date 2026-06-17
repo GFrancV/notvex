@@ -15,6 +15,7 @@
  *   VirtualLock/mlock so the OS cannot page it to disk.
  * - All intermediate key copies are zeroed immediately after use.
  */
+import { timingSafeEqual } from 'crypto'
 import { copyFileSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 
 import { getPref } from '../prefs'
@@ -28,12 +29,13 @@ import { dbAll, dbGet, dbRun } from '../db/queries'
 import { isNotvexContainer, makeTempDbPath, readContainer, writeContainer } from './container'
 import {
   calibrateArgon2id,
+  decryptBytes,
   decryptField,
   deriveKey,
   deriveRecoveryWrapKey,
+  encryptBytes,
   encryptField,
   generateSalt,
-  hashForVerify,
   hashKeyFile,
   initSodium,
   memzero,
@@ -49,7 +51,6 @@ interface VaultSidecar {
   version: number
   argon2_salt: string
   argon2_params: Argon2Params
-  verify_hash: string
   recovery_encrypted_master_key: string
   recovery_nonce: string
   hasKeyFile?: boolean
@@ -109,7 +110,9 @@ function encryptMasterKey(
   masterKeyBuf: Uint8Array,
   wrapKey: Uint8Array
 ): { ciphertext: string; nonce: string } {
-  const { ciphertext, nonce } = encryptField(Buffer.from(masterKeyBuf).toString('hex'), wrapKey)
+  // Encrypt raw bytes (32) directly — not the hex-encoded string (64 chars) from before.
+  // Uses XChaCha20-Poly1305 IETF via encryptBytes (same cipher as encryptField).
+  const { ciphertext, nonce } = encryptBytes(masterKeyBuf, wrapKey)
   return {
     ciphertext: Buffer.from(ciphertext).toString('hex'),
     nonce: Buffer.from(nonce).toString('hex')
@@ -121,12 +124,11 @@ function decryptMasterKey(
   nonceHex: string,
   wrapKey: Uint8Array
 ): Uint8Array {
-  const hex = decryptField(
+  return decryptBytes(
     new Uint8Array(Buffer.from(ciphertextHex, 'hex')),
     new Uint8Array(Buffer.from(nonceHex, 'hex')),
     wrapKey
   )
-  return new Uint8Array(Buffer.from(hex, 'hex'))
 }
 
 // Reads the current temp DB and repacks the .nvx container. Safe to call while
@@ -177,7 +179,6 @@ export async function createVault(filePath: string, password: string): Promise<C
   const params = calibrateArgon2id(1500)
   const salt = generateSalt()
   const rawKey = deriveKey(password, salt, params)
-  const verifyHash = hashForVerify(rawKey)
 
   // Build the DB in a temp file
   const tmp = makeTempDbPath()
@@ -187,10 +188,9 @@ export async function createVault(filePath: string, password: string): Promise<C
 
   await dbRun(
     database,
-    `
-    INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, verify_hash, recovery_verify_hash, created_at)
-    VALUES (1, 1, ?, ?, ?, '', ?)`,
-    [Buffer.from(salt), JSON.stringify(params), verifyHash, Date.now()]
+    `INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, created_at)
+     VALUES (1, 1, ?, ?, ?)`,
+    [Buffer.from(salt), JSON.stringify(params), Date.now()]
   )
 
   const mnemonic = generateMnemonic()
@@ -208,7 +208,6 @@ export async function createVault(filePath: string, password: string): Promise<C
     version: 1,
     argon2_salt: Buffer.from(salt).toString('hex'),
     argon2_params: params,
-    verify_hash: verifyHash,
     recovery_encrypted_master_key: recCipher,
     recovery_nonce: recNonce
   }
@@ -243,36 +242,45 @@ export async function openVault(
   const kfHash = kfContents ? hashKeyFile(Buffer.from(kfContents)) : undefined
   const rawKey = deriveKey(password, salt, sidecar.argon2_params, kfHash)
 
-  if (hashForVerify(rawKey) !== sidecar.verify_hash) {
-    memzero(rawKey)
-    return false
-  }
-
   const tmp = makeTempDbPath()
   writeFileSync(tmp, dbBytes)
 
-  const database = await openDatabase(tmp)
-  await applyKey(database, rawKey)
+  // Verification is implicit: if rawKey is wrong, SQLCipher cannot decrypt any page
+  // and the first query below throws. We catch it and return false.
+  let database: sqlite3.Database | null = null
+  let isCorrupted = false
+  try {
+    database = await openDatabase(tmp)
+    await applyKey(database, rawKey)
+    const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
+    if (!meta) {
+      isCorrupted = true
+      throw new Error('Vault database could not be read. It may be corrupted.')
+    }
 
-  const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
-  if (!meta) {
-    await closeDatabase(database)
+    db = database
+    masterKey = storeKey(rawKey)
+    currentVaultPath = filePath
+    currentSidecar = sidecar
+    tempDbPath = tmp
+    return true
+  } catch (err) {
+    memzero(rawKey)
+    if (database) {
+      try {
+        await closeDatabase(database)
+      } catch {
+        /* ignore */
+      }
+    }
     try {
       unlinkSync(tmp)
     } catch {
       /* ignore */
     }
-    memzero(rawKey)
-    throw new Error('Vault database could not be read. It may be corrupted.')
+    if (isCorrupted) throw err
+    return false
   }
-
-  db = database
-  masterKey = storeKey(rawKey)
-  currentVaultPath = filePath
-  currentSidecar = sidecar
-  tempDbPath = tmp
-
-  return true
 }
 
 export async function openVaultWithRecovery(
@@ -359,11 +367,13 @@ export async function changePassword(
   const backupPath = currentVaultPath + '.bak'
   copyFileSync(currentVaultPath, backupPath)
 
-  // Step 1 — verify current password
+  // Step 1 — verify current password by comparing derived key with the in-memory masterKey
   const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
   const testKey = deriveKey(currentPassword, salt, currentSidecar.argon2_params, kfHash)
-  if (hashForVerify(testKey) !== currentSidecar.verify_hash) {
-    memzero(testKey)
+  const testKeyIsValid =
+    testKey.length === masterKey.length && timingSafeEqual(Buffer.from(testKey), masterKey)
+  memzero(testKey)
+  if (!testKeyIsValid) {
     try {
       unlinkSync(backupPath)
     } catch {
@@ -371,12 +381,10 @@ export async function changePassword(
     }
     throw new Error('Current password is incorrect')
   }
-  memzero(testKey)
 
   // Step 2 — derive new key with a fresh salt (preserving key file in derivation)
   const newSalt = generateSalt()
   const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params, kfHash)
-  const newVerifyHash = hashForVerify(newRawKey)
 
   const oldKeyHex = masterKey.toString('hex')
 
@@ -391,11 +399,8 @@ export async function changePassword(
     await dbRun(db, 'BEGIN TRANSACTION')
 
     try {
-      // Step 4 — update vault_meta with new salt and verify hash
-      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1`, [
-        Buffer.from(newSalt),
-        newVerifyHash
-      ])
+      // Step 4 — update vault_meta with new salt
+      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ? WHERE id = 1`, [Buffer.from(newSalt)])
 
       // Step 5 — re-encrypt all note ciphertexts with the new key
       interface RawNote {
@@ -466,7 +471,6 @@ export async function changePassword(
     const newSidecar: VaultSidecar = {
       ...currentSidecar,
       argon2_salt: Buffer.from(newSalt).toString('hex'),
-      verify_hash: newVerifyHash,
       recovery_encrypted_master_key: recCipher,
       recovery_nonce: recNonce
     }
@@ -525,7 +529,6 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
 
   const newSalt = generateSalt()
   const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params, kfHash)
-  const newVerifyHash = hashForVerify(newRawKey)
 
   const oldKeyHex = masterKey.toString('hex')
 
@@ -538,10 +541,7 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
     await dbRun(db, 'BEGIN TRANSACTION')
 
     try {
-      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1`, [
-        Buffer.from(newSalt),
-        newVerifyHash
-      ])
+      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ? WHERE id = 1`, [Buffer.from(newSalt)])
 
       interface RawNote {
         id: string
@@ -609,7 +609,6 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
     const newSidecar: VaultSidecar = {
       ...currentSidecar,
       argon2_salt: Buffer.from(newSalt).toString('hex'),
-      verify_hash: newVerifyHash,
       recovery_encrypted_master_key: recCipher,
       recovery_nonce: recNonce,
       hasKeyFile: newHasKeyFile
@@ -782,8 +781,10 @@ export async function configureKeyFile(
     currentSidecar.argon2_params,
     currentSidecar.hasKeyFile ? hashKeyFile(Buffer.from(keyFileContents)) : undefined
   )
-  if (hashForVerify(testKey) !== currentSidecar.verify_hash) {
-    memzero(testKey)
+  const testKeyIsValid =
+    testKey.length === masterKey.length && timingSafeEqual(Buffer.from(testKey), masterKey)
+  memzero(testKey)
+  if (!testKeyIsValid) {
     try {
       unlinkSync(backupPath)
     } catch {
@@ -791,12 +792,10 @@ export async function configureKeyFile(
     }
     throw new Error('Incorrect password or key file')
   }
-  memzero(testKey)
 
   const kfHash = hashKeyFile(Buffer.from(keyFileContents))
   const newSalt = generateSalt()
   const newRawKey = deriveKey(password, newSalt, currentSidecar.argon2_params, kfHash)
-  const newVerifyHash = hashForVerify(newRawKey)
   const oldKeyHex = masterKey.toString('hex')
 
   const newHex = Buffer.from(newRawKey).toString('hex')
@@ -807,10 +806,7 @@ export async function configureKeyFile(
   try {
     await dbRun(db, 'BEGIN TRANSACTION')
     try {
-      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1', [
-        Buffer.from(newSalt),
-        newVerifyHash
-      ])
+      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ? WHERE id = 1', [Buffer.from(newSalt)])
       await reencryptNotes(masterKey, newRawKey)
       await dbRun(db, 'COMMIT')
     } catch (txErr) {
@@ -830,7 +826,6 @@ export async function configureKeyFile(
     const newSidecar: VaultSidecar = {
       ...currentSidecar,
       argon2_salt: Buffer.from(newSalt).toString('hex'),
-      verify_hash: newVerifyHash,
       recovery_encrypted_master_key: recCipher,
       recovery_nonce: recNonce,
       hasKeyFile: true
@@ -893,8 +888,10 @@ export async function removeKeyFile(
   const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
   const kfHash = hashKeyFile(Buffer.from(keyFileContents))
   const testKey = deriveKey(password, salt, currentSidecar.argon2_params, kfHash)
-  if (hashForVerify(testKey) !== currentSidecar.verify_hash) {
-    memzero(testKey)
+  const testKeyIsValid =
+    testKey.length === masterKey.length && timingSafeEqual(Buffer.from(testKey), masterKey)
+  memzero(testKey)
+  if (!testKeyIsValid) {
     try {
       unlinkSync(backupPath)
     } catch {
@@ -902,11 +899,9 @@ export async function removeKeyFile(
     }
     throw new Error('Incorrect password or key file')
   }
-  memzero(testKey)
 
   const newSalt = generateSalt()
   const newRawKey = deriveKey(password, newSalt, currentSidecar.argon2_params)
-  const newVerifyHash = hashForVerify(newRawKey)
   const oldKeyHex = masterKey.toString('hex')
 
   const newHex = Buffer.from(newRawKey).toString('hex')
@@ -917,10 +912,7 @@ export async function removeKeyFile(
   try {
     await dbRun(db, 'BEGIN TRANSACTION')
     try {
-      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ?, verify_hash = ? WHERE id = 1', [
-        Buffer.from(newSalt),
-        newVerifyHash
-      ])
+      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ? WHERE id = 1', [Buffer.from(newSalt)])
       await reencryptNotes(masterKey, newRawKey)
       await dbRun(db, 'COMMIT')
     } catch (txErr) {
@@ -940,7 +932,6 @@ export async function removeKeyFile(
     const newSidecar: VaultSidecar = {
       ...currentSidecar,
       argon2_salt: Buffer.from(newSalt).toString('hex'),
-      verify_hash: newVerifyHash,
       recovery_encrypted_master_key: recCipher,
       recovery_nonce: recNonce,
       hasKeyFile: false
