@@ -22,7 +22,7 @@ try {
     const k32 = koffi.load('kernel32.dll')
     const vlock = k32.func('bool VirtualLock(void* lpAddress, size_t dwSize)') as unknown as MemFn
     const vunlock = k32.func(
-      'bool VirtualUnlock(void* lpAddress, size_t dwSize)',
+      'bool VirtualUnlock(void* lpAddress, size_t dwSize)'
     ) as unknown as MemFn
     _lock = (buf): void => {
       vlock(buf, buf.byteLength)
@@ -69,5 +69,3 @@ export function freeSecure(buf: Buffer): void {
   buf.fill(0)
   _unlock?.(buf)
 }
-
-export const memlockAvailable = _lock !== null
