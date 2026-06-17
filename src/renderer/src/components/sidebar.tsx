@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 import {
+  ArrowBigUpIcon,
   CheckIcon,
+  CommandIcon,
   CopyIcon,
   FileIcon,
   LockIcon,
@@ -12,7 +14,8 @@ import {
   SearchIcon,
   SettingsIcon,
   Trash2Icon,
-  TrashIcon
+  TrashIcon,
+  XIcon
 } from 'lucide-react'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -22,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
+import { AppLogo } from './AppLogo'
 import { ChangePasswordDialog } from './change-password-dialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
@@ -37,6 +41,7 @@ import {
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
+import { Kbd } from './ui/kbd'
 import {
   Select,
   SelectContent,
@@ -134,15 +139,18 @@ export function Sidebar(): React.ReactNode {
         {/* App header */}
         <div
           className={cn(
-            'titlebar-drag border-sidebar-border flex items-center justify-between border-b',
+            'border-sidebar-border flex items-center justify-between border-b',
             notvex.platform === 'darwin' ? 'h-11 pr-3 pl-19' : 'h-10 pr-3 pl-4'
           )}
         >
-          <span className="titlebar-no-drag text-lg font-bold select-none">Notvex</span>
-          <div className="titlebar-no-drag flex items-center gap-1">
+          <span className="flex items-center gap-1.5 text-lg font-bold select-none">
+            <AppLogo className="size-6 rounded" />
+            Notvex
+          </span>
+          <div className="flex items-center gap-1">
             <DropdownMenu open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="xs">
+                <Button variant="ghost" size="xs" className="titlebar-no-drag z-100">
                   <SettingsIcon />
                 </Button>
               </DropdownMenuTrigger>
@@ -246,6 +254,18 @@ export function Sidebar(): React.ReactNode {
               />
               <InputGroupAddon>
                 <SearchIcon />
+              </InputGroupAddon>
+              <InputGroupAddon align="inline-end">
+                {searchQuery ? (
+                  <Button variant="ghost" size="icon-xs" onClick={() => setSearchQuery('')}>
+                    <XIcon />
+                  </Button>
+                ) : (
+                  <Kbd>
+                    {notvex.platform === 'darwin' ? <CommandIcon /> : 'Ctrl'} + <ArrowBigUpIcon /> +
+                    F
+                  </Kbd>
+                )}
               </InputGroupAddon>
             </InputGroup>
           </div>
