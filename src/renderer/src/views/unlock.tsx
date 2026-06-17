@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
-import { EyeIcon, EyeOffIcon, FolderOpenIcon, ShieldIcon } from 'lucide-react'
+import { EyeIcon, EyeOffIcon, FolderOpenIcon } from 'lucide-react'
 
+import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
@@ -185,13 +186,12 @@ export function Unlock(): ReactNode {
   const isThrottled = countdown > 0
 
   return (
-    <div className="bg-background flex min-h-screen items-center justify-center p-8">
+    <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
+      <div className="titlebar-drag absolute top-0 right-0 left-0 h-11" />
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border shadow-[0_0_40px_-6px_oklch(0.701913_0.15768_160.4375/0.5)]">
-            <ShieldIcon className="text-primary h-7 w-7" />
-          </div>
+          <AppLogo />
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
             <p className="text-muted mt-1 text-sm">
@@ -367,11 +367,11 @@ export function Unlock(): ReactNode {
                   />
                   <FieldDescription>
                     {mnemonic.trim() !== '' && (
-                      <p
-                        className={`text-right text-xs ${wordCount === 24 ? 'text-primary' : 'text-destructive'}`}
+                      <span
+                        className={`block text-right text-xs ${wordCount === 24 ? 'text-primary' : 'text-destructive'}`}
                       >
                         {wordCount}/24 words
-                      </p>
+                      </span>
                     )}
                     <p className="text-muted text-xs">
                       Separate each word with a space or new line.

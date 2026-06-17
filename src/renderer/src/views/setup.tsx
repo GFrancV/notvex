@@ -1,7 +1,8 @@
-import { type JSX, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
-import { AlertTriangleIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, ShieldIcon } from 'lucide-react'
+import { AlertTriangleIcon, EyeIcon, EyeOffIcon, FolderOpenIcon } from 'lucide-react'
 
+import { AppLogo } from '@/components/AppLogo'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -20,7 +21,7 @@ import { useVaultStore } from '@/store/vault.store'
 
 type Step = 'location' | 'password' | 'recovery'
 
-export function Setup(): JSX.Element {
+export function Setup(): ReactNode {
   const setStatus = useVaultStore((s) => s.setStatus)
   const pendingNewVaultPath = useVaultStore((s) => s.pendingNewVaultPath)
   const setPendingNewVaultPath = useVaultStore((s) => s.setPendingNewVaultPath)
@@ -77,13 +78,12 @@ export function Setup(): JSX.Element {
   }
 
   return (
-    <div className="bg-background flex min-h-screen items-center justify-center p-8">
+    <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
+      <div className="titlebar-drag absolute top-0 right-0 left-0 h-11" />
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border">
-            <ShieldIcon className="text-primary h-7 w-7" />
-          </div>
+          <AppLogo />
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
             <p className="text-muted mt-1 text-sm">Create your secure vault</p>
@@ -214,8 +214,8 @@ export function Setup(): JSX.Element {
           <div className="space-y-6">
             <Alert className="border-warning/30 bg-warning/10 border">
               <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-              <AlertTitle className="text-amber-300">Save your recovery key</AlertTitle>
-              <AlertDescription className="text-amber-300/70">
+              <AlertTitle className="text-warning">Save your recovery key</AlertTitle>
+              <AlertDescription className="text-warning/70">
                 If you lose your password, this is the only way to recover your notes. Write it down
                 or store it in a password manager. It will never be shown again.
               </AlertDescription>
