@@ -9,19 +9,30 @@ import { closeVault, isVaultOpen } from './vault/vault'
 
 let mainWindow: BrowserWindow | null = null
 
+const isMac = process.platform === 'darwin'
+const isWindows = process.platform === 'win32'
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#111111',
+    backgroundColor: '#0a0a0a',
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#111111',
-      symbolColor: '#e5e5e5',
-      height: 32
-    },
+    ...(isWindows && {
+      titleBarOverlay: {
+        color: '#0a0a0a', // --card / --sidebar token equivalent
+        symbolColor: '#a3a3a3', // --muted-foreground token equivalent
+        height: 40
+      }
+    }),
+    ...(isMac && {
+      trafficLightPosition: {
+        x: 14,
+        y: 13
+      }
+    }),
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.js'),
       contextIsolation: true,

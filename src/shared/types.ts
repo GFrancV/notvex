@@ -99,7 +99,10 @@ export interface UnlockThrottleStatus {
 
 export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
 
+export type Platform = 'darwin' | 'win32' | 'linux'
+
 export interface NotvexAPI {
+  platform: Platform
   vault: {
     hasVault(filePath?: string): Promise<IpcResult<boolean>>
     create(filePath: string, password: string): Promise<IpcResult<CreateVaultResult>>

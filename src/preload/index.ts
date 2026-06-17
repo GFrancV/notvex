@@ -15,6 +15,7 @@ export type {
   NotePatch,
   NoteTagPair,
   NotvexAPI,
+  Platform,
   Prefs,
   RecentVault,
   Tag,
@@ -23,11 +24,12 @@ export type {
   VaultStatus
 } from '../shared/types'
 
-import type { NotvexAPI } from '../shared/types'
+import type { NotvexAPI, Platform } from '../shared/types'
 
 // ─── Implementation ────────────────────────────────────────────────────────────
 
 const api: NotvexAPI = {
+  platform: process.platform as Platform,
   vault: {
     hasVault: (filePath) => ipcRenderer.invoke('vault:has-vault', filePath),
     create: (filePath, pw) => ipcRenderer.invoke('vault:create', filePath, pw),
