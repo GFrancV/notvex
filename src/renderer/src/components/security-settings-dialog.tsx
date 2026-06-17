@@ -161,7 +161,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
           <DialogTitle>Security settings</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-1">
+        <div className="no-scrollbar max-h-[80vh] space-y-5 overflow-y-auto py-1">
           {/* ── Auto-lock ── */}
           <section className="space-y-3">
             <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
