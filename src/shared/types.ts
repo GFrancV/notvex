@@ -171,7 +171,7 @@ export interface NotvexAPI {
     set(key: string, value: unknown): Promise<IpcResult<null>>
   }
   shell: {
-    openExternal(url: string): Promise<void>
+    openExternal(url: string): Promise<IpcResult<null>>
   }
   onAutoLocked(callback: () => void): () => void
 }
