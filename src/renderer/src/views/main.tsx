@@ -93,12 +93,7 @@ export function Main(): ReactNode {
 
   return (
     <div className="bg-background flex h-screen flex-col overflow-hidden">
-      <div
-        id="sidebar"
-        className="bg-sidebar flex h-8.5 w-full shrink-0 items-center justify-center border-b"
-      >
-        <span>Notvex</span>
-      </div>
+      <div className="titlebar-drag absolute top-0 right-0 left-0 h-11" />
       <SidebarProvider className="min-h-0! flex-1 overflow-hidden">
         <Sidebar />
         <SidebarInset className="flex min-w-0 flex-row">

@@ -18,6 +18,7 @@ import {
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
+import { cn } from '@/lib/utils'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
@@ -131,7 +132,12 @@ export function Sidebar(): React.ReactNode {
     <ShadcnSidebar collapsible="none" className="border-sidebar-border border-r">
       <SidebarHeader className="gap-0 p-0">
         {/* App header */}
-        <div className="titlebar-drag border-sidebar-border flex items-center justify-between border-b px-4 py-3">
+        <div
+          className={cn(
+            'titlebar-drag border-sidebar-border flex items-center justify-between border-b',
+            notvex.platform === 'darwin' ? 'h-11 pr-3 pl-19' : 'h-10 pr-3 pl-4'
+          )}
+        >
           <span className="titlebar-no-drag text-lg font-bold select-none">Notvex</span>
           <div className="titlebar-no-drag flex items-center gap-1">
             <DropdownMenu open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>

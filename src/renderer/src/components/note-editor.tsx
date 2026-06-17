@@ -213,11 +213,11 @@ export function NoteEditor(): ReactNode {
     <div className="flex min-w-0 flex-1 flex-col">
       {/* Header */}
       <div className="shrink-0 px-6.5 pt-5 pb-3.5">
-        {/* Title bar */}
+        {/* Title row */}
         <div className="flex items-center gap-2">
           {isLoading ? (
             <div className="flex-1">
-              <Skeleton className="h-5 w-40 rounded" />
+              <Skeleton className="h-6.5 w-40 rounded" />
             </div>
           ) : (
             <input
@@ -227,10 +227,61 @@ export function NoteEditor(): ReactNode {
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleBlur}
               placeholder="Untitled"
-              className="placeholder:text-muted-foreground flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
+              className="titlebar-no-drag placeholder:text-muted-foreground z-100 flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
             />
           )}
-          <div className="flex items-center gap-0.5">
+        </div>
+
+        {/* Tags + action icons row */}
+        <div className="mt-1 flex min-h-8.5 shrink-0 items-center gap-2">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            {note && (
+              <>
+                {assignedTags.map((tag) => (
+                  <TagChip
+                    key={tag.id}
+                    tag={tag}
+                    onRemove={() =>
+                      void removeTagFromNote(activeNoteId, tag.id).catch((e: Error) =>
+                        toast.error(e.message)
+                      )
+                    }
+                  />
+                ))}
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setTagSelectorOpen(true)}
+                    className="text-muted-foreground border border-dashed"
+                  >
+                    <PlusIcon className="size-3" /> Add tag
+                  </Button>
+                  {showTagSelector && (
+                    <div className="absolute top-full left-0 z-50 mt-1">
+                      <TagSelector noteId={activeNoteId} onClose={handleTagSelectorClose} />
+                    </div>
+                  )}
+                </div>
+                {/* Remove-tag selector (for command palette) */}
+                {showRemoveSelector && assignedTags.length > 0 && (
+                  <div className="absolute z-50 mt-8">
+                    <RemoveTagSelector
+                      tags={assignedTags}
+                      onRemove={(tagId) => {
+                        void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
+                          toast.error(e.message)
+                        )
+                        handleRemoveSelectorClose()
+                      }}
+                      onClose={handleRemoveSelectorClose}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
             {saving && <span className="text-muted-foreground text-xs">Saving…</span>}
             <Button
               variant="ghost"
@@ -277,53 +328,6 @@ export function NoteEditor(): ReactNode {
             </DropdownMenu>
           </div>
         </div>
-
-        {/* Tags row */}
-        {note && (
-          <div className="mt-1 flex min-h-8.5 shrink-0 flex-wrap items-center gap-2">
-            {assignedTags.map((tag) => (
-              <TagChip
-                key={tag.id}
-                tag={tag}
-                onRemove={() =>
-                  void removeTagFromNote(activeNoteId, tag.id).catch((e: Error) =>
-                    toast.error(e.message)
-                  )
-                }
-              />
-            ))}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setTagSelectorOpen(true)}
-                className="text-muted-foreground border border-dashed"
-              >
-                <PlusIcon className="size-3" /> Add tag
-              </Button>
-              {showTagSelector && (
-                <div className="absolute top-full left-0 z-50 mt-1">
-                  <TagSelector noteId={activeNoteId} onClose={handleTagSelectorClose} />
-                </div>
-              )}
-            </div>
-            {/* Remove-tag selector (for command palette) */}
-            {showRemoveSelector && assignedTags.length > 0 && (
-              <div className="absolute z-50 mt-8">
-                <RemoveTagSelector
-                  tags={assignedTags}
-                  onRemove={(tagId) => {
-                    void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
-                      toast.error(e.message)
-                    )
-                    handleRemoveSelectorClose()
-                  }}
-                  onClose={handleRemoveSelectorClose}
-                />
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Editor Toolbar */}
