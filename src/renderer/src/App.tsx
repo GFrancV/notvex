@@ -1,4 +1,4 @@
-import { type JSX, useEffect } from 'react'
+import { type ReactNode, useEffect } from 'react'
 
 import { notvex } from './lib/ipc'
 import { useVaultStore } from './store/vault.store'
@@ -7,7 +7,7 @@ import { PostRecoveryReset } from './views/post-recovery-reset'
 import { Setup } from './views/setup'
 import { Unlock } from './views/unlock'
 
-export default function App(): JSX.Element {
+export default function App(): ReactNode {
   const { status, needsRecoveryReset, pendingNewVaultPath, setStatus } = useVaultStore()
 
   useEffect(() => {
@@ -35,8 +35,8 @@ export default function App(): JSX.Element {
 
   if (status === 'checking') {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#111111]">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#2a2a2a] border-t-emerald-500" />
+      <div className="bg-background flex h-screen items-center justify-center">
+        <div className="border-border border-t-primary h-6 w-6 animate-spin rounded-full border-2" />
       </div>
     )
   }
