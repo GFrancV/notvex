@@ -25,7 +25,7 @@ interface TagSelectorProps {
 }
 
 export function TagSelector({ noteId, onClose }: TagSelectorProps): JSX.Element {
-  const { tags, noteTagsMap, addTagToNote, createTag } = useVaultStore()
+  const { tags, noteTagsMap, addTagToNote, createTagAndAssign } = useVaultStore()
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -77,8 +77,7 @@ export function TagSelector({ noteId, onClose }: TagSelectorProps): JSX.Element 
     if (!trimmed || loading) return
     setLoading(true)
     try {
-      const newTag = await createTag({ name: trimmed, color: PRESET_COLORS[0] })
-      await addTagToNote(noteId, newTag.id)
+      await createTagAndAssign(noteId, { name: trimmed, color: PRESET_COLORS[0] })
       onClose()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to create tag')

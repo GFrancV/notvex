@@ -29,6 +29,7 @@ interface VaultStore {
   loadNoteTagsMap: () => Promise<void>
   refreshAll: () => Promise<void>
   createTag: (input: CreateTagInput) => Promise<Tag>
+  createTagAndAssign: (noteId: string, input: CreateTagInput) => Promise<Tag>
   updateTag: (id: string, patch: TagPatch) => Promise<void>
   deleteTag: (id: string) => Promise<void>
   addTagToNote: (noteId: string, tagId: string) => Promise<void>
@@ -113,6 +114,50 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     }
     set((s) => ({ tags: s.tags.map((t) => (t.id === tempId ? res.data : t)) }))
     return res.data
+  },
+
+  createTagAndAssign: async (noteId, input): Promise<Tag> => {
+    const tempId = `temp-${Date.now()}`
+    const optimistic: Tag = {
+      id: tempId,
+      name: input.name,
+      color: input.color,
+      createdAt: Date.now()
+    }
+    const prevTags = get().tags
+    const prevMap = get().noteTagsMap
+    const prevCounts = get().tagCounts
+    const prevNotes = get().notes
+
+    set((s) => ({
+      tags: [...s.tags, optimistic],
+      noteTagsMap: { ...s.noteTagsMap, [noteId]: [...(s.noteTagsMap[noteId] ?? []), tempId] },
+      tagCounts: { ...s.tagCounts, [tempId]: 1 },
+      notes: s.notes.map((n) => (n.id === noteId ? { ...n, tags: [...n.tags, optimistic] } : n))
+    }))
+
+    const res = await notvex.tags.createAndAssign({ noteId, name: input.name, color: input.color })
+    if (!res.success) {
+      set({ tags: prevTags, noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
+      throw new Error(res.error)
+    }
+
+    const realTag = res.data
+    set((s) => ({
+      tags: s.tags.map((t) => (t.id === tempId ? realTag : t)),
+      noteTagsMap: {
+        ...s.noteTagsMap,
+        [noteId]: (s.noteTagsMap[noteId] ?? []).map((id) => (id === tempId ? realTag.id : id))
+      },
+      tagCounts: {
+        ...Object.fromEntries(Object.entries(s.tagCounts).filter(([k]) => k !== tempId)),
+        [realTag.id]: 1
+      },
+      notes: s.notes.map((n) =>
+        n.id === noteId ? { ...n, tags: n.tags.map((t) => (t.id === tempId ? realTag : t)) } : n
+      )
+    }))
+    return realTag
   },
 
   updateTag: async (id, patch): Promise<void> => {
