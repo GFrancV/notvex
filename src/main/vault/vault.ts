@@ -362,34 +362,37 @@ export async function openVault(
   cleanupOrphanedTempFiles(filePath)
   acquireLock(filePath)
 
-  const { sidecarJson, dbBytes } = readContainer(filePath)
-  const sidecar = JSON.parse(sidecarJson) as VaultSidecar
-  const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
-
-  const tmp = makeTempDbPath()
-  writeFileSync(tmp, dbBytes)
-
-  const auth = await authenticateVaultKey({
-    dbPath: tmp,
-    password,
-    keyFileContents,
-    salt,
-    argon2Params: sidecar.argon2_params
-  })
-
-  if (!auth.valid) {
-    releaseLock()
-    try {
-      unlinkSync(tmp)
-    } catch {
-      /* ignore */
-    }
-    return false
-  }
-
-  // authenticateVaultKey verified and closed the DB. Reopen for the session.
+  let tmp: string | null = null
+  let auth: Awaited<ReturnType<typeof authenticateVaultKey>> | null = null
   let database: sqlite3.Database | null = null
+
   try {
+    const { sidecarJson, dbBytes } = readContainer(filePath)
+    const sidecar = JSON.parse(sidecarJson) as VaultSidecar
+    const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
+
+    tmp = makeTempDbPath()
+    writeFileSync(tmp, dbBytes)
+
+    auth = await authenticateVaultKey({
+      dbPath: tmp,
+      password,
+      keyFileContents,
+      salt,
+      argon2Params: sidecar.argon2_params
+    })
+
+    if (!auth.valid) {
+      releaseLock()
+      try {
+        unlinkSync(tmp)
+      } catch {
+        /* ignore */
+      }
+      return false
+    }
+
+    // authenticateVaultKey verified and closed the DB. Reopen for the session.
     database = await openDatabase(tmp)
     await applyKey(database, auth.masterKey)
     db = database
@@ -400,7 +403,7 @@ export async function openVault(
     return true
   } catch (err) {
     releaseLock()
-    auth.masterKey.fill(0)
+    if (auth?.valid) auth.masterKey.fill(0)
     if (database) {
       try {
         await closeDatabase(database)
@@ -408,10 +411,12 @@ export async function openVault(
         /* ignore */
       }
     }
-    try {
-      unlinkSync(tmp)
-    } catch {
-      /* ignore */
+    if (tmp) {
+      try {
+        unlinkSync(tmp)
+      } catch {
+        /* ignore */
+      }
     }
     throw err
   }
