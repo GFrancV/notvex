@@ -15,7 +15,7 @@
  *   VirtualLock/mlock so the OS cannot page it to disk.
  * - All intermediate key copies are zeroed immediately after use.
  */
-import { copyFileSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 
 import { getPref } from '../prefs'
 
@@ -71,6 +71,76 @@ let currentVaultPath: string | null = null
 let currentSidecar: VaultSidecar | null = null
 let tempDbPath: string | null = null
 let pendingKeyFileContents: Uint8Array | null = null
+
+// ─── Lock state ──────────────────────────────────────────────────────────────
+
+let currentLockPath: string | null = null
+
+// Acquires an exclusive lock on a vault file using a sidecar .lock file.
+// Reads the PID from an existing lock to detect stale locks from crashed processes.
+// Throws with a user-facing message if another live process holds the lock.
+function acquireLock(vaultPath: string): void {
+  const lockPath = vaultPath + '.lock'
+
+  if (existsSync(lockPath)) {
+    let shouldProceed = false
+    try {
+      const { pid } = JSON.parse(readFileSync(lockPath, 'utf-8')) as { pid: number }
+      try {
+        process.kill(pid, 0)
+        // process.kill returned without error → process is alive → vault is in use
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+          shouldProceed = true // process is dead — orphaned lock
+        }
+        // EPERM: process exists but we can't signal it → treat as in use
+      }
+    } catch {
+      shouldProceed = true // corrupted or unreadable lock file — proceed
+    }
+
+    if (!shouldProceed) {
+      throw new Error(
+        'This vault is already open in another Notvex window. Close the other window before opening it here.'
+      )
+    }
+    try {
+      unlinkSync(lockPath)
+    } catch {
+      /* ignore — proceeding is safe even if we can't clean up the old lock */
+    }
+  }
+
+  writeFileSync(lockPath, JSON.stringify({ pid: process.pid, openedAt: Date.now() }))
+  currentLockPath = lockPath
+}
+
+function releaseLock(): void {
+  if (currentLockPath) {
+    try {
+      unlinkSync(currentLockPath)
+    } catch {
+      /* ignore */
+    }
+    currentLockPath = null
+  }
+}
+
+// Removes leftover .bak and .new files from a previous re-keying crash.
+// Safe to call before opening: if .new exists the rename never completed,
+// and if .bak exists the cleanup after rename never completed.
+function cleanupOrphanedTempFiles(vaultPath: string): void {
+  for (const suffix of ['.bak', '.new']) {
+    const p = vaultPath + suffix
+    if (existsSync(p)) {
+      try {
+        unlinkSync(p)
+      } catch {
+        /* ignore — not critical */
+      }
+    }
+  }
+}
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -216,6 +286,13 @@ export interface CreateVaultResult {
 export async function createVault(filePath: string, password: string): Promise<CreateVaultResult> {
   await initSodium()
 
+  if (!password || password.trim().length === 0) {
+    throw new Error('PASSWORD_EMPTY')
+  }
+  if (password.length < 8) {
+    throw new Error('PASSWORD_TOO_SHORT')
+  }
+
   if (vaultExistsAt(filePath)) {
     throw new Error('A vault already exists at this location.')
   }
@@ -282,6 +359,9 @@ export async function openVault(
 
   if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
 
+  cleanupOrphanedTempFiles(filePath)
+  acquireLock(filePath)
+
   const { sidecarJson, dbBytes } = readContainer(filePath)
   const sidecar = JSON.parse(sidecarJson) as VaultSidecar
   const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
@@ -298,6 +378,7 @@ export async function openVault(
   })
 
   if (!auth.valid) {
+    releaseLock()
     try {
       unlinkSync(tmp)
     } catch {
@@ -318,6 +399,7 @@ export async function openVault(
     tempDbPath = tmp
     return true
   } catch (err) {
+    releaseLock()
     auth.masterKey.fill(0)
     if (database) {
       try {
@@ -351,6 +433,9 @@ export async function openVaultWithRecovery(
 
   if (sidecar.hasKeyFile && !keyFileContents) return false
 
+  cleanupOrphanedTempFiles(filePath)
+  acquireLock(filePath)
+
   // Derive the wrap key that was used to encrypt the recovery blob.
   // When a key file is configured, the wrap key binds both factors:
   // wrapKey = BLAKE2b(mnemonicKey || BLAKE2b(keyFileContents))
@@ -371,6 +456,7 @@ export async function openVaultWithRecovery(
     )
   } catch {
     memzero(wrapKey)
+    releaseLock()
     return false
   } finally {
     memzero(wrapKey)
@@ -387,6 +473,7 @@ export async function openVaultWithRecovery(
     const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
     if (!meta) {
       memzero(rawKey)
+      releaseLock()
       return false
     }
 
@@ -398,6 +485,7 @@ export async function openVaultWithRecovery(
     pendingKeyFileContents = keyFileContents ?? null
     return true
   } catch (err) {
+    releaseLock()
     memzero(rawKey)
     if (database) {
       try {
@@ -668,6 +756,13 @@ export async function closeVault(): Promise<void> {
   }
   if (db) {
     try {
+      // SQLCipher also checkpoints on close, but making it explicit avoids any race where
+      // readFileSync in packContainer runs before the implicit checkpoint completes.
+      await dbRun(db, 'PRAGMA wal_checkpoint(TRUNCATE)')
+    } catch {
+      /* non-fatal — SQLCipher checkpoints implicitly on connection close */
+    }
+    try {
       await closeDatabase(db)
     } catch {
       /* ignore */
@@ -689,6 +784,7 @@ export async function closeVault(): Promise<void> {
   currentVaultPath = null
   currentSidecar = null
   tempDbPath = null
+  releaseLock()
 }
 
 // Returns whether the vault was configured with a key file.
