@@ -63,6 +63,7 @@ const AUTOSAVE_DELAY = 500
 export function NoteEditor(): ReactNode {
   const {
     activeNoteId,
+    setActiveNoteId,
     loadNotes,
     loadTagCounts,
     noteTagsMap,
@@ -110,6 +111,7 @@ export function NoteEditor(): ReactNode {
   const lastFocusTitleRef = useRef(0)
 
   useEffect(() => {
+    clearTimeout(saveTimer.current)
     if (!activeNoteId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setNote(null)
@@ -146,14 +148,33 @@ export function NoteEditor(): ReactNode {
         }
       }
     })
-  }, [activeNoteId])
+
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      const editorFocused = editorViewRef.current?.hasFocus ?? false
+      const titleFocused = document.activeElement === titleInputRef.current
+      if (!editorFocused && !titleFocused) return
+      e.stopPropagation()
+      setActiveNoteId(null)
+    }
+    window.addEventListener('keydown', onKey, true)
+
+    return () => {
+      clearTimeout(saveTimer.current)
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [activeNoteId, setActiveNoteId])
 
   const saveContent = useCallback(
     async (id: string, newContent: string): Promise<void> => {
       setSaving(true)
-      await notvex.notes.update(id, { content: newContent })
+      const result = await notvex.notes.update(id, { content: newContent })
       setSaving(false)
-      void loadNotes()
+      if (!result.success) {
+        toast.error('Failed to save note. Your changes may not be saved.')
+        return
+      }
+      void loadNotes({ trashed: useUiStore.getState().showTrash })
     },
     [loadNotes]
   )
@@ -169,6 +190,17 @@ export function NoteEditor(): ReactNode {
     },
     [activeNoteId, saveContent]
   )
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        console.log('llegue')
+      }
+    }
+
+    window.addEventListener('keydown', onKey, true)
+    return (): void => window.removeEventListener('keydown', onKey, true)
+  }, [])
 
   const handleTitleBlur = async (): Promise<void> => {
     if (!activeNoteId || !note || title === note.title) return
