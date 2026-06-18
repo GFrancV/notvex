@@ -1,3 +1,5 @@
+import { readdirSync, statSync, unlinkSync } from 'fs'
+import os from 'os'
 import { join } from 'path'
 
 import { app, BrowserWindow, powerMonitor, shell } from 'electron'
@@ -8,6 +10,30 @@ import { initSodium } from './vault/crypto'
 import { closeVault, isVaultOpen } from './vault/vault'
 
 let mainWindow: BrowserWindow | null = null
+
+function cleanupOrphanedTempDbs(): void {
+  const tmpDir = os.tmpdir()
+  const ONE_HOUR_MS = 60 * 60 * 1000
+  const now = Date.now()
+  // Pattern matches exactly what makeTempDbPath() produces: notvex_<16 hex>.db
+  const notvexTempPattern = /^notvex_[a-f0-9]{16}\.db(-wal|-shm)?$/
+  try {
+    const files = readdirSync(tmpDir)
+    for (const file of files) {
+      if (!notvexTempPattern.test(file)) continue
+      try {
+        const { mtimeMs } = statSync(join(tmpDir, file))
+        if (now - mtimeMs > ONE_HOUR_MS) {
+          unlinkSync(join(tmpDir, file))
+        }
+      } catch {
+        /* in use, already deleted, or no permissions — skip */
+      }
+    }
+  } catch {
+    /* tmpdir not accessible — skip */
+  }
+}
 
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
@@ -85,6 +111,7 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(async (): Promise<void> => {
+  cleanupOrphanedTempDbs()
   await initSodium()
   createWindow()
 
