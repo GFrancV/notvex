@@ -1,7 +1,8 @@
-import { type JSX, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import { toast } from 'sonner'
 
+import { COLOR_NAMES, PRESET_COLORS } from '@/lib/tag-colors'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { Button } from '../ui/button'
@@ -9,26 +10,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Field, FieldError, FieldLabel } from '../ui/field'
 import { Input } from '../ui/input'
 
-const PRESET_COLORS = [
-  '#10b981',
-  '#3b82f6',
-  '#8b5cf6',
-  '#f59e0b',
-  '#ef4444',
-  '#ec4899',
-  '#14b8a6',
-  '#f97316',
-  '#6366f1',
-  '#84cc16'
-]
-
 interface TagCreateModalProps {
   open: boolean
   onClose: () => void
   editTag?: Tag | null
 }
 
-export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps): JSX.Element {
+export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps): ReactNode {
   const { tags, createTag, updateTag } = useVaultStore()
   const [name, setName] = useState(editTag?.name ?? '')
   const [color, setColor] = useState(editTag?.color ?? PRESET_COLORS[0])
@@ -94,14 +82,17 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c}
+                  type="button"
                   onClick={() => setColor(c)}
+                  aria-label={`Color: ${COLOR_NAMES[c] ?? c}`}
+                  aria-pressed={color === c}
+                  title={COLOR_NAMES[c] ?? c}
                   className={`h-5 w-5 rounded-full transition-all ${
                     color === c
-                      ? 'ring-offset-background scale-110 ring-2 ring-white ring-offset-1'
+                      ? 'ring-offset-background ring-foreground scale-110 ring-2 ring-offset-1'
                       : 'opacity-70 hover:opacity-100'
                   }`}
                   style={{ backgroundColor: c }}
-                  title={c}
                 />
               ))}
             </div>

@@ -1,4 +1,4 @@
-import { type JSX, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import { toast } from 'sonner'
 
@@ -21,7 +21,7 @@ interface TagDeleteModalProps {
   tag: Tag | null
 }
 
-export function TagDeleteModal({ open, onClose, tag }: TagDeleteModalProps): JSX.Element {
+export function TagDeleteModal({ open, onClose, tag }: TagDeleteModalProps): ReactNode {
   const { tagCounts, deleteTag } = useVaultStore()
   const { activeTags, clearActiveTags } = useUiStore()
   const [loading, setLoading] = useState(false)
@@ -46,7 +46,7 @@ export function TagDeleteModal({ open, onClose, tag }: TagDeleteModalProps): JSX
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
+        <DialogHeader className="border-b-0">
           <DialogTitle>Delete &ldquo;{tag?.name}&rdquo;?</DialogTitle>
           <DialogDescription>
             {count > 0

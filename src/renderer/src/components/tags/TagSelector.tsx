@@ -1,30 +1,18 @@
-import { type JSX, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { PRESET_COLORS } from '../../lib/tag-colors'
 import { useVaultStore } from '../../store/vault.store'
 import { Button } from '../ui/button'
-
-const PRESET_COLORS = [
-  '#10b981',
-  '#3b82f6',
-  '#8b5cf6',
-  '#f59e0b',
-  '#ef4444',
-  '#ec4899',
-  '#14b8a6',
-  '#f97316',
-  '#6366f1',
-  '#84cc16'
-]
 
 interface TagSelectorProps {
   noteId: string
   onClose: () => void
 }
 
-export function TagSelector({ noteId, onClose }: TagSelectorProps): JSX.Element {
+export function TagSelector({ noteId, onClose }: TagSelectorProps): ReactNode {
   const { tags, noteTagsMap, addTagToNote, createTagAndAssign } = useVaultStore()
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
@@ -91,6 +79,7 @@ export function TagSelector({ noteId, onClose }: TagSelectorProps): JSX.Element 
       <div className="border border-b px-3 py-2">
         <input
           ref={inputRef}
+          aria-label="Search tags"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
