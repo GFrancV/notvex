@@ -1,6 +1,6 @@
 import { type JSX, useCallback, useEffect } from 'react'
 
-import { EyeIcon, FileTextIcon, LockIcon, PlusIcon, TagIcon, XIcon } from 'lucide-react'
+import { EyeIcon, FileTextIcon, LockIcon, PlusIcon, TagIcon, Trash2Icon, XIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
@@ -83,7 +83,7 @@ export function CommandPalette(): JSX.Element | null {
             <CommandShortcut>Ctrl+Shift+E</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => run(() => setShowTrash(true))}>
-            <PlusIcon />
+            <Trash2Icon />
             <span>Show Trash</span>
           </CommandItem>
           <CommandItem onSelect={() => run(handleLock)}>
@@ -95,7 +95,6 @@ export function CommandPalette(): JSX.Element | null {
             <CommandItem onSelect={() => run(() => setTagSelectorNoteId(activeNoteId))}>
               <TagIcon />
               <span>Tag note with...</span>
-              <CommandShortcut>Ctrl+L</CommandShortcut>
             </CommandItem>
           )}
           {activeNoteId && noteHasTags && (
