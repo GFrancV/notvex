@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
 
-import { EyeIcon, EyeOffIcon, FolderOpenIcon } from 'lucide-react'
+import { EyeIcon, EyeOffIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
@@ -300,10 +300,12 @@ export function Unlock(): ReactNode {
                     </p>
                     <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
                       <div
-                        className="bg-destructive h-full rounded-full transition-all duration-1000"
-                        style={{
-                          width: `${throttle ? (countdown / throttle.waitSeconds) * 100 : 0}%`
-                        }}
+                        className="bg-destructive h-full w-(--throttle-w,0%) rounded-full transition-all duration-1000"
+                        style={
+                          {
+                            '--throttle-w': `${throttle ? (countdown / throttle.waitSeconds) * 100 : 0}%`
+                          } as CSSProperties
+                        }
                       />
                     </div>
                   </div>
@@ -316,17 +318,26 @@ export function Unlock(): ReactNode {
                   }}
                   disabled={loading || !password || isThrottled || (hasKeyFile && !keyFileContents)}
                 >
-                  {loading ? 'Unlocking…' : 'Unlock'}
+                  {loading ? (
+                    <>
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                      Unlocking…
+                    </>
+                  ) : (
+                    'Unlock'
+                  )}
                 </Button>
 
                 <p className="text-center">
-                  <button
+                  <Button
+                    variant="link"
+                    size="sm"
                     type="button"
                     onClick={switchToRecovery}
-                    className="text-muted-foreground text-xs hover:underline"
+                    className="text-muted-foreground h-auto p-0 text-xs"
                   >
                     Forgot your password? <span className="text-foreground">Use recovery key</span>
-                  </button>
+                  </Button>
                 </p>
 
                 <p className="text-center">
@@ -388,17 +399,26 @@ export function Unlock(): ReactNode {
                   }}
                   disabled={loading || wordCount !== 24 || (hasKeyFile && !recoveryKeyFileContents)}
                 >
-                  {loading ? 'Recovering…' : 'Recover Access'}
+                  {loading ? (
+                    <>
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                      Recovering…
+                    </>
+                  ) : (
+                    'Recover Access'
+                  )}
                 </Button>
 
                 <p className="text-center">
-                  <button
+                  <Button
+                    variant="link"
+                    size="sm"
                     type="button"
                     onClick={switchToPassword}
-                    className="text-muted text-xs hover:underline"
+                    className="text-muted h-auto p-0 text-xs"
                   >
                     ← Back to unlock
-                  </button>
+                  </Button>
                 </p>
               </>
             )}
