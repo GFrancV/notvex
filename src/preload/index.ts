@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 export type {
   ChangePasswordResult,
   CreateNoteInput,
+  CreateTagAndAssignInput,
   CreateTagInput,
   CreateVaultResult,
   GeneratedKeyFile,
@@ -69,6 +70,7 @@ const api: NotvexAPI = {
   },
   tags: {
     create: (input) => ipcRenderer.invoke('tags:create', input),
+    createAndAssign: (input) => ipcRenderer.invoke('tags:create-and-assign', input),
     list: () => ipcRenderer.invoke('tags:list'),
     update: (id, patch) => ipcRenderer.invoke('tags:update', id, patch),
     delete: (id) => ipcRenderer.invoke('tags:delete', id)

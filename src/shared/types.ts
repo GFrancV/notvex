@@ -45,6 +45,11 @@ export interface CreateTagInput {
   name: string
   color: string
 }
+export interface CreateTagAndAssignInput {
+  noteId: string
+  name: string
+  color: string
+}
 export interface TagPatch {
   name?: string
   color?: string
@@ -155,6 +160,7 @@ export interface NotvexAPI {
   }
   tags: {
     create(input: CreateTagInput): Promise<IpcResult<Tag>>
+    createAndAssign(input: CreateTagAndAssignInput): Promise<IpcResult<Tag>>
     list(): Promise<IpcResult<Tag[]>>
     update(id: string, patch: TagPatch): Promise<IpcResult<null>>
     delete(id: string): Promise<IpcResult<null>>

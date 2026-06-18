@@ -10,6 +10,7 @@ import {
   addTagToNote,
   createNote,
   createTag,
+  createTagAndAssign,
   deleteNote,
   deleteTag,
   emptyTrash,
@@ -64,6 +65,8 @@ function requireVault(): void {
 
 // ─── Auto-lock + periodic sync state ─────────────────────────────────────────
 
+const VAULT_SYNC_INTERVAL_MS = 30_000
+
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
 let syncTimer: ReturnType<typeof setInterval> | null = null
@@ -92,11 +95,10 @@ function startAutoLockTimer(win: BrowserWindow): void {
     })()
   }, 60_000)
 
-  // Repack the .nvx container every 5 minutes for crash safety
   if (syncTimer) clearInterval(syncTimer)
   syncTimer = setInterval(() => {
     syncContainer()
-  }, 5 * 60_000)
+  }, VAULT_SYNC_INTERVAL_MS)
 }
 
 export function stopAutoLockTimer(): void {
@@ -546,6 +548,19 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return fail(e)
     }
   })
+
+  ipcMain.handle(
+    'tags:create-and-assign',
+    async (_e, input: { noteId: string; name: string; color: string }) => {
+      try {
+        requireVault()
+        touchActivity()
+        return ok(await createTagAndAssign(getDb(), input))
+      } catch (e) {
+        return fail(e)
+      }
+    }
+  )
 
   ipcMain.handle('tags:list', async () => {
     try {

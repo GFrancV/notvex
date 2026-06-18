@@ -337,6 +337,37 @@ export async function deleteTag(db: sqlite3.Database, id: string): Promise<void>
 
 // ─── Note-tag junction ────────────────────────────────────────────────────────
 
+// Creates a tag and assigns it to a note in a single transaction.
+// Use this instead of createTag + addTagToNote when both operations are needed
+// together — a crash between two separate IPC calls would leave an orphaned tag.
+export async function createTagAndAssign(
+  db: sqlite3.Database,
+  input: { noteId: string; name: string; color: string }
+): Promise<Tag> {
+  const id = newId()
+  const now = Date.now()
+
+  await dbRun(db, 'BEGIN TRANSACTION')
+  try {
+    await dbRun(db, 'INSERT INTO tags (id, name, color, created_at) VALUES (?, ?, ?, ?)', [
+      id,
+      input.name,
+      input.color,
+      now
+    ])
+    await dbRun(db, 'INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)', [
+      input.noteId,
+      id
+    ])
+    await dbRun(db, 'COMMIT')
+  } catch (err) {
+    await dbRun(db, 'ROLLBACK').catch(() => {})
+    throw err
+  }
+
+  return { id, name: input.name, color: input.color, createdAt: now }
+}
+
 export async function addTagToNote(
   db: sqlite3.Database,
   noteId: string,
