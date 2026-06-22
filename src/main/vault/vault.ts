@@ -2,13 +2,14 @@
  * vault.ts — SQLCipher vault lifecycle
  *
  * The vault is stored as a single opaque .nvx file (see container.ts):
- *   [4B magic "NVEX"][2B version][4B sidecar length][sidecar JSON][SQLCipher DB bytes]
+ *   [4B magic "NVX\0"][2B VERSION_MAJ][2B VERSION_MIN][TLV fields...][0x00][SQLCipher DB bytes]
  *
  * At runtime the DB bytes are extracted to a temporary file and opened with
  * SQLCipher. On close the temp file is repacked into the .nvx container then
- * deleted. The sidecar (plaintext) holds the Argon2id salt, params, and the
- * recovery-wrapped master key — everything needed to re-derive or recover
- * the master key without access to the encrypted DB.
+ * deleted. The TLV header holds the Argon2id salt (raw bytes), KDF tier, and the
+ * recovery-wrapped master key — all as opaque binary fields with no labels.
+ * An HMAC (BLAKE2b-256 keyed with the master key) covers the entire header and
+ * serves as the first authentication gate before SQLCipher is opened.
  *
  * Memory security:
  * - masterKey lives in a native Buffer (outside V8 GC heap) locked with
@@ -17,16 +18,22 @@
  */
 import { copyFileSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 
-import { getPref } from '../prefs'
-
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 
+import { CURRENT_VERSION_MIN, type VaultVersion } from '@shared/types'
 import { runMigrations } from '../db/migrations'
 import { dbAll, dbGet, dbRun } from '../db/queries'
-
-import { isNotvexContainer, makeTempDbPath, readContainer, writeContainer } from './container'
 import {
+  type ContainerMetadata,
+  isNotvexContainer,
+  makeTempDbPath,
+  readContainer,
+  verifyHeaderHmac,
+  writeContainer
+} from './container'
+import {
+  type KdfInputV1,
   calibrateArgon2id,
   decryptBytes,
   decryptField,
@@ -35,24 +42,13 @@ import {
   encryptBytes,
   encryptField,
   generateSalt,
+  getArgon2Params,
   hashKeyFile,
   initSodium,
-  memzero,
-  type Argon2Params
+  memzero
 } from './crypto'
 import { allocSecure, freeSecure } from './memlock'
 import { generateMnemonic, mnemonicToMasterKey, validateMnemonic } from './recovery'
-
-// ─── Sidecar schema ──────────────────────────────────────────────────────────
-
-interface VaultSidecar {
-  version: number
-  argon2_salt: string
-  argon2_params: Argon2Params
-  recovery_encrypted_master_key: string
-  recovery_nonce: string
-  hasKeyFile?: boolean
-}
 
 // Raw note row from the DB (used only in reencryptNotes and its callers).
 interface RawNote {
@@ -68,7 +64,8 @@ interface RawNote {
 let db: sqlite3.Database | null = null
 let masterKey: Buffer | null = null
 let currentVaultPath: string | null = null
-let currentSidecar: VaultSidecar | null = null
+let currentMetadata: ContainerMetadata | null = null
+let currentHasKeyFile: boolean = false
 let tempDbPath: string | null = null
 let pendingKeyFileContents: Uint8Array | null = null
 
@@ -126,11 +123,9 @@ function releaseLock(): void {
   }
 }
 
-// Removes leftover .bak and .new files from a previous re-keying crash.
-// Safe to call before opening: if .new exists the rename never completed,
-// and if .bak exists the cleanup after rename never completed.
+// Removes leftover .tmp and .bak files from a previous re-keying crash.
 function cleanupOrphanedTempFiles(vaultPath: string): void {
-  for (const suffix of ['.bak', '.new']) {
+  for (const suffix of ['.bak', '.tmp']) {
     const p = vaultPath + suffix
     if (existsSync(p)) {
       try {
@@ -183,76 +178,71 @@ function storeKey(rawKey: Uint8Array): Buffer {
   return secure
 }
 
-function encryptMasterKey(
-  masterKeyBuf: Uint8Array,
-  wrapKey: Uint8Array
-): { ciphertext: string; nonce: string } {
-  // Encrypt raw bytes (32) directly — not the hex-encoded string (64 chars) from before.
-  // Uses XChaCha20-Poly1305 IETF via encryptBytes (same cipher as encryptField).
-  const { ciphertext, nonce } = encryptBytes(masterKeyBuf, wrapKey)
-  return {
-    ciphertext: Buffer.from(ciphertext).toString('hex'),
-    nonce: Buffer.from(nonce).toString('hex')
-  }
+// Writes container bytes atomically: write to .tmp then rename.
+function atomicWrite(filePath: string, bytes: Buffer): void {
+  const tmp = filePath + '.tmp'
+  writeFileSync(tmp, bytes)
+  renameSync(tmp, filePath)
 }
 
-function decryptMasterKey(
-  ciphertextHex: string,
-  nonceHex: string,
-  wrapKey: Uint8Array
-): Uint8Array {
-  return decryptBytes(
-    new Uint8Array(Buffer.from(ciphertextHex, 'hex')),
-    new Uint8Array(Buffer.from(nonceHex, 'hex')),
-    wrapKey
-  )
+// Reads the current temp DB and repacks the .nvx container. Safe to call while
+// the DB is idle (not mid-transaction). Does nothing if state is incomplete.
+function packContainer(): void {
+  if (!currentVaultPath || !currentMetadata || !tempDbPath || !masterKey) return
+  const { salt } = getArgon2Params(currentMetadata.kdfInput)
+  const dbBytes = readFileSync(tempDbPath)
+  const bytes = writeContainer({
+    masterKey: Buffer.isBuffer(masterKey) ? masterKey : Buffer.from(masterKey),
+    salt,
+    kdfTier: currentMetadata.kdfInput.kdfTier,
+    recoveryBlob: currentMetadata.recoveryBlob,
+    dbBytes,
+    existingVersionMin: currentMetadata.versionMin
+  })
+  atomicWrite(currentVaultPath, bytes)
 }
 
-// Derives a candidate key from credentials and verifies it by opening the SQLCipher
-// database at dbPath. Verification is implicit — if the key is wrong, SQLCipher
-// cannot decrypt the first page and the query throws.
-//
-// This is the single point of credential verification for all Argon2id-based unlock
-// and credential-change flows. Never duplicate this open-verify-close pattern inline.
+// Derives a candidate key from credentials, verifies the header HMAC (before
+// touching SQLCipher), then confirms the key opens the DB. Returns the key on
+// success, zeros it on failure. The temp DB at dbPath is always closed on return.
 //
 // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
-// The DB at dbPath is always closed in the finally block, even on success.
 async function authenticateVaultKey(params: {
   dbPath: string
   password: string
+  metadata: ContainerMetadata
   keyFileContents?: Uint8Array
-  salt: Uint8Array
-  argon2Params: Argon2Params
 }): Promise<{ valid: false } | { valid: true; masterKey: Buffer }> {
   const kfHash = params.keyFileContents
     ? hashKeyFile(Buffer.from(params.keyFileContents))
     : undefined
-  const candidateKey = deriveKey(params.password, params.salt, params.argon2Params, kfHash)
+  // Convert WASM-backed Uint8Array to a native Buffer, then zero the WASM copy.
+  const { salt: kdfSalt, params: kdfParams } = getArgon2Params(params.metadata.kdfInput)
+  const rawDerived = deriveKey(params.password, kdfSalt, kdfParams, kfHash)
+  const candidateKey = Buffer.from(rawDerived)
+  memzero(rawDerived)
+
+  // HMAC check: wrong password → mismatch → reject immediately, no SQLCipher needed
+  if (
+    !verifyHeaderHmac(params.metadata.hmacCoveredBytes, params.metadata.storedHmac, candidateKey)
+  ) {
+    candidateKey.fill(0)
+    return { valid: false }
+  }
 
   let verifyDb: sqlite3.Database | null = null
   try {
     verifyDb = await openDatabase(params.dbPath)
     await applyKey(verifyDb, candidateKey)
     // Cheapest read that proves the key decrypts the first page correctly.
-    // SQLCipher throws before this query resolves if the key is wrong.
     await dbGet(verifyDb, 'SELECT 1 FROM schema_migrations LIMIT 1')
-    const result = Buffer.from(candidateKey)
-    memzero(candidateKey)
-    return { valid: true, masterKey: result }
+    return { valid: true, masterKey: candidateKey }
   } catch {
-    memzero(candidateKey)
+    candidateKey.fill(0)
     return { valid: false }
   } finally {
     if (verifyDb) await closeDatabase(verifyDb).catch(() => {})
   }
-}
-
-// Reads the current temp DB and repacks the .nvx container. Safe to call while
-// the DB is idle (not mid-transaction). Does nothing if state is incomplete.
-function packContainer(): void {
-  if (!currentVaultPath || !currentSidecar || !tempDbPath) return
-  const dbBytes = readFileSync(tempDbPath)
-  writeContainer(currentVaultPath, JSON.stringify(currentSidecar), dbBytes)
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -279,6 +269,20 @@ export function vaultExistsAt(filePath: string): boolean {
   return isNotvexContainer(filePath)
 }
 
+export function getHasKeyFileFromOpenVault(): boolean {
+  return currentHasKeyFile
+}
+
+// No-op for v1.0 — scaffolding for future minor version migrations.
+// Called by the vault:open IPC handler after the user confirms the migration dialog.
+export async function migrateHeaderIfNeeded(
+  _vaultPath: string,
+  _currentMin: number
+): Promise<void> {
+  if (_currentMin >= CURRENT_VERSION_MIN) return
+  // Future: apply chained header migrations here
+}
+
 export interface CreateVaultResult {
   mnemonic: string
 }
@@ -297,11 +301,11 @@ export async function createVault(filePath: string, password: string): Promise<C
     throw new Error('A vault already exists at this location.')
   }
 
-  // Calibrate Argon2id to ~1.5s on this hardware (only runs at vault creation).
-  // The result is stored in the sidecar so future unlocks use the same params.
-  const params = calibrateArgon2id(1500)
-  const salt = generateSalt()
-  const rawKey = deriveKey(password, salt, params)
+  const { tier } = calibrateArgon2id(1500)
+  const salt = Buffer.from(generateSalt())
+  const kdfInput: KdfInputV1 = { version: 1, salt, kdfTier: tier }
+  const { params: kdfParams } = getArgon2Params(kdfInput)
+  const rawKey = deriveKey(password, salt, kdfParams)
 
   // Build the DB in a temp file
   const tmp = makeTempDbPath()
@@ -311,40 +315,43 @@ export async function createVault(filePath: string, password: string): Promise<C
 
   await dbRun(
     database,
-    `INSERT INTO vault_meta (id, version, argon2_salt, argon2_params, created_at)
-     VALUES (1, 1, ?, ?, ?)`,
-    [Buffer.from(salt), JSON.stringify(params), Date.now()]
+    'INSERT INTO vault_meta (id, version, created_at, has_key_file) VALUES (1, 1, ?, 0)',
+    [Date.now()]
   )
 
   const mnemonic = generateMnemonic()
   const mnemonicKey = mnemonicToMasterKey(mnemonic)
   const wrapKey = deriveRecoveryWrapKey(mnemonicKey, undefined)
   memzero(mnemonicKey)
-  const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(rawKey, wrapKey)
+  const { ciphertext: recCt, nonce: recNonce } = encryptBytes(rawKey, wrapKey)
   memzero(wrapKey)
+  const recoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
 
   // Close DB to flush all pages to the temp file, then pack the .nvx container
   await closeDatabase(database)
   const dbBytes = readFileSync(tmp)
 
-  const sidecar: VaultSidecar = {
-    version: 1,
-    argon2_salt: Buffer.from(salt).toString('hex'),
-    argon2_params: params,
-    recovery_encrypted_master_key: recCipher,
-    recovery_nonce: recNonce
-  }
-  writeContainer(filePath, JSON.stringify(sidecar), dbBytes)
+  const containerBytes = writeContainer({
+    masterKey: Buffer.from(rawKey),
+    salt,
+    kdfTier: tier,
+    recoveryBlob,
+    dbBytes
+  })
+  atomicWrite(filePath, containerBytes)
 
   // Reopen the temp DB for the active session
   const reopened = await openDatabase(tmp)
   await applyKey(reopened, rawKey)
 
   db = reopened
-  masterKey = storeKey(rawKey)
+  masterKey = storeKey(rawKey) // zeros rawKey
   currentVaultPath = filePath
-  currentSidecar = sidecar
+  currentHasKeyFile = false
   tempDbPath = tmp
+
+  // Rebuild currentMetadata from the written file for consistency
+  currentMetadata = readContainer(readFileSync(filePath))
 
   return { mnemonic }
 }
@@ -352,14 +359,19 @@ export async function createVault(filePath: string, password: string): Promise<C
 export async function openVault(
   filePath: string,
   password: string,
-  keyFileContents?: Uint8Array
-): Promise<boolean> {
+  keyFileContents?: Uint8Array,
+  preReadBytes?: Buffer
+): Promise<VaultVersion | null> {
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
 
   if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
 
   cleanupOrphanedTempFiles(filePath)
+
+  const fileBytes = preReadBytes ?? readFileSync(filePath)
+  const metadata = readContainer(fileBytes) // throws NOT_NOTVEX_FILE / VERSION_TOO_NEW
+
   acquireLock(filePath)
 
   let tmp: string | null = null
@@ -367,20 +379,10 @@ export async function openVault(
   let database: sqlite3.Database | null = null
 
   try {
-    const { sidecarJson, dbBytes } = readContainer(filePath)
-    const sidecar = JSON.parse(sidecarJson) as VaultSidecar
-    const salt = new Uint8Array(Buffer.from(sidecar.argon2_salt, 'hex'))
-
     tmp = makeTempDbPath()
-    writeFileSync(tmp, dbBytes)
+    writeFileSync(tmp, fileBytes.subarray(metadata.dbOffset))
 
-    auth = await authenticateVaultKey({
-      dbPath: tmp,
-      password,
-      keyFileContents,
-      salt,
-      argon2Params: sidecar.argon2_params
-    })
+    auth = await authenticateVaultKey({ dbPath: tmp, password, metadata, keyFileContents })
 
     if (!auth.valid) {
       releaseLock()
@@ -389,18 +391,26 @@ export async function openVault(
       } catch {
         /* ignore */
       }
-      return false
+      return null
     }
 
     // authenticateVaultKey verified and closed the DB. Reopen for the session.
     database = await openDatabase(tmp)
     await applyKey(database, auth.masterKey)
+    await runMigrations(database)
+
+    const meta = await dbGet<{ has_key_file: number }>(
+      database,
+      'SELECT has_key_file FROM vault_meta WHERE id = 1'
+    )
+
     db = database
     masterKey = storeKey(auth.masterKey) // zeros auth.masterKey
     currentVaultPath = filePath
-    currentSidecar = sidecar
+    currentMetadata = metadata
+    currentHasKeyFile = (meta?.has_key_file ?? 0) === 1
     tempDbPath = tmp
-    return true
+    return { maj: metadata.versionMaj, min: metadata.versionMin }
   } catch (err) {
     releaseLock()
     if (auth?.valid) auth.masterKey.fill(0)
@@ -426,69 +436,69 @@ export async function openVaultWithRecovery(
   filePath: string,
   mnemonic: string,
   keyFileContents?: Uint8Array
-): Promise<boolean> {
+): Promise<VaultVersion | null> {
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
 
   if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
-  if (!validateMnemonic(mnemonic)) return false
+  if (!validateMnemonic(mnemonic)) return null
 
-  const { sidecarJson, dbBytes } = readContainer(filePath)
-  const sidecar = JSON.parse(sidecarJson) as VaultSidecar
-
-  if (sidecar.hasKeyFile && !keyFileContents) return false
+  const fileBytes = readFileSync(filePath)
+  const metadata = readContainer(fileBytes)
 
   cleanupOrphanedTempFiles(filePath)
   acquireLock(filePath)
 
   // Derive the wrap key that was used to encrypt the recovery blob.
-  // When a key file is configured, the wrap key binds both factors:
+  // When a key file was configured, the wrap key binds both factors:
   // wrapKey = BLAKE2b(mnemonicKey || BLAKE2b(keyFileContents))
   // If either factor is wrong the XChaCha20-Poly1305 MAC fails and decryption throws.
   const mnemonicKey = mnemonicToMasterKey(mnemonic)
-  const wrapKey = deriveRecoveryWrapKey(
-    mnemonicKey,
-    sidecar.hasKeyFile ? keyFileContents : undefined
-  )
+  const wrapKey = deriveRecoveryWrapKey(mnemonicKey, keyFileContents)
   memzero(mnemonicKey)
+
+  // RecoveryBlob layout: [24B nonce][ciphertext]
+  const recNonce = metadata.recoveryBlob.subarray(0, 24)
+  const recCt = metadata.recoveryBlob.subarray(24)
 
   let rawKey: Uint8Array
   try {
-    rawKey = decryptMasterKey(
-      sidecar.recovery_encrypted_master_key,
-      sidecar.recovery_nonce,
-      wrapKey
-    )
+    rawKey = decryptBytes(recCt, recNonce, wrapKey)
   } catch {
     memzero(wrapKey)
     releaseLock()
-    return false
+    return null
   } finally {
     memzero(wrapKey)
   }
 
   const tmp = makeTempDbPath()
-  writeFileSync(tmp, dbBytes)
+  writeFileSync(tmp, fileBytes.subarray(metadata.dbOffset))
 
   let database: sqlite3.Database | null = null
   try {
     database = await openDatabase(tmp)
     await applyKey(database, rawKey)
+    await runMigrations(database)
 
-    const meta = await dbGet<{ id: number }>(database, 'SELECT id FROM vault_meta WHERE id = 1')
+    const meta = await dbGet<{ id: number; has_key_file: number }>(
+      database,
+      'SELECT id, has_key_file FROM vault_meta WHERE id = 1'
+    )
     if (!meta) {
       memzero(rawKey)
       releaseLock()
-      return false
+      return null
     }
 
     db = database
-    masterKey = storeKey(rawKey)
+    masterKey = storeKey(rawKey) // zeros rawKey
     currentVaultPath = filePath
-    currentSidecar = sidecar
+    currentMetadata = metadata
+    currentHasKeyFile = (meta.has_key_file ?? 0) === 1
     tempDbPath = tmp
     pendingKeyFileContents = keyFileContents ?? null
-    return true
+    return { maj: metadata.versionMaj, min: metadata.versionMin }
   } catch (err) {
     releaseLock()
     memzero(rawKey)
@@ -513,25 +523,19 @@ export async function changePassword(
   newPassword: string,
   keyFileContents?: Uint8Array
 ): Promise<{ mnemonic: string }> {
-  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+  if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
-  }
-
-  if (currentSidecar.hasKeyFile && !keyFileContents) {
-    throw new Error('Key file is required to change the password')
   }
 
   const backupPath = currentVaultPath + '.bak'
   copyFileSync(currentVaultPath, backupPath)
 
-  // Step 1 — verify current password via SQLCipher (same source of truth as the live vault).
-  const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
+  // Step 1 — verify current credentials. Pass key file only if the vault has one.
   const auth = await authenticateVaultKey({
     dbPath: tempDbPath,
     password: currentPassword,
-    keyFileContents,
-    salt,
-    argon2Params: currentSidecar.argon2_params
+    metadata: currentMetadata,
+    keyFileContents: currentHasKeyFile ? keyFileContents : undefined
   })
   if (!auth.valid) {
     try {
@@ -543,79 +547,80 @@ export async function changePassword(
   }
   auth.masterKey.fill(0) // verified; the live masterKey is already in memory
 
-  // Step 2 — derive new key with a fresh salt (preserving key file in derivation)
+  // Step 2 — derive new key with a fresh salt, same tier
   const kfHash = keyFileContents ? hashKeyFile(Buffer.from(keyFileContents)) : undefined
-  const newSalt = generateSalt()
-  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params, kfHash)
+  const newSalt = Buffer.from(generateSalt())
+  const newKdfInput: KdfInputV1 = {
+    version: 1,
+    salt: newSalt,
+    kdfTier: currentMetadata.kdfInput.kdfTier
+  }
+  const { params: newKdfParams } = getArgon2Params(newKdfInput)
+  const newRawKey = deriveKey(newPassword, newSalt, newKdfParams, kfHash)
 
   // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
-  // Unavoidable limitation of the SQLCipher Node.js binding. Becomes unreachable after this scope.
+  // Unavoidable limitation of the SQLCipher Node.js binding.
   const oldKeyHex = masterKey.toString('hex')
+  const newHex = Buffer.from(newRawKey).toString('hex')
 
   // Step 3 — re-key SQLCipher in-place
-  const newHex = Buffer.from(newRawKey).toString('hex')
   await new Promise<void>((resolve, reject) => {
     db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) => (err ? reject(err) : resolve()))
   })
 
   try {
-    // Steps 4-5 inside a single transaction so all data changes are atomic.
     await dbRun(db, 'BEGIN TRANSACTION')
-
     try {
-      // Step 4 — update vault_meta with new salt
-      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ? WHERE id = 1`, [Buffer.from(newSalt)])
-
-      // Step 5 — re-encrypt all note ciphertexts with the new key
       await reencryptNotes(masterKey, newRawKey)
-
       await dbRun(db, 'COMMIT')
     } catch (txErr) {
       await dbRun(db, 'ROLLBACK').catch(() => {})
       throw txErr
     }
 
-    // Step 6 — checkpoint WAL so readFileSync gets all committed data
     await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
 
-    // Step 7 — generate new recovery mnemonic, wrap new key (bind key file when active)
+    // Generate new recovery blob wrapping the new key
     const mnemonic = generateMnemonic()
     const mnemonicKey = mnemonicToMasterKey(mnemonic)
     const wrapKey = deriveRecoveryWrapKey(
       mnemonicKey,
-      currentSidecar.hasKeyFile ? keyFileContents : undefined
+      currentHasKeyFile ? keyFileContents : undefined
     )
     memzero(mnemonicKey)
-    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    const { ciphertext: recCt, nonce: recNonce } = encryptBytes(newRawKey, wrapKey)
+    const newRecoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
     memzero(wrapKey)
 
-    // Step 8 — write new container to .new, then rename atomically
-    const newSidecar: VaultSidecar = {
-      ...currentSidecar,
-      argon2_salt: Buffer.from(newSalt).toString('hex'),
-      recovery_encrypted_master_key: recCipher,
-      recovery_nonce: recNonce
-    }
-    const newContainerPath = currentVaultPath + '.new'
     const dbBytes = readFileSync(tempDbPath)
-    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
-    renameSync(newContainerPath, currentVaultPath)
+    const containerBytes = writeContainer({
+      masterKey: Buffer.from(newRawKey),
+      salt: newSalt,
+      kdfTier: currentMetadata.kdfInput.kdfTier,
+      recoveryBlob: newRecoveryBlob,
+      dbBytes,
+      existingVersionMin: currentMetadata.versionMin
+    })
+    atomicWrite(currentVaultPath, containerBytes)
     try {
       unlinkSync(backupPath)
     } catch {
       /* ignore */
     }
 
-    // Step 9 — swap masterKey in memory
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentSidecar = newSidecar
+    currentMetadata = {
+      ...currentMetadata,
+      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
+      recoveryBlob: newRecoveryBlob
+    }
 
     return { mnemonic }
   } catch (err) {
     try {
-      unlinkSync(currentVaultPath + '.new')
+      unlinkSync(currentVaultPath + '.tmp')
     } catch {
       /* ignore */
     }
@@ -639,7 +644,7 @@ export async function changePassword(
 }
 
 export async function rotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
-  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+  if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
 
@@ -649,13 +654,16 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
   const backupPath = currentVaultPath + '.bak'
   copyFileSync(currentVaultPath, backupPath)
 
-  const newSalt = generateSalt()
-  const newRawKey = deriveKey(newPassword, newSalt, currentSidecar.argon2_params, kfHash)
+  const newSalt = Buffer.from(generateSalt())
+  const newKdfInput: KdfInputV1 = {
+    version: 1,
+    salt: newSalt,
+    kdfTier: currentMetadata.kdfInput.kdfTier
+  }
+  const { params: newKdfParams } = getArgon2Params(newKdfInput)
+  const newRawKey = deriveKey(newPassword, newSalt, newKdfParams, kfHash)
 
-  // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
-  // Unavoidable limitation of the SQLCipher Node.js binding. Becomes unreachable after this scope.
   const oldKeyHex = masterKey.toString('hex')
-
   const newHex = Buffer.from(newRawKey).toString('hex')
   await new Promise<void>((resolve, reject) => {
     db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) => (err ? reject(err) : resolve()))
@@ -663,9 +671,11 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
 
   try {
     await dbRun(db, 'BEGIN TRANSACTION')
-
     try {
-      await dbRun(db, `UPDATE vault_meta SET argon2_salt = ? WHERE id = 1`, [Buffer.from(newSalt)])
+      const newHasKeyFile = pendingKeyFileContents !== null ? true : currentHasKeyFile
+      await dbRun(db, 'UPDATE vault_meta SET has_key_file = ? WHERE id = 1', [
+        newHasKeyFile ? 1 : 0
+      ])
       await reencryptNotes(masterKey, newRawKey)
       await dbRun(db, 'COMMIT')
     } catch (txErr) {
@@ -675,7 +685,7 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
 
     await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
 
-    const newHasKeyFile = pendingKeyFileContents !== null ? true : currentSidecar.hasKeyFile
+    const newHasKeyFile = pendingKeyFileContents !== null ? true : currentHasKeyFile
     const mnemonic = generateMnemonic()
     const mnemonicKey = mnemonicToMasterKey(mnemonic)
     const wrapKey = deriveRecoveryWrapKey(
@@ -683,20 +693,20 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
       newHasKeyFile ? (pendingKeyFileContents ?? undefined) : undefined
     )
     memzero(mnemonicKey)
-    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    const { ciphertext: recCt, nonce: recNonce } = encryptBytes(newRawKey, wrapKey)
+    const newRecoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
     memzero(wrapKey)
 
-    const newSidecar: VaultSidecar = {
-      ...currentSidecar,
-      argon2_salt: Buffer.from(newSalt).toString('hex'),
-      recovery_encrypted_master_key: recCipher,
-      recovery_nonce: recNonce,
-      hasKeyFile: newHasKeyFile
-    }
-    const newContainerPath = currentVaultPath + '.new'
     const dbBytes = readFileSync(tempDbPath)
-    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
-    renameSync(newContainerPath, currentVaultPath)
+    const containerBytes = writeContainer({
+      masterKey: Buffer.from(newRawKey),
+      salt: newSalt,
+      kdfTier: currentMetadata.kdfInput.kdfTier,
+      recoveryBlob: newRecoveryBlob,
+      dbBytes,
+      existingVersionMin: currentMetadata.versionMin
+    })
+    atomicWrite(currentVaultPath, containerBytes)
     try {
       unlinkSync(backupPath)
     } catch {
@@ -708,15 +718,20 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
       pendingKeyFileContents = null
     }
 
-    const newSecureKey = storeKey(newRawKey)
+    const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentSidecar = newSidecar
+    currentMetadata = {
+      ...currentMetadata,
+      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
+      recoveryBlob: newRecoveryBlob
+    }
+    currentHasKeyFile = newHasKeyFile
 
     return { mnemonic }
   } catch (err) {
     try {
-      unlinkSync(currentVaultPath + '.new')
+      unlinkSync(currentVaultPath + '.tmp')
     } catch {
       /* ignore */
     }
@@ -751,21 +766,11 @@ export function syncContainer(): void {
 }
 
 export async function closeVault(): Promise<void> {
-  if (pendingKeyFileContents) {
-    memzero(pendingKeyFileContents)
-    pendingKeyFileContents = null
-  }
-  if (masterKey) {
-    freeSecure(masterKey)
-    masterKey = null
-  }
   if (db) {
     try {
-      // SQLCipher also checkpoints on close, but making it explicit avoids any race where
-      // readFileSync in packContainer runs before the implicit checkpoint completes.
       await dbRun(db, 'PRAGMA wal_checkpoint(TRUNCATE)')
     } catch {
-      /* non-fatal — SQLCipher checkpoints implicitly on connection close */
+      /* non-fatal */
     }
     try {
       await closeDatabase(db)
@@ -774,7 +779,7 @@ export async function closeVault(): Promise<void> {
     }
     db = null
   }
-  if (tempDbPath && currentVaultPath && currentSidecar) {
+  if (tempDbPath && currentVaultPath && currentMetadata) {
     try {
       packContainer()
     } catch {
@@ -786,24 +791,19 @@ export async function closeVault(): Promise<void> {
       /* ignore */
     }
   }
+  if (pendingKeyFileContents) {
+    memzero(pendingKeyFileContents)
+    pendingKeyFileContents = null
+  }
+  if (masterKey) {
+    freeSecure(masterKey)
+    masterKey = null
+  }
   currentVaultPath = null
-  currentSidecar = null
+  currentMetadata = null
+  currentHasKeyFile = false
   tempDbPath = null
   releaseLock()
-}
-
-// Returns whether the vault was configured with a key file.
-// Reads from the sidecar (no open vault needed) so it works at unlock time.
-export function getHasKeyFile(filePath?: string): boolean {
-  const path = filePath ?? currentVaultPath ?? getPref('vaultPath')
-  if (!path || !vaultExistsAt(path)) return false
-  try {
-    const { sidecarJson } = readContainer(path)
-    const sidecar = JSON.parse(sidecarJson) as VaultSidecar
-    return sidecar.hasKeyFile ?? false
-  } catch {
-    return false
-  }
 }
 
 // Helper to re-encrypt all notes with a new key inside an open transaction.
@@ -842,28 +842,24 @@ async function reencryptNotes(oldKey: Uint8Array, newKey: Uint8Array): Promise<v
 }
 
 // Add or change the key file on the open vault.
-// Derives a new master key = Argon2id(password + BLAKE2b(keyFile), newSalt),
-// re-encrypts all notes, updates the sidecar, and replaces the in-memory key.
 export async function configureKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
-  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+  if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
 
   const backupPath = currentVaultPath + '.bak'
   copyFileSync(currentVaultPath, backupPath)
 
-  // Verify current credentials via SQLCipher. Pass the existing key file if one is configured.
-  const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
+  // Verify current credentials. Pass current key file only if one is already configured.
   const auth = await authenticateVaultKey({
     dbPath: tempDbPath,
     password,
-    keyFileContents: currentSidecar.hasKeyFile ? keyFileContents : undefined,
-    salt,
-    argon2Params: currentSidecar.argon2_params
+    metadata: currentMetadata,
+    keyFileContents: currentHasKeyFile ? keyFileContents : undefined
   })
   if (!auth.valid) {
     try {
@@ -873,13 +869,17 @@ export async function configureKeyFile(
     }
     throw new Error('Incorrect password or key file')
   }
-  auth.masterKey.fill(0) // verified; the live masterKey is already in memory
+  auth.masterKey.fill(0)
 
   const kfHash = hashKeyFile(Buffer.from(keyFileContents))
-  const newSalt = generateSalt()
-  const newRawKey = deriveKey(password, newSalt, currentSidecar.argon2_params, kfHash)
-  // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
-  // Unavoidable limitation of the SQLCipher Node.js binding. Becomes unreachable after this scope.
+  const newSalt = Buffer.from(generateSalt())
+  const newKdfInput: KdfInputV1 = {
+    version: 1,
+    salt: newSalt,
+    kdfTier: currentMetadata.kdfInput.kdfTier
+  }
+  const { params: newKdfParams } = getArgon2Params(newKdfInput)
+  const newRawKey = deriveKey(password, newSalt, newKdfParams, kfHash)
   const oldKeyHex = masterKey.toString('hex')
 
   const newHex = Buffer.from(newRawKey).toString('hex')
@@ -890,7 +890,7 @@ export async function configureKeyFile(
   try {
     await dbRun(db, 'BEGIN TRANSACTION')
     try {
-      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ? WHERE id = 1', [Buffer.from(newSalt)])
+      await dbRun(db, 'UPDATE vault_meta SET has_key_file = 1 WHERE id = 1')
       await reencryptNotes(masterKey, newRawKey)
       await dbRun(db, 'COMMIT')
     } catch (txErr) {
@@ -904,20 +904,20 @@ export async function configureKeyFile(
     const mnemonicKey = mnemonicToMasterKey(mnemonic)
     const wrapKey = deriveRecoveryWrapKey(mnemonicKey, keyFileContents)
     memzero(mnemonicKey)
-    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    const { ciphertext: recCt, nonce: recNonce } = encryptBytes(newRawKey, wrapKey)
+    const newRecoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
     memzero(wrapKey)
 
-    const newSidecar: VaultSidecar = {
-      ...currentSidecar,
-      argon2_salt: Buffer.from(newSalt).toString('hex'),
-      recovery_encrypted_master_key: recCipher,
-      recovery_nonce: recNonce,
-      hasKeyFile: true
-    }
-    const newContainerPath = currentVaultPath + '.new'
     const dbBytes = readFileSync(tempDbPath)
-    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
-    renameSync(newContainerPath, currentVaultPath)
+    const containerBytes = writeContainer({
+      masterKey: Buffer.from(newRawKey),
+      salt: newSalt,
+      kdfTier: currentMetadata.kdfInput.kdfTier,
+      recoveryBlob: newRecoveryBlob,
+      dbBytes,
+      existingVersionMin: currentMetadata.versionMin
+    })
+    atomicWrite(currentVaultPath, containerBytes)
     try {
       unlinkSync(backupPath)
     } catch {
@@ -927,12 +927,17 @@ export async function configureKeyFile(
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentSidecar = newSidecar
+    currentMetadata = {
+      ...currentMetadata,
+      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
+      recoveryBlob: newRecoveryBlob
+    }
+    currentHasKeyFile = true
 
     return { mnemonic }
   } catch (err) {
     try {
-      unlinkSync(currentVaultPath + '.new')
+      unlinkSync(currentVaultPath + '.tmp')
     } catch {
       /* ignore */
     }
@@ -955,29 +960,27 @@ export async function configureKeyFile(
   }
 }
 
-// Remove the key file from the open vault.
-// Requires both the current password AND the current key file for verification.
+// Remove the key file from the open vault. Requires the current password + key file.
 export async function removeKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
-  if (!isVaultOpen() || !db || !masterKey || !currentSidecar || !currentVaultPath || !tempDbPath) {
+  if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
-  if (!currentSidecar.hasKeyFile) throw new Error('No key file is configured')
+  if (!currentHasKeyFile) {
+    throw new Error('No key file is configured for this vault')
+  }
 
   const backupPath = currentVaultPath + '.bak'
   copyFileSync(currentVaultPath, backupPath)
 
-  // Verify current credentials (password + key file) via SQLCipher.
-  const salt = new Uint8Array(Buffer.from(currentSidecar.argon2_salt, 'hex'))
   const auth = await authenticateVaultKey({
     dbPath: tempDbPath,
     password,
-    keyFileContents,
-    salt,
-    argon2Params: currentSidecar.argon2_params
+    metadata: currentMetadata,
+    keyFileContents
   })
   if (!auth.valid) {
     try {
@@ -987,12 +990,16 @@ export async function removeKeyFile(
     }
     throw new Error('Incorrect password or key file')
   }
-  auth.masterKey.fill(0) // verified; the live masterKey is already in memory
+  auth.masterKey.fill(0)
 
-  const newSalt = generateSalt()
-  const newRawKey = deriveKey(password, newSalt, currentSidecar.argon2_params)
-  // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
-  // Unavoidable limitation of the SQLCipher Node.js binding. Becomes unreachable after this scope.
+  const newSalt = Buffer.from(generateSalt())
+  const newKdfInput: KdfInputV1 = {
+    version: 1,
+    salt: newSalt,
+    kdfTier: currentMetadata.kdfInput.kdfTier
+  }
+  const { params: newKdfParams } = getArgon2Params(newKdfInput)
+  const newRawKey = deriveKey(password, newSalt, newKdfParams)
   const oldKeyHex = masterKey.toString('hex')
 
   const newHex = Buffer.from(newRawKey).toString('hex')
@@ -1003,7 +1010,7 @@ export async function removeKeyFile(
   try {
     await dbRun(db, 'BEGIN TRANSACTION')
     try {
-      await dbRun(db, 'UPDATE vault_meta SET argon2_salt = ? WHERE id = 1', [Buffer.from(newSalt)])
+      await dbRun(db, 'UPDATE vault_meta SET has_key_file = 0 WHERE id = 1')
       await reencryptNotes(masterKey, newRawKey)
       await dbRun(db, 'COMMIT')
     } catch (txErr) {
@@ -1017,20 +1024,20 @@ export async function removeKeyFile(
     const mnemonicKey = mnemonicToMasterKey(mnemonic)
     const wrapKey = deriveRecoveryWrapKey(mnemonicKey, undefined)
     memzero(mnemonicKey)
-    const { ciphertext: recCipher, nonce: recNonce } = encryptMasterKey(newRawKey, wrapKey)
+    const { ciphertext: recCt, nonce: recNonce } = encryptBytes(newRawKey, wrapKey)
+    const newRecoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
     memzero(wrapKey)
 
-    const newSidecar: VaultSidecar = {
-      ...currentSidecar,
-      argon2_salt: Buffer.from(newSalt).toString('hex'),
-      recovery_encrypted_master_key: recCipher,
-      recovery_nonce: recNonce,
-      hasKeyFile: false
-    }
-    const newContainerPath = currentVaultPath + '.new'
     const dbBytes = readFileSync(tempDbPath)
-    writeContainer(newContainerPath, JSON.stringify(newSidecar), dbBytes)
-    renameSync(newContainerPath, currentVaultPath)
+    const containerBytes = writeContainer({
+      masterKey: Buffer.from(newRawKey),
+      salt: newSalt,
+      kdfTier: currentMetadata.kdfInput.kdfTier,
+      recoveryBlob: newRecoveryBlob,
+      dbBytes,
+      existingVersionMin: currentMetadata.versionMin
+    })
+    atomicWrite(currentVaultPath, containerBytes)
     try {
       unlinkSync(backupPath)
     } catch {
@@ -1040,12 +1047,17 @@ export async function removeKeyFile(
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentSidecar = newSidecar
+    currentMetadata = {
+      ...currentMetadata,
+      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
+      recoveryBlob: newRecoveryBlob
+    }
+    currentHasKeyFile = false
 
     return { mnemonic }
   } catch (err) {
     try {
-      unlinkSync(currentVaultPath + '.new')
+      unlinkSync(currentVaultPath + '.tmp')
     } catch {
       /* ignore */
     }
