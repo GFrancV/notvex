@@ -1,7 +1,10 @@
+import { app } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-import { app } from 'electron'
+import type { VaultKeyFileAssociation } from '@shared/types'
+
+export type { VaultKeyFileAssociation }
 
 export interface Prefs {
   vaultPath: string | null
@@ -9,6 +12,7 @@ export interface Prefs {
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
+  keyFileAssociations: Record<string, VaultKeyFileAssociation>
 }
 
 const DEFAULTS: Prefs = {
@@ -16,7 +20,8 @@ const DEFAULTS: Prefs = {
   recentVaultPaths: [],
   autoLockMinutes: 15,
   allowScreenCapture: false,
-  lockOnMinimize: false
+  lockOnMinimize: false,
+  keyFileAssociations: {}
 }
 
 const MAX_RECENT_VAULTS = 5
@@ -58,4 +63,16 @@ export function recordVaultUsed(path: string): void {
   const prefs = getPrefs()
   const rest = prefs.recentVaultPaths.filter((p) => !samePath(p, path))
   setPrefs({ vaultPath: path, recentVaultPaths: [path, ...rest].slice(0, MAX_RECENT_VAULTS) })
+}
+
+export function getKeyFileAssociation(vaultPath: string): VaultKeyFileAssociation | null {
+  const associations = getPref('keyFileAssociations')
+  const key = Object.keys(associations).find((k) => samePath(k, vaultPath))
+  return key ? (associations[key] ?? null) : null
+}
+
+export function setKeyFileAssociation(vaultPath: string, hasKeyFile: boolean): void {
+  const associations = getPref('keyFileAssociations')
+  const key = process.platform === 'win32' ? vaultPath.toLowerCase() : vaultPath
+  setPref('keyFileAssociations', { ...associations, [key]: { hasKeyFile } })
 }

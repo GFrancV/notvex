@@ -88,12 +88,17 @@ export interface GeneratedKeyFile {
   filename: string
 }
 
+export interface VaultKeyFileAssociation {
+  hasKeyFile: boolean
+}
+
 export interface Prefs {
   vaultPath: string | null
   recentVaultPaths: string[]
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
+  keyFileAssociations: Record<string, VaultKeyFileAssociation>
 }
 
 export interface UnlockThrottleStatus {
@@ -145,6 +150,7 @@ export interface NotvexAPI {
     selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
     getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
     getHasKeyFile(): Promise<IpcResult<boolean>>
+    getKeyFileAssociation(vaultPath: string): Promise<IpcResult<VaultKeyFileAssociation | null>>
     generateKeyFile(): Promise<IpcResult<GeneratedKeyFile | null>>
     configureKeyFile(
       password: string,
