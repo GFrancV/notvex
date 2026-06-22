@@ -1,11 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { formatDistanceToNow } from 'date-fns'
 import { PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
-import { cn } from '@/lib/utils'
+import { cn, formatTimeAgo } from '@/lib/utils'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { NoteListItem } from '@shared/types'
@@ -212,9 +211,7 @@ export function NoteList(): ReactNode {
                       <h3 className="truncate text-sm font-medium">{note.title || 'Untitled'}</h3>
                     </div>
                     <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                      <span>
-                        {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
-                      </span>
+                      <span>{formatTimeAgo(note.updatedAt)}</span>
                       {note.tags.length > 0 && (
                         <>
                           <span className="opacity-50">·</span>
