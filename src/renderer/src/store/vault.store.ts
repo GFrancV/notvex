@@ -1,12 +1,20 @@
 import { create } from 'zustand'
 
-import type { CreateNoteInput, CreateTagInput, NoteListItem, Tag, TagPatch } from '@shared/types'
-import { notvex } from '../lib/ipc'
+import { notvex } from '@/lib/ipc'
+import type {
+  CreateNoteInput,
+  CreateTagInput,
+  NoteListItem,
+  Tag,
+  TagPatch,
+  VaultVersion
+} from '@shared/types'
 
 export type VaultStatus = 'checking' | 'uninitialized' | 'locked' | 'unlocked'
 
 interface VaultStore {
   status: VaultStatus
+  vaultVersion: VaultVersion | null
   needsRecoveryReset: boolean
   pendingNewVaultPath: string | null
   notes: NoteListItem[]
@@ -15,6 +23,7 @@ interface VaultStore {
   noteTagsMap: Record<string, string[]>
   activeNoteId: string | null
   setStatus: (s: VaultStatus) => void
+  setVaultVersion: (v: VaultVersion | null) => void
   setNeedsRecoveryReset: (value: boolean) => void
   setPendingNewVaultPath: (path: string | null) => void
   setNotes: (notes: NoteListItem[]) => void
@@ -38,6 +47,7 @@ interface VaultStore {
 
 export const useVaultStore = create<VaultStore>((set, get) => ({
   status: 'checking',
+  vaultVersion: null,
   needsRecoveryReset: false,
   pendingNewVaultPath: null,
   notes: [],
@@ -46,7 +56,14 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   noteTagsMap: {},
   activeNoteId: null,
 
-  setStatus: (status): void => set({ status }),
+  setStatus: (status): void => {
+    if (status === 'locked' || status === 'checking' || status === 'uninitialized') {
+      set({ status, vaultVersion: null })
+    } else {
+      set({ status })
+    }
+  },
+  setVaultVersion: (vaultVersion): void => set({ vaultVersion }),
   setNeedsRecoveryReset: (needsRecoveryReset): void => set({ needsRecoveryReset }),
   setPendingNewVaultPath: (pendingNewVaultPath): void => set({ pendingNewVaultPath }),
   setNotes: (notes): void => set({ notes }),
