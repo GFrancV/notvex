@@ -1,10 +1,9 @@
-import { type JSX, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import { CircleAlertIcon, FileKeyIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
-import millify from 'millify'
 
 import { notvex } from '@/lib/ipc'
-import { cn } from '@/lib/utils'
+import { cn, formatFileSize } from '@/lib/utils'
 import { InputGroup, InputGroupAddon, InputGroupButton } from './ui/input-group'
 
 interface KeyFileInputProps {
@@ -13,7 +12,7 @@ interface KeyFileInputProps {
   disabled?: boolean
 }
 
-export function KeyFileInput({ onChange, onClear, disabled }: KeyFileInputProps): JSX.Element {
+export function KeyFileInput({ onChange, onClear, disabled }: KeyFileInputProps): ReactNode {
   const [selectedFile, setSelectedFile] = useState<{
     filename: string
     sizeBytes: number
@@ -61,10 +60,7 @@ export function KeyFileInput({ onChange, onClear, disabled }: KeyFileInputProps)
             <>
               <span className="text-foreground">{selectedFile.filename}</span>
               <span className="text-muted-foreground text-xs">
-                {millify(selectedFile.sizeBytes || 0, {
-                  units: ['B', 'KB', 'MB', 'GB', 'TB'],
-                  space: true
-                })}
+                {formatFileSize(selectedFile.sizeBytes)}
               </span>
             </>
           ) : (
