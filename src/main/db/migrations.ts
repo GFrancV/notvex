@@ -45,17 +45,13 @@ async function applyMigration(
 }
 
 async function migration_v1(db: sqlite3.Database): Promise<void> {
-  // recovery_verify_hash removed — it was always '' (dead column, misleading security artifact).
-  // has_key_file stays in the sidecar JSON so getHasKeyFile() can read it from
-  // the container without opening the vault.
   await dbRun(
     db,
     `CREATE TABLE IF NOT EXISTS vault_meta (
       id            INTEGER PRIMARY KEY CHECK (id = 1),
       version       INTEGER NOT NULL DEFAULT 1,
-      argon2_salt   BLOB    NOT NULL,
-      argon2_params TEXT    NOT NULL,
-      created_at    INTEGER NOT NULL
+      created_at    INTEGER NOT NULL,
+      has_key_file  INTEGER NOT NULL DEFAULT 0
     )`
     // verify_hash removed: it stored BLAKE2b(masterKey) in the plaintext sidecar,
     // enabling offline brute-force without the encrypted DB. Verification is now
