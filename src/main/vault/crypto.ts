@@ -20,13 +20,41 @@ export interface Argon2Params {
   parallelism: number
 }
 
-// Hardcoded to avoid reading sodium constants before sodium.ready.
-// Safety-net default: production callers always pass explicit params from
-// calibrateArgon2id() (vault creation) or from the vault sidecar (unlock).
-export const DEFAULT_ARGON2_PARAMS: Argon2Params = {
-  memory: 268435456, // sodium.crypto_pwhash_MEMLIMIT_MODERATE (256 MB)
-  iterations: 3, // sodium.crypto_pwhash_OPSLIMIT_MODERATE
-  parallelism: 1
+// Ordered highest → lowest security. Stored as an opaque byte in the NVX header —
+// the tier number is the only thing written to disk; the params stay private here.
+const KDF_TIERS: Readonly<Record<number, Argon2Params>> = {
+  1: { memory: 512 * 1024 * 1024, iterations: 4, parallelism: 1 }, // 512 MB / 4 passes
+  2: { memory: 512 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 512 MB / 3 passes
+  3: { memory: 256 * 1024 * 1024, iterations: 4, parallelism: 1 }, // 256 MB / 4 passes
+  4: { memory: 256 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 256 MB / 3 passes  ← current default
+  5: { memory: 128 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 128 MB / 3 passes
+  6: { memory: 128 * 1024 * 1024, iterations: 2, parallelism: 1 }, // 128 MB / 2 passes
+  7: { memory: 64 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 64 MB / 3 passes
+  8: { memory: 64 * 1024 * 1024, iterations: 2, parallelism: 1 }, //  64 MB / 2 passes
+  9: { memory: 32 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 32 MB / 3 passes
+  10: { memory: 32 * 1024 * 1024, iterations: 2, parallelism: 1 } // 64 MB / 2 passes
+}
+
+export function isValidKdfTier(tier: number): boolean {
+  return Object.prototype.hasOwnProperty.call(KDF_TIERS, tier)
+}
+
+export interface KdfInputV1 {
+  readonly version: 1
+  readonly salt: Buffer
+  readonly kdfTier: number
+}
+
+export type KdfInput = KdfInputV1
+
+export function getArgon2Params(kdfInput: KdfInput): { salt: Buffer; params: Argon2Params } {
+  switch (kdfInput.version) {
+    case 1: {
+      const params = KDF_TIERS[kdfInput.kdfTier]
+      if (!params) throw new Error(`Unknown KDF tier: ${kdfInput.kdfTier}`)
+      return { salt: kdfInput.salt, params }
+    }
+  }
 }
 
 export function generateSalt(): Uint8Array {
@@ -72,7 +100,7 @@ export function deriveRecoveryWrapKey(
 export function deriveKey(
   password: string,
   salt: Uint8Array,
-  params: Argon2Params = DEFAULT_ARGON2_PARAMS,
+  params: Argon2Params,
   keyFileHash?: string
 ): Uint8Array {
   assertReady()
@@ -153,37 +181,32 @@ export function memzero(buf: Uint8Array): void {
   }
 }
 
-/**
- * Measures how long Argon2id takes for a given parameter set on this machine.
- * Returns the highest-security tier that finishes within targetMs.
- * Only called once at vault creation — result is stored in the sidecar.
- */
-export function calibrateArgon2id(targetMs = 1500): Argon2Params {
+// Returns BLAKE2b-256(headerBytes, key=BLAKE2b-256(masterKey, key=context)).
+// The domain-separated subkey ensures the header HMAC key is distinct from the SQLCipher key.
+export function computeHeaderHmac(headerBytes: Buffer, masterKey: Buffer): Buffer {
+  assertReady()
+  const context = Buffer.from('notvex-header-hmac-v1')
+  const hmacKey = sodium.crypto_generichash(32, masterKey, context)
+  const hmac = sodium.crypto_generichash(32, headerBytes, hmacKey)
+  sodium.memzero(hmacKey)
+  return Buffer.from(hmac)
+}
+
+// Measures how long Argon2id takes on this machine, returns the highest-security
+// tier that finishes within targetMs. Only called once at vault creation.
+export function calibrateArgon2id(targetMs = 1500): { tier: number } {
   assertReady()
   const testPassword = 'calibration-benchmark'
   const testSalt = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES)
   const ALG = sodium.crypto_pwhash_ALG_ARGON2ID13
 
-  // Ordered from highest to lowest security — first one that fits wins.
-  const tiers: Argon2Params[] = [
-    { memory: 536870912, iterations: 4, parallelism: 1 }, // 512 MB / 4 passes
-    { memory: 536870912, iterations: 3, parallelism: 1 }, // 512 MB / 3 passes
-    { memory: 268435456, iterations: 4, parallelism: 1 }, // 256 MB / 4 passes
-    { memory: 268435456, iterations: 3, parallelism: 1 }, // 256 MB / 3 passes  ← current default
-    { memory: 268435456, iterations: 2, parallelism: 1 }, // 256 MB / 2 passes
-    { memory: 134217728, iterations: 3, parallelism: 1 }, // 128 MB / 3 passes
-    { memory: 134217728, iterations: 2, parallelism: 1 }, // 128 MB / 2 passes
-    { memory: 67108864, iterations: 3, parallelism: 1 }, //  64 MB / 3 passes
-    { memory: 67108864, iterations: 2, parallelism: 1 } //  64 MB / 2 passes  ← minimum
-  ]
-
-  for (const tier of tiers) {
+  for (const [key, params] of Object.entries(KDF_TIERS)) {
     const t0 = performance.now()
-    sodium.crypto_pwhash(32, testPassword, testSalt, tier.iterations, tier.memory, ALG)
+    sodium.crypto_pwhash(32, testPassword, testSalt, params.iterations, params.memory, ALG)
     if (performance.now() - t0 <= targetMs) {
-      return tier
+      return { tier: Number(key) }
     }
   }
 
-  return tiers[tiers.length - 1]
+  return { tier: 10 }
 }
