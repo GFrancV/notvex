@@ -1,3 +1,5 @@
+import { type ReactNode } from 'react'
+
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -6,10 +8,9 @@ import {
   TriangleAlertIcon
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { JSX } from 'react/jsx-runtime'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 
-const Toaster = ({ ...props }: ToasterProps): JSX.Element => {
+const Toaster = ({ ...props }: ToasterProps): ReactNode => {
   const { theme = 'system' } = useTheme()
 
   return (
@@ -20,7 +21,7 @@ const Toaster = ({ ...props }: ToasterProps): JSX.Element => {
         success: <CircleCheckIcon className="text-primary size-4" />,
         info: <InfoIcon className="size-4" />,
         warning: <TriangleAlertIcon className="text-warning size-4" />,
-        error: <OctagonXIcon className="text-danger size-4" />,
+        error: <OctagonXIcon className="text-destructive size-4" />,
         loading: <Loader2Icon className="size-4 animate-spin" />
       }}
       toastOptions={{
