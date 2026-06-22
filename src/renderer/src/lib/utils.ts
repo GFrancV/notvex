@@ -1,13 +1,31 @@
 import { clsx, type ClassValue } from 'clsx'
-import { formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
+import millify from 'millify'
 import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(timestamp: number): string {
+export function formatTimeAgo(timestamp: number): string {
   return formatDistanceToNow(new Date(timestamp), { addSuffix: true })
+}
+
+export function formatDateTime(timestamp: number): string {
+  return format(new Date(timestamp), 'PP p')
+}
+
+export function formatFileSize(bytes: number): string {
+  return millify(bytes, {
+    units: ['B', 'KB', 'MB', 'GB', 'TB'],
+    space: true
+  })
+}
+
+export function truncatePath(path: string, maxLen = 54): string {
+  if (path.length <= maxLen) return path
+  const half = Math.floor((maxLen - 3) / 2)
+  return path.slice(0, half) + '…' + path.slice(path.length - half)
 }
 
 export function passwordStrength(password: string): 'weak' | 'medium' | 'strong' {
