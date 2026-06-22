@@ -8,8 +8,12 @@ import {
   ShieldCheckIcon,
   ShieldOffIcon
 } from 'lucide-react'
+import { toast } from 'sonner'
 
+import { useVaultCapabilities } from '@/hooks/use-vault-capabilities'
 import { notvex } from '@/lib/ipc'
+import { useVaultStore } from '@/store/vault.store'
+import { CURRENT_VERSION_MAJ, CURRENT_VERSION_MIN } from '@shared/types'
 import { KeyFileInput } from './KeyFileInput'
 import { RecoveryWordsGrid } from './recovery-words-grid'
 import { Alert, AlertDescription } from './ui/alert'
@@ -35,7 +39,14 @@ type KeyFileStep =
   | 'removing'
   | 'post-remove-mnemonic'
 
+function handleUpgradeFormat(): void {
+  toast.info('To upgrade the vault format, close and reopen the vault.')
+}
+
 export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
+  const vaultVersion = useVaultStore((s) => s.vaultVersion)
+  const { canUpgradeFormat } = useVaultCapabilities()
+
   const [lockOnMinimize, setLockOnMinimize] = useState(false)
   const [allowScreenCapture, setAllowScreenCapture] = useState(false)
   const [hasKeyFile, setHasKeyFile] = useState(false)
@@ -64,7 +75,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
         setLockOnMinimize(p.lockOnMinimize ?? false)
         setAllowScreenCapture(p.allowScreenCapture ?? false)
       }
-      const kf = await notvex.vault.hasKeyFile()
+      const kf = await notvex.vault.getHasKeyFile()
       setHasKeyFile(kf.success ? kf.data : false)
     })()
   }, [open])
@@ -458,6 +469,24 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
               </div>
             )}
           </section>
+
+          {canUpgradeFormat && vaultVersion !== null && (
+            <>
+              <Separator />
+              <section className="space-y-3">
+                <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+                  Vault format
+                </p>
+                <p className="text-sm">
+                  Your vault uses format v{vaultVersion.maj}.{vaultVersion.min}. The current format
+                  is v{CURRENT_VERSION_MAJ}.{CURRENT_VERSION_MIN}.
+                </p>
+                <Button variant="secondary" size="sm" onClick={handleUpgradeFormat}>
+                  Upgrade vault format
+                </Button>
+              </section>
+            </>
+          )}
 
           <Separator />
 
