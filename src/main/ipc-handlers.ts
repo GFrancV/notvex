@@ -1,9 +1,8 @@
 import { randomBytes } from 'crypto'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { basename } from 'node:path'
-
 import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain, shell } from 'electron'
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
+import { basename, dirname, join } from 'node:path'
 
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
@@ -28,6 +27,8 @@ import {
   updateTag
 } from './db/queries'
 import { getPref, getPrefs, recordVaultUsed, setPrefs, type Prefs } from './prefs'
+import { CURRENT_VERSION_MIN } from '@shared/types'
+import { readContainer } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -35,10 +36,11 @@ import {
   configureKeyFile,
   createVault,
   getDb,
-  getHasKeyFile,
+  getHasKeyFileFromOpenVault,
   getMasterKey,
   getVaultPath,
   isVaultOpen,
+  migrateHeaderIfNeeded,
   openVault,
   openVaultWithRecovery,
   removeKeyFile,
@@ -147,6 +149,12 @@ const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = 
   lockOnMinimize: (v) => typeof v === 'boolean'
 }
 
+// ─── Migration coordinator ────────────────────────────────────────────────────
+
+let migrationResolver: ((result: { confirmed: boolean; createBackup: boolean }) => void) | null =
+  null
+let migrationBackupTimestamp: number | null = null
+
 // ─── Register all handlers ────────────────────────────────────────────────────
 
 export function registerIpcHandlers(win: BrowserWindow): void {
@@ -177,32 +185,116 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   ipcMain.handle(
     'vault:open',
     async (_e, filePath: string, password: string, keyFileContents?: Uint8Array) => {
+      const throttleErr = checkAndSetThrottle()
+      if (throttleErr) return throttleErr
+      isUnlocking = true
       try {
-        const throttleErr = checkAndSetThrottle()
-        if (throttleErr) return throttleErr
-        isUnlocking = true
+        // Pre-check container header before authenticating to surface format errors early
+        let fileBytes: Buffer
         try {
-          const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
-          const success = await openVault(filePath, password, kfContents)
-          if (success) {
-            unlockThrottle.failedAttempts = 0
-            unlockThrottle.lockedUntil = 0
-            recordVaultUsed(filePath)
-            touchActivity()
-          } else {
-            unlockThrottle.failedAttempts += 1
-            const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
-            if (delaySecs > 0) unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
-          }
-          return ok(success)
-        } finally {
-          isUnlocking = false
+          fileBytes = readFileSync(filePath)
+        } catch {
+          return fail('Vault file not found or could not be read.')
         }
+
+        let migrationOccurred = false
+        try {
+          const header = readContainer(fileBytes)
+          // Minor version: show migration dialog if needed (no-op for v1.0)
+          if (header.versionMin < CURRENT_VERSION_MIN) {
+            if (migrationResolver !== null) {
+              return fail('A migration dialog is already open. Complete or cancel it first.')
+            }
+            const backupTimestamp = Date.now()
+            migrationBackupTimestamp = backupTimestamp
+            win.webContents.send('vault:migration-required', {
+              currentMin: header.versionMin,
+              vaultPath: filePath,
+              backupTimestamp
+            })
+            const migResult = await new Promise<{ confirmed: boolean; createBackup: boolean }>(
+              (resolve) => {
+                migrationResolver = resolve
+              }
+            )
+            if (!migResult.confirmed) return ok(null)
+            if (migResult.createBackup && migrationBackupTimestamp !== null) {
+              const vaultDir = dirname(filePath)
+              const vaultName = basename(filePath, '.nvx')
+              const ts = new Date(migrationBackupTimestamp)
+                .toISOString()
+                .replace(/[:.]/g, '-')
+                .slice(0, 19)
+              copyFileSync(filePath, join(vaultDir, `${vaultName}_backup_${ts}.nvx`))
+            }
+            migrationBackupTimestamp = null
+            await migrateHeaderIfNeeded(filePath, header.versionMin)
+            migrationOccurred = true
+          }
+        } catch (e) {
+          migrationBackupTimestamp = null
+          if (e instanceof Error) {
+            if (e.message === 'VERSION_TOO_NEW') {
+              return fail(
+                'This vault was created using a newer version of Notvex. Please update the app to open it.'
+              )
+            }
+            if (e.message === 'NOT_NOTVEX_FILE') {
+              return fail('The selected file is not a Notvex vault.')
+            }
+          }
+          return fail(e)
+        }
+
+        const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+        // Pass pre-read bytes to avoid a second readFileSync; after migration the file was
+        // rewritten so openVault must re-read it (pass undefined to trigger the internal read).
+        const vaultVersion = await openVault(
+          filePath,
+          password,
+          kfContents,
+          migrationOccurred ? undefined : fileBytes
+        )
+        if (vaultVersion !== null) {
+          unlockThrottle.failedAttempts = 0
+          unlockThrottle.lockedUntil = 0
+          recordVaultUsed(filePath)
+          touchActivity()
+        } else {
+          unlockThrottle.failedAttempts += 1
+          const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
+          if (delaySecs > 0) unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
+        }
+        return ok(vaultVersion)
       } catch (e) {
         return fail(e)
+      } finally {
+        isUnlocking = false
       }
     }
   )
+
+  ipcMain.handle('vault:migration-confirmed', (_e, createBackup: boolean) => {
+    try {
+      migrationResolver?.({ confirmed: true, createBackup })
+      migrationResolver = null
+      migrationBackupTimestamp = null
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:migration-cancelled', () => {
+    try {
+      migrationResolver?.({ confirmed: false, createBackup: false })
+      migrationResolver = null
+      migrationBackupTimestamp = null
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
 
   ipcMain.handle('vault:unlock-throttle-status', () => {
     try {
@@ -227,8 +319,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         isUnlocking = true
         try {
           const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
-          const success = await openVaultWithRecovery(filePath, mnemonic, kfContents)
-          if (success) {
+          const vaultVersion = await openVaultWithRecovery(filePath, mnemonic, kfContents)
+          if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
             unlockThrottle.lockedUntil = 0
             recordVaultUsed(filePath)
@@ -238,7 +330,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
             const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
             if (delaySecs > 0) unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
           }
-          return ok(success)
+          return ok(vaultVersion)
         } finally {
           isUnlocking = false
         }
@@ -330,9 +422,36 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   })
 
-  ipcMain.handle('vault:has-key-file', () => {
+  ipcMain.handle('vault:get-has-key-file', () => {
     try {
-      return ok(getHasKeyFile())
+      requireVault()
+      return ok(getHasKeyFileFromOpenVault())
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:save-copy-as', async () => {
+    try {
+      const vaultPath = getVaultPath()
+      if (!vaultPath) return fail('No vault open')
+
+      syncContainer()
+
+      const vaultDir = dirname(vaultPath)
+      const vaultName = basename(vaultPath, '.nvx')
+
+      const { canceled, filePath } = await dialog.showSaveDialog(win, {
+        title: 'Save a copy of your vault',
+        defaultPath: join(vaultDir, `${vaultName}_copy.nvx`),
+        filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }],
+        buttonLabel: 'Save copy'
+      })
+
+      if (canceled || !filePath) return ok(null)
+
+      copyFileSync(vaultPath, filePath)
+      return ok(filePath)
     } catch (e) {
       return fail(e)
     }

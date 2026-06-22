@@ -102,6 +102,14 @@ export interface UnlockThrottleStatus {
   failedAttempts: number
 }
 
+export interface VaultVersion {
+  maj: number
+  min: number
+}
+
+export const CURRENT_VERSION_MAJ = 1
+export const CURRENT_VERSION_MIN = 0
+
 export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
 
 export type Platform = 'darwin' | 'win32' | 'linux'
@@ -115,12 +123,12 @@ export interface NotvexAPI {
       filePath: string,
       password: string,
       keyFileContents?: Uint8Array
-    ): Promise<IpcResult<boolean>>
+    ): Promise<IpcResult<VaultVersion | null>>
     openWithRecovery(
       filePath: string,
       mnemonic: string,
       keyFileContents?: Uint8Array
-    ): Promise<IpcResult<boolean>>
+    ): Promise<IpcResult<VaultVersion | null>>
     changePassword(
       currentPassword: string,
       newPassword: string,
@@ -136,7 +144,7 @@ export interface NotvexAPI {
     chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
     selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
     getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
-    hasKeyFile(): Promise<IpcResult<boolean>>
+    getHasKeyFile(): Promise<IpcResult<boolean>>
     generateKeyFile(): Promise<IpcResult<GeneratedKeyFile | null>>
     configureKeyFile(
       password: string,
@@ -146,6 +154,12 @@ export interface NotvexAPI {
       password: string,
       keyFileContents: Uint8Array
     ): Promise<IpcResult<KeyFileOperationResult>>
+    saveCopyAs(): Promise<IpcResult<string | null>>
+    confirmMigration(createBackup: boolean): Promise<IpcResult<null>>
+    cancelMigration(): Promise<IpcResult<null>>
+    onMigrationRequired(
+      callback: (data: { vaultPath: string; currentMin: number; backupTimestamp: number }) => void
+    ): () => void
   }
   notes: {
     create(input: CreateNoteInput): Promise<IpcResult<NoteListItem>>

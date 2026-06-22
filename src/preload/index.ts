@@ -22,10 +22,11 @@ export type {
   Tag,
   TagPatch,
   UnlockThrottleStatus,
-  VaultStatus
-} from '../shared/types'
+  VaultStatus,
+  VaultVersion
+} from '@shared/types'
 
-import type { NotvexAPI, Platform } from '../shared/types'
+import type { NotvexAPI, Platform } from '@shared/types'
 
 // ─── Implementation ────────────────────────────────────────────────────────────
 
@@ -50,12 +51,31 @@ const api: NotvexAPI = {
     chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode),
     selectKeyFile: () => ipcRenderer.invoke('vault:select-key-file'),
     getUnlockThrottleStatus: () => ipcRenderer.invoke('vault:unlock-throttle-status'),
-    hasKeyFile: () => ipcRenderer.invoke('vault:has-key-file'),
+    getHasKeyFile: () => ipcRenderer.invoke('vault:get-has-key-file'),
     generateKeyFile: () => ipcRenderer.invoke('vault:generate-key-file'),
     configureKeyFile: (password, keyFileContents) =>
       ipcRenderer.invoke('vault:configure-key-file', password, keyFileContents),
     removeKeyFile: (password, keyFileContents) =>
-      ipcRenderer.invoke('vault:remove-key-file', password, keyFileContents)
+      ipcRenderer.invoke('vault:remove-key-file', password, keyFileContents),
+    saveCopyAs: () => ipcRenderer.invoke('vault:save-copy-as'),
+    confirmMigration: (createBackup) =>
+      ipcRenderer.invoke('vault:migration-confirmed', createBackup),
+    cancelMigration: () => ipcRenderer.invoke('vault:migration-cancelled'),
+    onMigrationRequired: (callback) => {
+      const listener = (
+        _e: unknown,
+        data: { currentMin: number; vaultPath: string; backupTimestamp: number }
+      ): void =>
+        callback({
+          vaultPath: data.vaultPath,
+          currentMin: data.currentMin,
+          backupTimestamp: data.backupTimestamp
+        })
+      ipcRenderer.on('vault:migration-required', listener)
+      return (): void => {
+        ipcRenderer.off('vault:migration-required', listener)
+      }
+    }
   },
   notes: {
     create: (input) => ipcRenderer.invoke('notes:create', input),
