@@ -1,10 +1,11 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
 
-import { EyeIcon, EyeOffIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
+import { ChevronDownIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import {
   InputGroup,
@@ -15,23 +16,18 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { notvex } from '@/lib/ipc'
+import { truncatePath } from '@/lib/utils'
 import { useVaultStore } from '@/store/vault.store'
 import type { UnlockThrottleStatus } from '@shared/types'
 
 type UnlockMode = 'password' | 'recovery'
 
-function truncatePath(path: string, maxLen = 54): string {
-  if (path.length <= maxLen) return path
-  const half = Math.floor((maxLen - 3) / 2)
-  return path.slice(0, half) + '…' + path.slice(path.length - half)
-}
-
 export function Unlock(): ReactNode {
-  const { setStatus, setNeedsRecoveryReset, setPendingNewVaultPath, refreshAll } = useVaultStore()
+  const { setStatus, setNeedsRecoveryReset, setPendingNewVaultPath, refreshAll, setVaultVersion } =
+    useVaultStore()
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [vaultExists, setVaultExists] = useState<boolean | null>(null)
-  const [hasKeyFile, setHasKeyFile] = useState(false)
   const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
   const [recoveryKeyFileContents, setRecoveryKeyFileContents] = useState<Uint8Array | null>(null)
   const [mode, setMode] = useState<UnlockMode>('password')
@@ -81,8 +77,6 @@ export function Unlock(): ReactNode {
         const exists = check.success && check.data
         setVaultExists(exists)
         if (exists) {
-          const kfRes = await notvex.vault.hasKeyFile()
-          setHasKeyFile(kfRes.success ? kfRes.data : false)
           await refreshThrottleStatus()
         }
       } else {
@@ -113,12 +107,12 @@ export function Unlock(): ReactNode {
       await refreshThrottleStatus()
       return
     }
-    if (!res.data) {
-      const errMsg = hasKeyFile ? 'Incorrect password or key file.' : 'Incorrect password.'
-      setError(errMsg)
+    if (res.data === null) {
+      setError('Incorrect password or key file.')
       await refreshThrottleStatus()
       return
     }
+    setVaultVersion(res.data)
     await afterUnlock()
   }
 
@@ -129,17 +123,18 @@ export function Unlock(): ReactNode {
     const res = await notvex.vault.openWithRecovery(
       vaultPath,
       mnemonic.trim(),
-      hasKeyFile ? (recoveryKeyFileContents ?? undefined) : undefined
+      recoveryKeyFileContents ?? undefined
     )
     setLoading(false)
     if (!res.success) {
       setError(res.error)
       return
     }
-    if (!res.data) {
-      setError(hasKeyFile ? 'Invalid recovery key or key file.' : 'Invalid recovery key.')
+    if (res.data === null) {
+      setError('Invalid recovery key or key file.')
       return
     }
+    setVaultVersion(res.data)
     await afterUnlock(true)
   }
 
@@ -157,8 +152,6 @@ export function Unlock(): ReactNode {
     setPathError('')
     setVaultExists(true)
     setError('')
-    const kfRes = await notvex.vault.hasKeyFile()
-    setHasKeyFile(kfRes.success ? kfRes.data : false)
     setKeyFileContents(null)
     setRecoveryKeyFileContents(null)
     await refreshThrottleStatus()
@@ -280,15 +273,23 @@ export function Unlock(): ReactNode {
                   </InputGroup>
                 </Field>
 
-                {hasKeyFile && (
-                  <Field>
-                    <FieldLabel>Key file</FieldLabel>
-                    <KeyFileInput
-                      onChange={(c) => setKeyFileContents(c)}
-                      onClear={() => setKeyFileContents(null)}
-                    />
-                  </Field>
-                )}
+                <Collapsible className="rounded-md border-0 transition duration-300 data-[state=open]:border">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" className="group w-full justify-start">
+                      Advanced options
+                      <ChevronDownIcon className="ml-auto transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-3 py-4">
+                    <Field>
+                      <FieldLabel>Key file</FieldLabel>
+                      <KeyFileInput
+                        onChange={(c) => setKeyFileContents(c)}
+                        onClear={() => setKeyFileContents(null)}
+                      />
+                    </Field>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {error && !isThrottled && <p className="text-destructive text-sm">{error}</p>}
 
@@ -316,7 +317,7 @@ export function Unlock(): ReactNode {
                   onClick={(): void => {
                     void handlePasswordUnlock()
                   }}
-                  disabled={loading || !password || isThrottled || (hasKeyFile && !keyFileContents)}
+                  disabled={loading || !password || isThrottled}
                 >
                   {loading ? (
                     <>
@@ -358,15 +359,13 @@ export function Unlock(): ReactNode {
                   Enter your 24 recovery words to regain access to your vault.
                 </p>
 
-                {hasKeyFile && (
-                  <Field>
-                    <FieldLabel>Key file</FieldLabel>
-                    <KeyFileInput
-                      onChange={(c) => setRecoveryKeyFileContents(c)}
-                      onClear={() => setRecoveryKeyFileContents(null)}
-                    />
-                  </Field>
-                )}
+                <Field>
+                  <FieldLabel>Key file</FieldLabel>
+                  <KeyFileInput
+                    onChange={(c) => setRecoveryKeyFileContents(c)}
+                    onClear={() => setRecoveryKeyFileContents(null)}
+                  />
+                </Field>
 
                 <Field>
                   <Textarea
@@ -397,7 +396,7 @@ export function Unlock(): ReactNode {
                   onClick={(): void => {
                     void handleRecoveryUnlock()
                   }}
-                  disabled={loading || wordCount !== 24 || (hasKeyFile && !recoveryKeyFileContents)}
+                  disabled={loading || wordCount !== 24}
                 >
                   {loading ? (
                     <>
