@@ -26,7 +26,15 @@ import {
   updateNote,
   updateTag
 } from './db/queries'
-import { getPref, getPrefs, recordVaultUsed, setPrefs, type Prefs } from './prefs'
+import {
+  getKeyFileAssociation,
+  getPref,
+  getPrefs,
+  recordVaultUsed,
+  setKeyFileAssociation,
+  setPrefs,
+  type Prefs
+} from './prefs'
 import { CURRENT_VERSION_MIN } from '@shared/types'
 import { readContainer } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
@@ -259,6 +267,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
           unlockThrottle.failedAttempts = 0
           unlockThrottle.lockedUntil = 0
           recordVaultUsed(filePath)
+          setKeyFileAssociation(filePath, keyFileContents !== undefined)
           touchActivity()
         } else {
           unlockThrottle.failedAttempts += 1
@@ -324,6 +333,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
             unlockThrottle.failedAttempts = 0
             unlockThrottle.lockedUntil = 0
             recordVaultUsed(filePath)
+            setKeyFileAssociation(filePath, keyFileContents !== undefined)
             touchActivity()
           } else {
             unlockThrottle.failedAttempts += 1
@@ -431,6 +441,14 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   })
 
+  ipcMain.handle('vault:get-key-file-association', (_e, vaultPath: string) => {
+    try {
+      return ok(getKeyFileAssociation(vaultPath))
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
   ipcMain.handle('vault:save-copy-as', async () => {
     try {
       const vaultPath = getVaultPath()
@@ -505,6 +523,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         touchActivity()
         const kfContents = readKeyFileContents(keyFileContents)
         const result = await configureKeyFile(password, kfContents)
+        setKeyFileAssociation(getVaultPath()!, true)
         return ok(result)
       } catch (e) {
         if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
@@ -521,6 +540,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         touchActivity()
         const kfContents = readKeyFileContents(keyFileContents)
         const result = await removeKeyFile(password, kfContents)
+        setKeyFileAssociation(getVaultPath()!, false)
         return ok(result)
       } catch (e) {
         if (!isVaultOpen()) win.webContents.send('vault:auto-locked')

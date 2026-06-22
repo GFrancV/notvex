@@ -22,6 +22,7 @@ export type {
   Tag,
   TagPatch,
   UnlockThrottleStatus,
+  VaultKeyFileAssociation,
   VaultStatus,
   VaultVersion
 } from '@shared/types'
@@ -52,6 +53,8 @@ const api: NotvexAPI = {
     selectKeyFile: () => ipcRenderer.invoke('vault:select-key-file'),
     getUnlockThrottleStatus: () => ipcRenderer.invoke('vault:unlock-throttle-status'),
     getHasKeyFile: () => ipcRenderer.invoke('vault:get-has-key-file'),
+    getKeyFileAssociation: (vaultPath: string) =>
+      ipcRenderer.invoke('vault:get-key-file-association', vaultPath),
     generateKeyFile: () => ipcRenderer.invoke('vault:generate-key-file'),
     configureKeyFile: (password, keyFileContents) =>
       ipcRenderer.invoke('vault:configure-key-file', password, keyFileContents),
