@@ -17,11 +17,12 @@ import {
   TrashIcon,
   XIcon
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
-import { cn } from '@/lib/utils'
+import { cn, truncatePath } from '@/lib/utils'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
@@ -127,6 +128,16 @@ export function Sidebar(): React.ReactNode {
     void notvex.prefs.set('autoLockMinutes', Number(minutes))
   }
 
+  const handleSaveCopy = async (): Promise<void> => {
+    const result = await notvex.vault.saveCopyAs()
+    if (!result.success) {
+      toast.error('Failed to save copy')
+      return
+    }
+
+    if (result.data) toast.success('Copy saved successfully')
+  }
+
   const allNotesCount = notes.filter((n) => !n.isTrashed).length
   const pinnedCount = notes.filter((n) => n.isPinned && !n.isTrashed).length
   const trashCount = notes.filter((n) => n.isTrashed).length
@@ -181,7 +192,7 @@ export function Sidebar(): React.ReactNode {
                       <DropdownMenuLabel>Vault Location</DropdownMenuLabel>
                       <DropdownMenuItem>
                         <InputGroup onClick={(e) => e.stopPropagation()}>
-                          <InputGroupInput readOnly value={vaultPath} />
+                          <InputGroupInput readOnly value={truncatePath(vaultPath, 28)} />
                           <InputGroupAddon align="inline-end">
                             <InputGroupButton
                               onClick={() => void copyToClipboard(vaultPath)}
@@ -191,6 +202,13 @@ export function Sidebar(): React.ReactNode {
                             </InputGroupButton>
                           </InputGroupAddon>
                         </InputGroup>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        role="button"
+                        className="text-primary"
+                        onClick={handleSaveCopy}
+                      >
+                        Save a vault copy as...
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                   </>
