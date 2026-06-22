@@ -28,6 +28,7 @@ export function Unlock(): ReactNode {
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [vaultExists, setVaultExists] = useState<boolean | null>(null)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
   const [recoveryKeyFileContents, setRecoveryKeyFileContents] = useState<Uint8Array | null>(null)
   const [mode, setMode] = useState<UnlockMode>('password')
@@ -66,6 +67,11 @@ export function Unlock(): ReactNode {
     }
   }
 
+  async function loadKeyFileAssociation(path: string): Promise<void> {
+    const assoc = await notvex.vault.getKeyFileAssociation(path)
+    setAdvancedOpen(assoc.success && assoc.data?.hasKeyFile === true)
+  }
+
   useEffect(() => {
     void (async (): Promise<void> => {
       const res = await notvex.prefs.get('vaultPath')
@@ -78,6 +84,7 @@ export function Unlock(): ReactNode {
         setVaultExists(exists)
         if (exists) {
           await refreshThrottleStatus()
+          await loadKeyFileAssociation(path)
         }
       } else {
         setVaultExists(false)
@@ -154,7 +161,9 @@ export function Unlock(): ReactNode {
     setError('')
     setKeyFileContents(null)
     setRecoveryKeyFileContents(null)
+    setAdvancedOpen(false)
     await refreshThrottleStatus()
+    await loadKeyFileAssociation(selected)
   }
 
   const handleCreateNew = async (): Promise<void> => {
@@ -273,7 +282,11 @@ export function Unlock(): ReactNode {
                   </InputGroup>
                 </Field>
 
-                <Collapsible className="rounded-md border-0 transition duration-300 data-[state=open]:border">
+                <Collapsible
+                  open={advancedOpen}
+                  onOpenChange={setAdvancedOpen}
+                  className="rounded-md border-0 transition duration-300 data-[state=open]:border"
+                >
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" className="group w-full justify-start">
                       Advanced options
