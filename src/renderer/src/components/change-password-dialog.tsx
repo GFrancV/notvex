@@ -37,7 +37,7 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
 
   useEffect(() => {
     if (!open) return
-    void notvex.vault.hasKeyFile().then((r) => {
+    void notvex.vault.getHasKeyFile().then((r) => {
       setHasKeyFile(r.success ? r.data : false)
     })
   }, [open])

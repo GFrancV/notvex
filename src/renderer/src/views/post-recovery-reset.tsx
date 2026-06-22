@@ -43,7 +43,7 @@ export function PostRecoveryReset(): ReactNode {
   const [hadKeyFile, setHadKeyFile] = useState(false)
 
   useEffect(() => {
-    void notvex.vault.hasKeyFile().then((r) => {
+    void notvex.vault.getHasKeyFile().then((r) => {
       setHadKeyFile(r.success ? r.data : false)
     })
   }, [])
