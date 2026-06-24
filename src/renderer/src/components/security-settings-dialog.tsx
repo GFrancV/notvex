@@ -71,7 +71,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
     void (async (): Promise<void> => {
       const prefs = await notvex.prefs.get()
       if (prefs.success && prefs.data && typeof prefs.data === 'object') {
-        const p = prefs.data as { lockOnMinimize?: boolean; allowScreenCapture?: boolean }
+        const p = prefs.data
         setLockOnMinimize(p.lockOnMinimize ?? false)
         setAllowScreenCapture(p.allowScreenCapture ?? false)
       }

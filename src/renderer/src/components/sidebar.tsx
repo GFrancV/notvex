@@ -109,9 +109,9 @@ export function Sidebar(): React.ReactNode {
     void loadTagCounts()
     void notvex.prefs.get().then((res) => {
       if (res.success && res.data && typeof res.data === 'object') {
-        const prefs = res.data as { autoLockMinutes?: number; vaultPath?: string | null }
+        const prefs = res.data
         setAutoLockMinutes(prefs.autoLockMinutes ?? 15)
-        setVaultPath(prefs.vaultPath ?? null)
+        setVaultPath(prefs.recentVaults[0]?.path ?? null)
       }
     })
   }, [loadTags, loadTagCounts])
