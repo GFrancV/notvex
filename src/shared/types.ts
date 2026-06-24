@@ -187,8 +187,11 @@ export interface NotvexAPI {
     all(): Promise<IpcResult<NoteTagPair[]>>
   }
   prefs: {
-    get(key?: keyof Prefs): Promise<IpcResult<Prefs[keyof Prefs]>>
-    set(key: keyof Prefs, value: Prefs[keyof Prefs]): Promise<IpcResult<void>>
+    get<K extends keyof Prefs>(key: K): Promise<IpcResult<Prefs[K]>>
+    get(): Promise<IpcResult<Prefs>>
+    get<K extends keyof Prefs>(key?: K): Promise<IpcResult<Prefs | Prefs[K]>>
+
+    set<K extends keyof Prefs>(key: K, value: Prefs[K]): Promise<IpcResult<void>>
     vaulthPathHasKeyFile(vaultPath: string): Promise<IpcResult<boolean>>
     getCurrentVaultPath(): Promise<IpcResult<string | null>>
     recordVaultUsed(vaultPath: string, hasKeyFile?: boolean): Promise<IpcResult<void>>
