@@ -153,7 +153,7 @@ export function verifyHeaderHmac(
   return valid
 }
 
-export function isNotvexContainer(filePath: string): boolean {
+export function isValidNotvexFile(filePath: string): boolean {
   try {
     if (!existsSync(filePath)) return false
     const buf = Buffer.alloc(4)

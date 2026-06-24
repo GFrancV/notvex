@@ -26,7 +26,7 @@ import { runMigrations } from '../db/migrations'
 import { dbAll, dbGet, dbRun } from '../db/queries'
 import {
   type ContainerMetadata,
-  isNotvexContainer,
+  isValidNotvexFile,
   makeTempDbPath,
   readContainer,
   verifyHeaderHmac,
@@ -265,10 +265,6 @@ export function getVaultPath(): string | null {
   return currentVaultPath
 }
 
-export function vaultExistsAt(filePath: string): boolean {
-  return isNotvexContainer(filePath)
-}
-
 export function getHasKeyFileFromOpenVault(): boolean {
   return currentHasKeyFile
 }
@@ -297,7 +293,7 @@ export async function createVault(filePath: string, password: string): Promise<C
     throw new Error('PASSWORD_TOO_SHORT')
   }
 
-  if (vaultExistsAt(filePath)) {
+  if (existsSync(filePath) && isValidNotvexFile(filePath)) {
     throw new Error('A vault already exists at this location.')
   }
 
@@ -365,7 +361,7 @@ export async function openVault(
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
 
-  if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
+  if (!existsSync(filePath)) throw new Error('Vault not found at the specified location.')
 
   cleanupOrphanedTempFiles(filePath)
 
@@ -440,7 +436,7 @@ export async function openVaultWithRecovery(
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
 
-  if (!vaultExistsAt(filePath)) throw new Error('Vault not found at the specified location.')
+  if (!existsSync(filePath)) throw new Error('Vault not found at the specified location.')
   if (!validateMnemonic(mnemonic)) return null
 
   const fileBytes = readFileSync(filePath)
