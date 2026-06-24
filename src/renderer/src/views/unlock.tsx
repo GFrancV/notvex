@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { ChevronDownIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
 
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/input-group'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
 import { useVaultStore } from '@/store/vault.store'
@@ -23,26 +24,36 @@ import type { UnlockThrottleStatus } from '@shared/types'
 type UnlockMode = 'password' | 'recovery'
 
 export function Unlock(): ReactNode {
-  const { setStatus, setNeedsRecoveryReset, setPendingNewVaultPath, refreshAll, setVaultVersion } =
-    useVaultStore()
+  const {
+    setStatus,
+    setNeedsRecoveryReset,
+    setPendingNewVaultPath,
+    refreshAll,
+    setVaultVersion,
+    pendingOpenVaultPath,
+    setPendingOpenVaultPath
+  } = useVaultStore()
+
+  const { pickExistingVault } = usePickVault()
 
   const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [vaultExists, setVaultExists] = useState<boolean | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
-  const [recoveryKeyFileContents, setRecoveryKeyFileContents] = useState<Uint8Array | null>(null)
   const [mode, setMode] = useState<UnlockMode>('password')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
   const [error, setError] = useState('')
-  const [pathError, setPathError] = useState('')
   const [loading, setLoading] = useState(false)
   const [throttle, setThrottle] = useState<UnlockThrottleStatus | null>(null)
   const [countdown, setCountdown] = useState(0)
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  function startCountdown(seconds: number): void {
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const keyFileContentsRef = useRef<Uint8Array | null>(null)
+  const recoveryKeyFileContentsRef = useRef<Uint8Array | null>(null)
+  const pendingPathRef = useRef(pendingOpenVaultPath)
+
+  const startCountdown = useCallback((seconds: number): void => {
     if (countdownRef.current) clearInterval(countdownRef.current)
     setCountdown(seconds)
     countdownRef.current = setInterval(() => {
@@ -56,45 +67,55 @@ export function Unlock(): ReactNode {
         return prev - 1
       })
     }, 1000)
-  }
+  }, [])
 
-  async function refreshThrottleStatus(): Promise<void> {
+  const refreshThrottleStatus = useCallback(async (): Promise<void> => {
     const t = await notvex.vault.getUnlockThrottleStatus()
     if (!t.success) return
     setThrottle(t.data)
     if (t.data.isThrottled && t.data.waitSeconds > 0) {
       startCountdown(t.data.waitSeconds)
     }
-  }
+  }, [startCountdown])
 
-  async function loadKeyFileAssociation(path: string): Promise<void> {
-    const assoc = await notvex.vault.getKeyFileAssociation(path)
-    setAdvancedOpen(assoc.success && assoc.data?.hasKeyFile === true)
-  }
+  const loadKeyFileAssociation = useCallback(async (path: string): Promise<void> => {
+    const resHasKeyFile = await notvex.prefs.vaulthPathHasKeyFile(path)
+    setAdvancedOpen(resHasKeyFile.success && resHasKeyFile.data)
+  }, [])
 
   useEffect(() => {
     void (async (): Promise<void> => {
-      const res = await notvex.prefs.get('vaultPath')
-      const data = res.success ? res.data : null
-      const path = typeof data === 'string' ? data : null
-      setVaultPath(path)
-      if (path) {
-        const check = await notvex.vault.hasVault(path)
-        const exists = check.success && check.data
-        setVaultExists(exists)
-        if (exists) {
-          await refreshThrottleStatus()
-          await loadKeyFileAssociation(path)
-        }
-      } else {
+      if (pendingPathRef.current) {
+        setVaultPath(pendingPathRef.current)
+        setVaultExists(true)
+        setPendingOpenVaultPath(null)
+        await refreshThrottleStatus()
+        await loadKeyFileAssociation(pendingPathRef.current)
+        return
+      }
+
+      const vaultPathRes = await notvex.prefs.getCurrentVaultPath()
+      const currentVaultPath = vaultPathRes.success ? vaultPathRes.data : null
+      setVaultPath(currentVaultPath)
+
+      if (currentVaultPath === null) {
         setVaultExists(false)
+        return
+      }
+
+      const hasVaultRes = await notvex.vault.hasVault(currentVaultPath)
+      const hasVault = hasVaultRes.success && hasVaultRes.data
+      setVaultExists(hasVault)
+
+      if (hasVault) {
+        await refreshThrottleStatus()
+        await loadKeyFileAssociation(currentVaultPath)
       }
     })()
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [refreshThrottleStatus, loadKeyFileAssociation, setPendingOpenVaultPath])
 
   async function afterUnlock(viaRecovery = false): Promise<void> {
     await refreshAll()
@@ -102,12 +123,16 @@ export function Unlock(): ReactNode {
     setStatus('unlocked')
   }
 
-  const handlePasswordUnlock = async (): Promise<void> => {
+  const handleUnlockVault = async (): Promise<void> => {
     if (!vaultPath) return
     if (countdown > 0) return
     setError('')
     setLoading(true)
-    const res = await notvex.vault.open(vaultPath, password, keyFileContents ?? undefined)
+    const res = await notvex.vault.open(
+      vaultPath,
+      password,
+      keyFileContentsRef.current ?? undefined
+    )
     setLoading(false)
     if (!res.success) {
       setError(res.error)
@@ -130,7 +155,7 @@ export function Unlock(): ReactNode {
     const res = await notvex.vault.openWithRecovery(
       vaultPath,
       mnemonic.trim(),
-      recoveryKeyFileContents ?? undefined
+      recoveryKeyFileContentsRef.current ?? undefined
     )
     setLoading(false)
     if (!res.success) {
@@ -146,24 +171,16 @@ export function Unlock(): ReactNode {
   }
 
   const handleOpenOther = async (): Promise<void> => {
-    const res = await notvex.vault.chooseFile('existing')
-    if (!res.success || !res.data) return
-    const selected = res.data
-    const check = await notvex.vault.hasVault(selected)
-    if (!check.success || !check.data) {
-      setPathError('This file is not a valid Notvex vault')
-      return
-    }
-    await notvex.prefs.set('vaultPath', selected)
-    setVaultPath(selected)
-    setPathError('')
+    const selectedPath = await pickExistingVault()
+    if (selectedPath === null) return
+
+    setVaultPath(selectedPath)
     setVaultExists(true)
     setError('')
-    setKeyFileContents(null)
-    setRecoveryKeyFileContents(null)
-    setAdvancedOpen(false)
+    keyFileContentsRef.current = null
+    recoveryKeyFileContentsRef.current = null
     await refreshThrottleStatus()
-    await loadKeyFileAssociation(selected)
+    await loadKeyFileAssociation(selectedPath)
   }
 
   const handleCreateNew = async (): Promise<void> => {
@@ -223,8 +240,6 @@ export function Unlock(): ReactNode {
                 </Tooltip>
               </TooltipProvider>
             </Button>
-
-            {pathError && <p className="text-destructive mt-1 text-xs">✕ {pathError}</p>}
           </div>
         )}
 
@@ -238,18 +253,33 @@ export function Unlock(): ReactNode {
         {/* Vault file not found */}
         {vaultExists === false && (
           <div className="space-y-4 rounded-lg border p-4">
-            <p className="text-muted text-sm">
+            <p className="text-muted-foreground text-sm">
               The vault file could not be found at the saved location.
             </p>
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={(): void => {
-                void handleCreateNew()
-              }}
-            >
-              Create new vault
-            </Button>
+
+            <div className="space-y-4">
+              <Button
+                className="w-full"
+                onClick={(): void => {
+                  void handleCreateNew()
+                }}
+              >
+                Create new vault
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="border-border w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-background text-muted px-2">or</span>
+                </div>
+              </div>
+
+              <Button variant="outline" className="w-full" onClick={handleOpenOther}>
+                Open existing vault
+              </Button>
+            </div>
           </div>
         )}
 
@@ -271,7 +301,7 @@ export function Unlock(): ReactNode {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
                       onKeyDown={(e): void => {
-                        if (e.key === 'Enter' && !isThrottled) void handlePasswordUnlock()
+                        if (e.key === 'Enter' && !isThrottled) void handleUnlockVault()
                       }}
                     />
                     <InputGroupAddon align="inline-end">
@@ -297,8 +327,8 @@ export function Unlock(): ReactNode {
                     <Field>
                       <FieldLabel>Key file</FieldLabel>
                       <KeyFileInput
-                        onChange={(c) => setKeyFileContents(c)}
-                        onClear={() => setKeyFileContents(null)}
+                        onChange={(c) => (keyFileContentsRef.current = c)}
+                        onClear={() => (keyFileContentsRef.current = null)}
                       />
                     </Field>
                   </CollapsibleContent>
@@ -327,9 +357,7 @@ export function Unlock(): ReactNode {
 
                 <Button
                   className="w-full"
-                  onClick={(): void => {
-                    void handlePasswordUnlock()
-                  }}
+                  onClick={handleUnlockVault}
                   disabled={loading || !password || isThrottled}
                 >
                   {loading ? (
@@ -373,14 +401,6 @@ export function Unlock(): ReactNode {
                 </p>
 
                 <Field>
-                  <FieldLabel>Key file</FieldLabel>
-                  <KeyFileInput
-                    onChange={(c) => setRecoveryKeyFileContents(c)}
-                    onClear={() => setRecoveryKeyFileContents(null)}
-                  />
-                </Field>
-
-                <Field>
                   <Textarea
                     value={mnemonic}
                     onChange={(e) => setMnemonic(e.target.value)}
@@ -401,6 +421,28 @@ export function Unlock(): ReactNode {
                     </p>
                   </FieldDescription>
                 </Field>
+
+                <Collapsible
+                  open={advancedOpen}
+                  onOpenChange={setAdvancedOpen}
+                  className="rounded-md border-0 transition duration-300 data-[state=open]:border"
+                >
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" className="group w-full justify-start">
+                      Advanced options
+                      <ChevronDownIcon className="ml-auto transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-3 py-4">
+                    <Field>
+                      <FieldLabel>Key file</FieldLabel>
+                      <KeyFileInput
+                        onChange={(c) => (recoveryKeyFileContentsRef.current = c)}
+                        onClear={() => (recoveryKeyFileContentsRef.current = null)}
+                      />
+                    </Field>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {error && <p className="text-destructive text-sm">{error}</p>}
 

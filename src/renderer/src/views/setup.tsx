@@ -16,15 +16,17 @@ import {
   InputGroupButton,
   InputGroupInput
 } from '@/components/ui/input-group'
+import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { useVaultStore } from '@/store/vault.store'
 
 type Step = 'location' | 'password' | 'recovery'
 
 export function Setup(): ReactNode {
-  const setStatus = useVaultStore((s) => s.setStatus)
-  const pendingNewVaultPath = useVaultStore((s) => s.pendingNewVaultPath)
-  const setPendingNewVaultPath = useVaultStore((s) => s.setPendingNewVaultPath)
+  const { setStatus, pendingNewVaultPath, setPendingNewVaultPath, setPendingOpenVaultPath } =
+    useVaultStore()
+
+  const { pickExistingVault } = usePickVault()
 
   // When opened from the vault switcher the path is already chosen — skip the location step
   const [step, setStep] = useState<Step>(pendingNewVaultPath ? 'password' : 'location')
@@ -44,6 +46,14 @@ export function Setup(): ReactNode {
   const handleChooseFile = async (): Promise<void> => {
     const res = await notvex.vault.chooseFile('new')
     if (res.success && res.data) setVaultPath(res.data)
+  }
+
+  const handleOpenExisting = async (): Promise<void> => {
+    const selectedPath = await pickExistingVault()
+    if (!selectedPath) return
+
+    setPendingOpenVaultPath(selectedPath)
+    handleBackToUnlock()
   }
 
   const handleCreate = async (): Promise<void> => {
@@ -92,37 +102,52 @@ export function Setup(): ReactNode {
 
         {/* Step: Location */}
         {step === 'location' && (
-          <FieldGroup>
-            <Field>
-              <FieldLabel>Vault file</FieldLabel>
-              <div className="flex gap-2">
-                <Input
-                  value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
-                  placeholder="Choose where to save..."
-                  readOnly
-                  title={vaultPath}
-                  className="flex-1"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={(): void => {
-                    void handleChooseFile()
-                  }}
-                >
-                  <FolderOpenIcon className="h-4 w-4" />
-                </Button>
-              </div>
-              <FieldDescription className="text-muted text-xs">
-                Your vault will be saved as a single <code className="text-primary">.nvx</code>{' '}
-                file. Copy it to back up everything.
-              </FieldDescription>
-            </Field>
+          <div className="space-y-4">
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Vault file</FieldLabel>
+                <div className="flex gap-2">
+                  <Input
+                    value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
+                    placeholder="Choose where to save..."
+                    readOnly
+                    title={vaultPath}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={(): void => {
+                      void handleChooseFile()
+                    }}
+                  >
+                    <FolderOpenIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+                <FieldDescription className="text-muted text-xs">
+                  Your vault will be saved as a single <code className="text-primary">.nvx</code>{' '}
+                  file. Copy it to back up everything.
+                </FieldDescription>
+              </Field>
 
-            <Button className="w-full" disabled={!vaultPath} onClick={() => setStep('password')}>
-              Continue
+              <Button className="w-full" disabled={!vaultPath} onClick={() => setStep('password')}>
+                Continue
+              </Button>
+            </FieldGroup>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="border-border w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-background text-muted px-2">or</span>
+              </div>
+            </div>
+
+            <Button variant="outline" className="w-full" onClick={handleOpenExisting}>
+              Open existing vault
             </Button>
-          </FieldGroup>
+          </div>
         )}
 
         {/* Step: Password */}

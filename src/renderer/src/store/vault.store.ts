@@ -17,6 +17,7 @@ interface VaultStore {
   vaultVersion: VaultVersion | null
   needsRecoveryReset: boolean
   pendingNewVaultPath: string | null
+  pendingOpenVaultPath: string | null
   notes: NoteListItem[]
   tags: Tag[]
   tagCounts: Record<string, number>
@@ -26,6 +27,7 @@ interface VaultStore {
   setVaultVersion: (v: VaultVersion | null) => void
   setNeedsRecoveryReset: (value: boolean) => void
   setPendingNewVaultPath: (path: string | null) => void
+  setPendingOpenVaultPath: (path: string | null) => void
   setNotes: (notes: NoteListItem[]) => void
   setTags: (tags: Tag[]) => void
   setTagCounts: (counts: Record<string, number>) => void
@@ -50,6 +52,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   vaultVersion: null,
   needsRecoveryReset: false,
   pendingNewVaultPath: null,
+  pendingOpenVaultPath: null,
   notes: [],
   tags: [],
   tagCounts: {},
@@ -66,6 +69,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   setVaultVersion: (vaultVersion): void => set({ vaultVersion }),
   setNeedsRecoveryReset: (needsRecoveryReset): void => set({ needsRecoveryReset }),
   setPendingNewVaultPath: (pendingNewVaultPath): void => set({ pendingNewVaultPath }),
+  setPendingOpenVaultPath: (pendingOpenVaultPath): void => set({ pendingOpenVaultPath }),
   setNotes: (notes): void => set({ notes }),
   setTags: (tags): void => set({ tags }),
   setTagCounts: (tagCounts): void => set({ tagCounts }),
