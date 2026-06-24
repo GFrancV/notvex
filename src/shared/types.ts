@@ -66,7 +66,8 @@ export interface VaultStatus {
 }
 export interface RecentVault {
   path: string
-  exists: boolean
+  hasKeyFile: boolean
+  lastOpenedAt: number
 }
 export interface CreateVaultResult {
   mnemonic: string
@@ -88,17 +89,11 @@ export interface GeneratedKeyFile {
   filename: string
 }
 
-export interface VaultKeyFileAssociation {
-  hasKeyFile: boolean
-}
-
 export interface Prefs {
-  vaultPath: string | null
-  recentVaultPaths: string[]
+  recentVaults: RecentVault[]
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
-  keyFileAssociations: Record<string, VaultKeyFileAssociation>
 }
 
 export interface UnlockThrottleStatus {
@@ -150,7 +145,6 @@ export interface NotvexAPI {
     selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
     getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
     getHasKeyFile(): Promise<IpcResult<boolean>>
-    getKeyFileAssociation(vaultPath: string): Promise<IpcResult<VaultKeyFileAssociation | null>>
     generateKeyFile(): Promise<IpcResult<GeneratedKeyFile | null>>
     configureKeyFile(
       password: string,
@@ -193,8 +187,11 @@ export interface NotvexAPI {
     all(): Promise<IpcResult<NoteTagPair[]>>
   }
   prefs: {
-    get(key?: string): Promise<IpcResult<Prefs | Prefs[keyof Prefs]>>
-    set(key: string, value: unknown): Promise<IpcResult<null>>
+    get(key?: keyof Prefs): Promise<IpcResult<Prefs[keyof Prefs]>>
+    set(key: keyof Prefs, value: Prefs[keyof Prefs]): Promise<IpcResult<void>>
+    vaulthPathHasKeyFile(vaultPath: string): Promise<IpcResult<boolean>>
+    getCurrentVaultPath(): Promise<IpcResult<string | null>>
+    recordVaultUsed(vaultPath: string, hasKeyFile?: boolean): Promise<IpcResult<void>>
   }
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>

@@ -2,26 +2,13 @@ import { app } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-import type { VaultKeyFileAssociation } from '@shared/types'
-
-export type { VaultKeyFileAssociation }
-
-export interface Prefs {
-  vaultPath: string | null
-  recentVaultPaths: string[]
-  autoLockMinutes: number
-  allowScreenCapture: boolean
-  lockOnMinimize: boolean
-  keyFileAssociations: Record<string, VaultKeyFileAssociation>
-}
+import type { Prefs } from '@shared/types'
 
 const DEFAULTS: Prefs = {
-  vaultPath: null,
-  recentVaultPaths: [],
+  recentVaults: [],
   autoLockMinutes: 15,
   allowScreenCapture: false,
-  lockOnMinimize: false,
-  keyFileAssociations: {}
+  lockOnMinimize: false
 }
 
 const MAX_RECENT_VAULTS = 5
@@ -58,21 +45,26 @@ function samePath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
-// Single setPrefs call keeps the invariant vaultPath === recentVaultPaths[0]
-export function recordVaultUsed(path: string): void {
-  const prefs = getPrefs()
-  const rest = prefs.recentVaultPaths.filter((p) => !samePath(p, path))
-  setPrefs({ vaultPath: path, recentVaultPaths: [path, ...rest].slice(0, MAX_RECENT_VAULTS) })
+export function recordVaultUsed(path: string, hasKeyFile: boolean = false): void {
+  const recentVaults = getPrefs().recentVaults
+  const rest = recentVaults.filter((recentVault) => !samePath(recentVault.path, path))
+
+  setPrefs({
+    recentVaults: [{ path, hasKeyFile, lastOpenedAt: Date.now() }, ...rest].slice(
+      0,
+      MAX_RECENT_VAULTS
+    )
+  })
 }
 
-export function getKeyFileAssociation(vaultPath: string): VaultKeyFileAssociation | null {
-  const associations = getPref('keyFileAssociations')
-  const key = Object.keys(associations).find((k) => samePath(k, vaultPath))
-  return key ? (associations[key] ?? null) : null
+export function getCurrentVaultPath(): string | null {
+  return getPrefs().recentVaults[0]?.path ?? null
 }
 
-export function setKeyFileAssociation(vaultPath: string, hasKeyFile: boolean): void {
-  const associations = getPref('keyFileAssociations')
-  const key = process.platform === 'win32' ? vaultPath.toLowerCase() : vaultPath
-  setPref('keyFileAssociations', { ...associations, [key]: { hasKeyFile } })
+export function vaultPathHasKeyFile(vaultPath: string): boolean {
+  const recentVaults = getPref('recentVaults')
+
+  return (
+    recentVaults.find((recentVault) => samePath(recentVault.path, vaultPath))?.hasKeyFile ?? false
+  )
 }
