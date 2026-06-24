@@ -22,7 +22,6 @@ export type {
   Tag,
   TagPatch,
   UnlockThrottleStatus,
-  VaultKeyFileAssociation,
   VaultStatus,
   VaultVersion
 } from '@shared/types'
@@ -53,8 +52,6 @@ const api: NotvexAPI = {
     selectKeyFile: () => ipcRenderer.invoke('vault:select-key-file'),
     getUnlockThrottleStatus: () => ipcRenderer.invoke('vault:unlock-throttle-status'),
     getHasKeyFile: () => ipcRenderer.invoke('vault:get-has-key-file'),
-    getKeyFileAssociation: (vaultPath: string) =>
-      ipcRenderer.invoke('vault:get-key-file-association', vaultPath),
     generateKeyFile: () => ipcRenderer.invoke('vault:generate-key-file'),
     configureKeyFile: (password, keyFileContents) =>
       ipcRenderer.invoke('vault:configure-key-file', password, keyFileContents),
@@ -107,7 +104,12 @@ const api: NotvexAPI = {
   },
   prefs: {
     get: (key) => ipcRenderer.invoke('prefs:get', key),
-    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value)
+    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
+    vaulthPathHasKeyFile: (vaultPath) =>
+      ipcRenderer.invoke('prefs:vault-path-has-key-file', vaultPath),
+    getCurrentVaultPath: () => ipcRenderer.invoke('prefs:get-current-vault-path'),
+    recordVaultUsed: (vaultPath: string, hasKeyFile: boolean = false) =>
+      ipcRenderer.invoke('prefs:record-vault-used', vaultPath, hasKeyFile)
   },
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)

@@ -4,6 +4,7 @@ import { dialog, ipcMain, shell } from 'electron'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, join } from 'node:path'
 
+import { CURRENT_VERSION_MIN, Prefs } from '@shared/types'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
   addTagToNote,
@@ -27,16 +28,14 @@ import {
   updateTag
 } from './db/queries'
 import {
-  getKeyFileAssociation,
+  getCurrentVaultPath,
   getPref,
   getPrefs,
   recordVaultUsed,
-  setKeyFileAssociation,
-  setPrefs,
-  type Prefs
+  setPref,
+  vaultPathHasKeyFile
 } from './prefs'
-import { CURRENT_VERSION_MIN } from '@shared/types'
-import { readContainer } from './vault/container'
+import { isValidNotvexFile, readContainer } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -53,8 +52,7 @@ import {
   openVaultWithRecovery,
   removeKeyFile,
   rotateVaultCredentials,
-  syncContainer,
-  vaultExistsAt
+  syncContainer
 } from './vault/vault'
 
 // ─── IPC envelope helper ─────────────────────────────────────────────────────
@@ -172,8 +170,8 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   ipcMain.handle('vault:has-vault', (_e, filePath?: string) => {
     try {
-      const path = filePath ?? getPref('vaultPath')
-      return ok(path ? vaultExistsAt(path) : false)
+      const path = filePath ?? getCurrentVaultPath()
+      return ok(path ? existsSync(path) && isValidNotvexFile(path) : false)
     } catch (e) {
       return fail(e)
     }
@@ -266,8 +264,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
           unlockThrottle.lockedUntil = 0
-          recordVaultUsed(filePath)
-          setKeyFileAssociation(filePath, keyFileContents !== undefined)
+          recordVaultUsed(filePath, keyFileContents !== undefined)
           touchActivity()
         } else {
           unlockThrottle.failedAttempts += 1
@@ -332,8 +329,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
             unlockThrottle.lockedUntil = 0
-            recordVaultUsed(filePath)
-            setKeyFileAssociation(filePath, keyFileContents !== undefined)
+            recordVaultUsed(filePath, keyFileContents !== undefined)
             touchActivity()
           } else {
             unlockThrottle.failedAttempts += 1
@@ -396,11 +392,19 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   ipcMain.handle('vault:recent-vaults', () => {
     try {
-      let recents = getPref('recentVaultPaths')
-      const current = getPref('vaultPath')
-      // Seed for users whose vaultPath predates the recents list
-      if (recents.length === 0 && current) recents = [current]
-      return ok(recents.map((path) => ({ path, exists: existsSync(path) })))
+      const recentVaults = getPref('recentVaults')
+
+      const validatedPaths = recentVaults.filter((recentVault) => {
+        if (!existsSync(recentVault.path)) return false
+
+        return isValidNotvexFile(recentVault.path)
+      })
+
+      if (validatedPaths.length !== recentVaults.length) {
+        setPref('recentVaults', validatedPaths)
+      }
+
+      return ok(validatedPaths)
     } catch (e) {
       return fail(e)
     }
@@ -412,7 +416,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       if (!existsSync(filePath)) {
         return fail('Vault not found. It may have been moved or deleted.')
       }
-      if (!vaultExistsAt(filePath)) {
+      if (!isValidNotvexFile(filePath)) {
         return fail('This file is not a valid Notvex vault')
       }
       await closeVault()
@@ -436,14 +440,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     try {
       requireVault()
       return ok(getHasKeyFileFromOpenVault())
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  ipcMain.handle('vault:get-key-file-association', (_e, vaultPath: string) => {
-    try {
-      return ok(getKeyFileAssociation(vaultPath))
     } catch (e) {
       return fail(e)
     }
@@ -523,7 +519,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         touchActivity()
         const kfContents = readKeyFileContents(keyFileContents)
         const result = await configureKeyFile(password, kfContents)
-        setKeyFileAssociation(getVaultPath()!, true)
+        recordVaultUsed(getVaultPath()!, true)
         return ok(result)
       } catch (e) {
         if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
@@ -540,7 +536,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         touchActivity()
         const kfContents = readKeyFileContents(keyFileContents)
         const result = await removeKeyFile(password, kfContents)
-        setKeyFileAssociation(getVaultPath()!, false)
+        recordVaultUsed(getVaultPath()!, false)
         return ok(result)
       } catch (e) {
         if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
@@ -789,7 +785,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   // ── Prefs ─────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('prefs:get', (_e, key?: string) => {
+  ipcMain.handle('prefs:get', (_e, key?: keyof Prefs) => {
     try {
       const prefs = getPrefs()
       return ok(key ? prefs[key as keyof typeof prefs] : prefs)
@@ -798,22 +794,45 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   })
 
-  ipcMain.handle('prefs:set', (_e, key: string, value: unknown) => {
+  ipcMain.handle('prefs:set', (_e, key: keyof Prefs, value: Prefs[keyof Prefs]) => {
     try {
-      // Route vaultPath writes through the recents list to keep vaultPath === recentVaultPaths[0]
-      if (key === 'vaultPath' && typeof value === 'string') {
-        recordVaultUsed(value)
-        return ok(null)
-      }
       const validator = PREFS_VALIDATORS[key as keyof Prefs]
       if (!validator) return fail(`Unknown preference key: ${key}`)
       if (!validator(value)) return fail(`Invalid value for preference: ${key}`)
-      setPrefs({ [key]: value } as Partial<Prefs>)
+
+      setPref(key, value)
       return ok(null)
     } catch (e) {
       return fail(e)
     }
   })
+
+  ipcMain.handle('prefs:vault-path-has-key-file', (_e, vaultPath: string) => {
+    try {
+      return ok(vaultPathHasKeyFile(vaultPath))
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('prefs:get-current-vault-path', () => {
+    try {
+      return ok(getCurrentVaultPath())
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle(
+    'prefs:record-vault-used',
+    (_e, vaultPath: string, hasKeyFile: boolean = false) => {
+      try {
+        return ok(recordVaultUsed(vaultPath, hasKeyFile))
+      } catch (e) {
+        return fail(e)
+      }
+    }
+  )
 
   ipcMain.handle('shell:open-external', async (_e, url: string) => {
     try {
