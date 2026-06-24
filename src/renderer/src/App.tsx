@@ -1,22 +1,22 @@
 import { type ReactNode, useEffect } from 'react'
 
-import { notvex } from './lib/ipc'
-import { useVaultStore } from './store/vault.store'
-import { Main } from './views/main'
-import { PostRecoveryReset } from './views/post-recovery-reset'
-import { Setup } from './views/setup'
-import { Unlock } from './views/unlock'
+import { Toaster } from '@/components/ui/sonner'
+import { notvex } from '@/lib/ipc'
+import { useVaultStore } from '@/store/vault.store'
+import { Main } from '@/views/main'
+import { PostRecoveryReset } from '@/views/post-recovery-reset'
+import { Setup } from '@/views/setup'
+import { Unlock } from '@/views/unlock'
 
 export default function App(): ReactNode {
   const { status, needsRecoveryReset, pendingNewVaultPath, setStatus } = useVaultStore()
 
   useEffect(() => {
     const init = async (): Promise<void> => {
-      const prefsRes = await notvex.prefs.get('vaultPath')
-      const prefsData = prefsRes.success ? prefsRes.data : null
-      const savedPath = typeof prefsData === 'string' ? prefsData : null
+      const currentPathRes = await notvex.prefs.getCurrentVaultPath()
+      const currentVaultPath = currentPathRes.success ? currentPathRes.data : null
 
-      if (!savedPath) {
+      if (currentVaultPath === null) {
         setStatus('uninitialized')
         return
       }
@@ -41,9 +41,18 @@ export default function App(): ReactNode {
     )
   }
 
-  if (pendingNewVaultPath) return <Setup />
-  if (status === 'uninitialized') return <Setup />
-  if (status === 'locked') return <Unlock />
-  if (needsRecoveryReset) return <PostRecoveryReset />
-  return <Main />
+  return (
+    <>
+      {pendingNewVaultPath || status === 'uninitialized' ? (
+        <Setup />
+      ) : status === 'locked' ? (
+        <Unlock />
+      ) : needsRecoveryReset ? (
+        <PostRecoveryReset />
+      ) : (
+        <Main />
+      )}
+      <Toaster position="bottom-right" />
+    </>
+  )
 }

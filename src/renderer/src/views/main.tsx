@@ -6,7 +6,6 @@ import { NoteEditor } from '@/components/note-editor'
 import { NoteList } from '@/components/note-list'
 import { Sidebar } from '@/components/sidebar'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { Toaster } from '@/components/ui/sonner'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
@@ -102,7 +101,6 @@ export function Main(): ReactNode {
         </SidebarInset>
       </SidebarProvider>
       <CommandPalette />
-      <Toaster position="bottom-right" />
     </div>
   )
 }
