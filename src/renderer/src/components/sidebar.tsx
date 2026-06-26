@@ -18,11 +18,13 @@ import {
   XIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
 import { cn, truncatePath } from '@/lib/utils'
+import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
@@ -68,52 +70,62 @@ import {
 } from './ui/sidebar'
 import { VaultSwitcher } from './VaultSwitcher'
 
-export function Sidebar(): React.ReactNode {
-  const { tags, tagCounts, loadTags, loadTagCounts, notes, setStatus, setActiveNoteId, setNotes } =
-    useVaultStore()
-  const {
-    activeTags,
-    showTrash,
-    showPinned,
-    toggleActiveTag,
-    clearActiveTags,
-    setShowTrash,
-    setShowPinned,
-    searchQuery,
-    setSearchQuery
-  } = useUiStore()
-  const handleNewNote = useCreateNote()
+const handleSaveCopy = async (): Promise<void> => {
+  const result = await notvex.vault.saveCopyAs()
+  if (!result.success) {
+    toast.error('Failed to save copy')
+    return
+  }
 
+  if (result.data) toast.success('Copy saved successfully')
+}
+
+export function Sidebar(): React.ReactNode {
+  const { loadTags, loadTagCounts, setStatus, setActiveNoteId, setNotes } = useVaultStore()
+  const { tags, tagCounts, notes, currentVaultPath } = useVaultStore(
+    useShallow((s) => ({
+      tags: s.tags,
+      tagCounts: s.tagCounts,
+      notes: s.notes,
+      currentVaultPath: s.currentVaultPath
+    }))
+  )
+
+  const { toggleActiveTag, clearActiveTags, setShowTrash, setShowPinned, setSearchQuery } =
+    useUiStore()
+  const { activeTags, showTrash, showPinned, searchQuery, focusSearchRequest } = useUiStore(
+    useShallow((s) => ({
+      activeTags: s.activeTags,
+      showTrash: s.showTrash,
+      showPinned: s.showPinned,
+      searchQuery: s.searchQuery,
+      focusSearchRequest: s.focusSearchRequest
+    }))
+  )
+
+  const { setPref } = usePrefsStore()
+  const autoLockMinutes = usePrefsStore((s) => s.autoLockMinutes)
+
+  const handleNewNote = useCreateNote()
   const { isCopied, copyToClipboard } = useCopyToClipboard()
 
   const searchContainerRef = useRef<HTMLDivElement>(null)
-  const focusSearchRequest = useUiStore((s) => s.focusSearchRequest)
-
-  useEffect(() => {
-    if (focusSearchRequest === 0) return
-    searchContainerRef.current?.querySelector('input')?.focus()
-  }, [focusSearchRequest])
-
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [securitySettingsOpen, setSecuritySettingsOpen] = useState(false)
-  const [autoLockMinutes, setAutoLockMinutes] = useState(15)
-  const [vaultPath, setVaultPath] = useState<string | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createModalKey, setCreateModalKey] = useState(0)
   const [editingTag, setEditingTag] = useState<Tag | null>(null)
   const [deletingTag, setDeletingTag] = useState<Tag | null>(null)
 
   useEffect(() => {
+    if (focusSearchRequest === 0) return
+    searchContainerRef.current?.querySelector('input')?.focus()
+  }, [focusSearchRequest])
+
+  useEffect(() => {
     void loadTags()
     void loadTagCounts()
-    void notvex.prefs.get().then((res) => {
-      if (res.success && res.data && typeof res.data === 'object') {
-        const prefs = res.data
-        setAutoLockMinutes(prefs.autoLockMinutes ?? 15)
-        setVaultPath(prefs.recentVaults[0]?.path ?? null)
-      }
-    })
   }, [loadTags, loadTagCounts])
 
   const handleLock = async (): Promise<void> => {
@@ -124,18 +136,7 @@ export function Sidebar(): React.ReactNode {
   }
 
   const handleAutoLockChange = (minutes: string): void => {
-    setAutoLockMinutes(Number(minutes))
-    void notvex.prefs.set('autoLockMinutes', Number(minutes))
-  }
-
-  const handleSaveCopy = async (): Promise<void> => {
-    const result = await notvex.vault.saveCopyAs()
-    if (!result.success) {
-      toast.error('Failed to save copy')
-      return
-    }
-
-    if (result.data) toast.success('Copy saved successfully')
+    void setPref('autoLockMinutes', Number(minutes))
   }
 
   const allNotesCount = notes.filter((n) => !n.isTrashed).length
@@ -185,17 +186,17 @@ export function Sidebar(): React.ReactNode {
                     </Select>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
-                {vaultPath && (
+                {currentVaultPath && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>Vault Location</DropdownMenuLabel>
                       <DropdownMenuItem>
                         <InputGroup onClick={(e) => e.stopPropagation()}>
-                          <InputGroupInput readOnly value={truncatePath(vaultPath, 28)} />
+                          <InputGroupInput readOnly value={truncatePath(currentVaultPath, 28)} />
                           <InputGroupAddon align="inline-end">
                             <InputGroupButton
-                              onClick={() => void copyToClipboard(vaultPath)}
+                              onClick={() => copyToClipboard(currentVaultPath)}
                               title="Copy to Clipboard"
                             >
                               {isCopied ? <CheckIcon className="text-primary" /> : <CopyIcon />}
