@@ -27,7 +27,14 @@ import {
   updateNote,
   updateTag
 } from './db/queries'
-import { getCurrentVaultPath, getPref, getPrefs, recordVaultUsed, setPref } from './prefs'
+import {
+  getCurrentVaultPath,
+  getPref,
+  getPrefs,
+  promoteVaultToTop,
+  recordVaultUsed,
+  setPref
+} from './prefs'
 import { isValidNotvexFile, readContainer } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
@@ -393,7 +400,7 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         return fail('This file is not a valid Notvex vault')
       }
       await closeVault()
-      recordVaultUsed(filePath)
+      promoteVaultToTop(filePath)
       return ok(null)
     } catch (e) {
       return fail(e)

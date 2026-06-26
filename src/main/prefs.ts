@@ -60,3 +60,16 @@ export function recordVaultUsed(path: string, hasKeyFile: boolean = false): void
 export function getCurrentVaultPath(): string | null {
   return getPrefs().recentVaults[0]?.path ?? null
 }
+
+export function promoteVaultToTop(vaultPath: string): void {
+  const recentVaults = getPref('recentVaults')
+  const existing = recentVaults.find((v) => samePath(v.path, vaultPath))
+
+  if (!existing) {
+    recordVaultUsed(vaultPath, false)
+    return
+  }
+
+  const rest = recentVaults.filter((v) => !samePath(v.path, vaultPath))
+  setPrefs({ recentVaults: [existing, ...rest].slice(0, MAX_RECENT_VAULTS) })
+}
