@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import {
   AlertTriangleIcon,
@@ -9,9 +9,11 @@ import {
   ShieldOffIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 
 import { useVaultCapabilities } from '@/hooks/use-vault-capabilities'
 import { notvex } from '@/lib/ipc'
+import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import { CURRENT_VERSION_MAJ, CURRENT_VERSION_MIN } from '@shared/types'
 import { KeyFileInput } from './KeyFileInput'
@@ -45,55 +47,55 @@ function handleUpgradeFormat(): void {
 
 export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
   const vaultVersion = useVaultStore((s) => s.vaultVersion)
+
+  const { setPref } = usePrefsStore()
+  const { lockOnMinimize, allowScreenCapture } = usePrefsStore(
+    useShallow((s) => ({
+      lockOnMinimize: s.lockOnMinimize,
+      allowScreenCapture: s.allowScreenCapture
+    }))
+  )
+
   const { canUpgradeFormat } = useVaultCapabilities()
 
-  const [lockOnMinimize, setLockOnMinimize] = useState(false)
-  const [allowScreenCapture, setAllowScreenCapture] = useState(false)
+  const pendingKeyFileContentsRef = useRef<Uint8Array | null>(null)
   const [hasKeyFile, setHasKeyFile] = useState(false)
-
   const [keyFileStep, setKeyFileStep] = useState<KeyFileStep>('idle')
   const [pendingKeyFilePassword, setPendingKeyFilePassword] = useState('')
   const [pendingKeyFileError, setPendingKeyFileError] = useState('')
   const [pendingKeyFileLoading, setPendingKeyFileLoading] = useState(false)
-
-  const [pendingKeyFileContents, setPendingKeyFileContents] = useState<Uint8Array | null>(null)
   const [pendingKeyFilename, setPendingKeyFilename] = useState<string | null>(null)
   const [removeKeyFileContents, setRemoveKeyFileContents] = useState<Uint8Array | null>(null)
   const [removePassword, setRemovePassword] = useState('')
   const [removeError, setRemoveError] = useState('')
   const [removeLoading, setRemoveLoading] = useState(false)
-
   const [pendingMnemonic, setPendingMnemonic] = useState('')
   const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
 
   useEffect(() => {
-    if (!open) return
-    void (async (): Promise<void> => {
-      const prefs = await notvex.prefs.get()
-      if (prefs.success && prefs.data && typeof prefs.data === 'object') {
-        const p = prefs.data
-        setLockOnMinimize(p.lockOnMinimize ?? false)
-        setAllowScreenCapture(p.allowScreenCapture ?? false)
-      }
-      const kf = await notvex.vault.getHasKeyFile()
-      setHasKeyFile(kf.success ? kf.data : false)
-    })()
+    const init = async (): Promise<void> => {
+      if (!open) return
+
+      const res = await notvex.vault.getHasKeyFile()
+      setHasKeyFile(res.success ? res.data : false)
+    }
+
+    void init()
   }, [open])
 
   const handleLockOnMinimize = (checked: boolean): void => {
-    setLockOnMinimize(checked)
-    void notvex.prefs.set('lockOnMinimize', checked)
+    void setPref('lockOnMinimize', checked)
   }
 
   const handleAllowScreenCapture = (checked: boolean): void => {
-    setAllowScreenCapture(checked)
-    void notvex.prefs.set('allowScreenCapture', checked)
+    void setPref('allowScreenCapture', checked)
   }
 
   const handleGenerateKeyFile = async (): Promise<void> => {
     const res = await notvex.vault.generateKeyFile()
     if (!res.success || !res.data) return
-    setPendingKeyFileContents(res.data.contents)
+
+    pendingKeyFileContentsRef.current = res.data.contents
     setPendingKeyFilename(res.data.filename)
     setPendingKeyFilePassword('')
     setPendingKeyFileError('')
@@ -103,7 +105,8 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
   const handleChooseKeyFile = async (): Promise<void> => {
     const res = await notvex.vault.selectKeyFile()
     if (!res.success || !res.data || res.data.sizeBytes === 0) return
-    setPendingKeyFileContents(res.data.contents)
+
+    pendingKeyFileContentsRef.current = res.data.contents
     setPendingKeyFilename(res.data.filename)
     setPendingKeyFilePassword('')
     setPendingKeyFileError('')
@@ -111,17 +114,20 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
   }
 
   const handleActivateKeyFile = async (): Promise<void> => {
-    if (!pendingKeyFileContents || !pendingKeyFilePassword) return
+    if (!pendingKeyFileContentsRef.current || !pendingKeyFilePassword) return
     setPendingKeyFileLoading(true)
     setPendingKeyFileError('')
-    const res = await notvex.vault.configureKeyFile(pendingKeyFilePassword, pendingKeyFileContents)
+    const res = await notvex.vault.configureKeyFile(
+      pendingKeyFilePassword,
+      pendingKeyFileContentsRef.current
+    )
     setPendingKeyFileLoading(false)
     if (!res.success) {
       setPendingKeyFileError(res.error)
       return
     }
+    pendingKeyFileContentsRef.current = null
     setHasKeyFile(true)
-    setPendingKeyFileContents(null)
     setPendingKeyFilename(null)
     setPendingKeyFilePassword('')
     setPendingMnemonic(res.data.mnemonic)
@@ -148,8 +154,8 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
   }
 
   const cancelKeyFileStep = (): void => {
+    pendingKeyFileContentsRef.current = null
     setKeyFileStep('idle')
-    setPendingKeyFileContents(null)
     setPendingKeyFilename(null)
     setPendingKeyFilePassword('')
     setPendingKeyFileError('')
@@ -219,8 +225,8 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
               description="Hides Notvex from screenshots and screen sharing. Requires restart."
             >
               <Checkbox
-                checked={allowScreenCapture ? false : true}
-                onCheckedChange={(v) => handleAllowScreenCapture(v !== true)}
+                checked={!allowScreenCapture}
+                onCheckedChange={(v) => handleAllowScreenCapture(!(v === true))}
               />
             </SettingRow>
           </section>
