@@ -1,18 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback } from 'react'
 
-import {
-  AlertTriangleIcon,
-  CheckIcon,
-  ChevronsUpDownIcon,
-  FolderOpenIcon,
-  LockOpenIcon,
-  PlusIcon
-} from 'lucide-react'
+import { CheckIcon, ChevronsUpDownIcon, FolderOpenIcon, LockOpenIcon, PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { notvex } from '@/lib/ipc'
+import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
-import type { RecentVault } from '@shared/types'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -37,22 +30,14 @@ function isSamePath(a: string | null, b: string): boolean {
 
 export function VaultSwitcher(): ReactNode {
   const { setStatus, setActiveNoteId, setNotes, setPendingNewVaultPath } = useVaultStore()
+  const currentVaultPath = useVaultStore((s) => s.currentVaultPath)
 
-  const [currentPath, setCurrentPath] = useState<string | null>(null)
-  const [recents, setRecents] = useState<RecentVault[]>([])
+  const { load: loadPrefs } = usePrefsStore()
+  const recentVaults = usePrefsStore((s) => s.recentVaults)
 
   const refresh = useCallback((): void => {
-    void Promise.all([notvex.vault.status(), notvex.vault.recentVaults()]).then(
-      ([statusRes, recentsRes]) => {
-        if (statusRes.success) setCurrentPath(statusRes.data.vaultPath)
-        if (recentsRes.success) setRecents(recentsRes.data)
-      }
-    )
-  }, [])
-
-  useEffect(() => {
-    refresh()
-  }, [refresh])
+    loadPrefs()
+  }, [loadPrefs])
 
   const handleOpenChange = (open: boolean): void => {
     if (open) refresh()
@@ -64,7 +49,10 @@ export function VaultSwitcher(): ReactNode {
       toast.error(res.error)
       return
     }
-    // Main process already closed the vault and zeroed the master key
+
+    // Main process already closed the vault and zeroed the master key.
+    // Reload prefs so recentVaults reflects the switch.
+    await loadPrefs()
     setActiveNoteId(null)
     setNotes([])
     setStatus('locked')
@@ -94,7 +82,7 @@ export function VaultSwitcher(): ReactNode {
         >
           <LockOpenIcon className="text-primary size-3.5 shrink-0" />
           <span className="text-muted-foreground min-w-0 flex-1 truncate text-left text-xs">
-            {currentPath ? displayName(currentPath) : 'Vault unlocked'}
+            {currentVaultPath ? displayName(currentVaultPath) : 'Vault unlocked'}
           </span>
           <ChevronsUpDownIcon className="text-muted-foreground size-3 shrink-0" />
         </Button>
@@ -102,18 +90,14 @@ export function VaultSwitcher(): ReactNode {
       <DropdownMenuContent side="right" align="end" sideOffset={4} className="w-64">
         <TooltipProvider>
           <DropdownMenuLabel>Recent vaults</DropdownMenuLabel>
-          {recents.map((vault) => {
-            const isCurrent = isSamePath(currentPath, vault.path)
+          {recentVaults.map((vault) => {
+            const isCurrent = isSamePath(currentVaultPath, vault.path)
             return (
               <Tooltip key={vault.path}>
                 <TooltipTrigger asChild>
                   <DropdownMenuItem
                     className={
-                      isCurrent
-                        ? 'text-foreground'
-                        : vault.exists
-                          ? undefined
-                          : 'text-muted-foreground'
+                      isCurrent ? 'text-foreground' : 'text-muted-foreground cursor-pointer'
                     }
                     onSelect={() => {
                       if (!isCurrent) void handleSwitch(vault.path)
@@ -121,9 +105,6 @@ export function VaultSwitcher(): ReactNode {
                   >
                     <span className="min-w-0 flex-1 truncate">{displayName(vault.path)}</span>
                     {isCurrent && <CheckIcon className="text-primary ml-auto size-4 shrink-0" />}
-                    {!vault.exists && (
-                      <AlertTriangleIcon className="text-warning ml-auto size-3.5 shrink-0" />
-                    )}
                   </DropdownMenuItem>
                 </TooltipTrigger>
                 <TooltipContent side="right">{vault.path}</TooltipContent>
