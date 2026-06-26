@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
+import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { UnlockThrottleStatus } from '@shared/types'
 
@@ -30,15 +31,22 @@ export function Unlock(): ReactNode {
     setPendingNewVaultPath,
     refreshAll,
     setVaultVersion,
-    pendingOpenVaultPath,
+    setCurrentVaultPath,
     setPendingOpenVaultPath
   } = useVaultStore()
+  const pendingOpenVaultPath = useVaultStore((s) => s.pendingOpenVaultPath)
 
   const { pickExistingVault } = usePickVault()
 
-  const [vaultPath, setVaultPath] = useState<string | null>(null)
-  const [vaultExists, setVaultExists] = useState<boolean | null>(null)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  // Prefs already loaded by App.tsx before Unlock mounts — reads are synchronous
+  const lastOpenedVaultPath = usePrefsStore((s) => s.recentVaults[0]?.path ?? null)
+
+  const initialPath = pendingOpenVaultPath ?? lastOpenedVaultPath
+  const [vaultPath, setVaultPath] = useState<string | null>(initialPath)
+  const [vaultExists, setVaultExists] = useState<boolean>(initialPath !== null)
+  const [advancedOpen, setAdvancedOpen] = useState(() =>
+    initialPath !== null ? usePrefsStore.getState().getHasKeyFileForPath(initialPath) : false
+  )
   const [mode, setMode] = useState<UnlockMode>('password')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -78,48 +86,27 @@ export function Unlock(): ReactNode {
     }
   }, [startCountdown])
 
-  const loadKeyFileAssociation = useCallback(async (path: string): Promise<void> => {
-    const resHasKeyFile = await notvex.prefs.vaulthPathHasKeyFile(path)
-    setAdvancedOpen(resHasKeyFile.success && resHasKeyFile.data)
-  }, [])
-
+  // Init: clear pending path from store + fetch throttle status
   useEffect(() => {
     void (async (): Promise<void> => {
       if (pendingPathRef.current) {
-        setVaultPath(pendingPathRef.current)
-        setVaultExists(true)
         setPendingOpenVaultPath(null)
-        await refreshThrottleStatus()
-        await loadKeyFileAssociation(pendingPathRef.current)
-        return
       }
 
-      const vaultPathRes = await notvex.prefs.getCurrentVaultPath()
-      const currentVaultPath = vaultPathRes.success ? vaultPathRes.data : null
-      setVaultPath(currentVaultPath)
+      if (!vaultPath) return
 
-      if (currentVaultPath === null) {
-        setVaultExists(false)
-        return
-      }
-
-      const hasVaultRes = await notvex.vault.hasVault(currentVaultPath)
-      const hasVault = hasVaultRes.success && hasVaultRes.data
-      setVaultExists(hasVault)
-
-      if (hasVault) {
-        await refreshThrottleStatus()
-        await loadKeyFileAssociation(currentVaultPath)
-      }
+      await refreshThrottleStatus()
     })()
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
-  }, [refreshThrottleStatus, loadKeyFileAssociation, setPendingOpenVaultPath])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshThrottleStatus, setPendingOpenVaultPath])
 
   async function afterUnlock(viaRecovery = false): Promise<void> {
-    await refreshAll()
+    await Promise.all([refreshAll(), usePrefsStore.getState().load()])
     if (viaRecovery) setNeedsRecoveryReset(true)
+    setCurrentVaultPath(vaultPath)
     setStatus('unlocked')
   }
 
@@ -175,12 +162,12 @@ export function Unlock(): ReactNode {
     if (selectedPath === null) return
 
     setVaultPath(selectedPath)
+    setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(selectedPath))
     setVaultExists(true)
     setError('')
     keyFileContentsRef.current = null
     recoveryKeyFileContentsRef.current = null
     await refreshThrottleStatus()
-    await loadKeyFileAssociation(selectedPath)
   }
 
   const handleCreateNew = async (): Promise<void> => {
@@ -240,13 +227,6 @@ export function Unlock(): ReactNode {
                 </Tooltip>
               </TooltipProvider>
             </Button>
-          </div>
-        )}
-
-        {/* Checking */}
-        {vaultExists === null && (
-          <div className="flex justify-center py-8">
-            <div className="border-t-primary border-border h-6 w-6 animate-spin rounded-full border-2" />
           </div>
         )}
 
