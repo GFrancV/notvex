@@ -15,6 +15,7 @@ export type VaultStatus = 'checking' | 'uninitialized' | 'locked' | 'unlocked'
 interface VaultStore {
   status: VaultStatus
   vaultVersion: VaultVersion | null
+  currentVaultPath: string | null
   needsRecoveryReset: boolean
   pendingNewVaultPath: string | null
   pendingOpenVaultPath: string | null
@@ -25,6 +26,7 @@ interface VaultStore {
   activeNoteId: string | null
   setStatus: (s: VaultStatus) => void
   setVaultVersion: (v: VaultVersion | null) => void
+  setCurrentVaultPath: (path: string | null) => void
   setNeedsRecoveryReset: (value: boolean) => void
   setPendingNewVaultPath: (path: string | null) => void
   setPendingOpenVaultPath: (path: string | null) => void
@@ -50,6 +52,7 @@ interface VaultStore {
 export const useVaultStore = create<VaultStore>((set, get) => ({
   status: 'checking',
   vaultVersion: null,
+  currentVaultPath: null,
   needsRecoveryReset: false,
   pendingNewVaultPath: null,
   pendingOpenVaultPath: null,
@@ -61,12 +64,13 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
 
   setStatus: (status): void => {
     if (status === 'locked' || status === 'checking' || status === 'uninitialized') {
-      set({ status, vaultVersion: null })
+      set({ status, vaultVersion: null, currentVaultPath: null })
     } else {
       set({ status })
     }
   },
   setVaultVersion: (vaultVersion): void => set({ vaultVersion }),
+  setCurrentVaultPath: (currentVaultPath): void => set({ currentVaultPath }),
   setNeedsRecoveryReset: (needsRecoveryReset): void => set({ needsRecoveryReset }),
   setPendingNewVaultPath: (pendingNewVaultPath): void => set({ pendingNewVaultPath }),
   setPendingOpenVaultPath: (pendingOpenVaultPath): void => set({ pendingOpenVaultPath }),
