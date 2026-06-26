@@ -60,11 +60,3 @@ export function recordVaultUsed(path: string, hasKeyFile: boolean = false): void
 export function getCurrentVaultPath(): string | null {
   return getPrefs().recentVaults[0]?.path ?? null
 }
-
-export function vaultPathHasKeyFile(vaultPath: string): boolean {
-  const recentVaults = getPref('recentVaults')
-
-  return (
-    recentVaults.find((recentVault) => samePath(recentVault.path, vaultPath))?.hasKeyFile ?? false
-  )
-}

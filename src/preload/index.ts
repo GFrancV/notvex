@@ -47,7 +47,6 @@ const api: NotvexAPI = {
     clearDecryptedContent: () => ipcRenderer.invoke('vault:clear-decrypted'),
     status: () => ipcRenderer.invoke('vault:status'),
     switchTo: (filePath) => ipcRenderer.invoke('vault:switch', filePath),
-    recentVaults: () => ipcRenderer.invoke('vault:recent-vaults'),
     chooseFile: (mode) => ipcRenderer.invoke('vault:choose-file', mode),
     selectKeyFile: () => ipcRenderer.invoke('vault:select-key-file'),
     getUnlockThrottleStatus: () => ipcRenderer.invoke('vault:unlock-throttle-status'),
@@ -103,13 +102,8 @@ const api: NotvexAPI = {
     all: () => ipcRenderer.invoke('note-tags:all')
   },
   prefs: {
-    get: (key) => ipcRenderer.invoke('prefs:get', key),
-    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
-    vaulthPathHasKeyFile: (vaultPath) =>
-      ipcRenderer.invoke('prefs:vault-path-has-key-file', vaultPath),
-    getCurrentVaultPath: () => ipcRenderer.invoke('prefs:get-current-vault-path'),
-    recordVaultUsed: (vaultPath: string, hasKeyFile: boolean = false) =>
-      ipcRenderer.invoke('prefs:record-vault-used', vaultPath, hasKeyFile)
+    get: () => ipcRenderer.invoke('prefs:get'),
+    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value)
   },
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)

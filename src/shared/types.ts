@@ -60,10 +60,7 @@ export interface NoteTagPair {
   tagId: string
 }
 
-export interface VaultStatus {
-  isOpen: boolean
-  vaultPath: string | null
-}
+export type VaultStatus = { isOpen: true; vaultPath: string } | { isOpen: false }
 export interface RecentVault {
   path: string
   hasKeyFile: boolean
@@ -140,7 +137,6 @@ export interface NotvexAPI {
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
     switchTo(filePath: string): Promise<IpcResult<null>>
-    recentVaults(): Promise<IpcResult<RecentVault[]>>
     chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
     selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
     getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
@@ -187,14 +183,8 @@ export interface NotvexAPI {
     all(): Promise<IpcResult<NoteTagPair[]>>
   }
   prefs: {
-    get<K extends keyof Prefs>(key: K): Promise<IpcResult<Prefs[K]>>
     get(): Promise<IpcResult<Prefs>>
-    get<K extends keyof Prefs>(key?: K): Promise<IpcResult<Prefs | Prefs[K]>>
-
     set<K extends keyof Prefs>(key: K, value: Prefs[K]): Promise<IpcResult<void>>
-    vaulthPathHasKeyFile(vaultPath: string): Promise<IpcResult<boolean>>
-    getCurrentVaultPath(): Promise<IpcResult<string | null>>
-    recordVaultUsed(vaultPath: string, hasKeyFile?: boolean): Promise<IpcResult<void>>
   }
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>

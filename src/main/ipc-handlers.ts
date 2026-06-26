@@ -27,14 +27,7 @@ import {
   updateNote,
   updateTag
 } from './db/queries'
-import {
-  getCurrentVaultPath,
-  getPref,
-  getPrefs,
-  recordVaultUsed,
-  setPref,
-  vaultPathHasKeyFile
-} from './prefs'
+import { getCurrentVaultPath, getPref, getPrefs, recordVaultUsed, setPref } from './prefs'
 import { isValidNotvexFile, readContainer } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
@@ -150,7 +143,7 @@ function checkAndSetThrottle(): IpcResult<never> | null {
 // ─── Prefs validators ─────────────────────────────────────────────────────────
 
 const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = {
-  autoLockMinutes: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 480,
+  autoLockMinutes: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 480,
   allowScreenCapture: (v) => typeof v === 'boolean',
   lockOnMinimize: (v) => typeof v === 'boolean'
 }
@@ -390,26 +383,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   })
 
-  ipcMain.handle('vault:recent-vaults', () => {
-    try {
-      const recentVaults = getPref('recentVaults')
-
-      const validatedPaths = recentVaults.filter((recentVault) => {
-        if (!existsSync(recentVault.path)) return false
-
-        return isValidNotvexFile(recentVault.path)
-      })
-
-      if (validatedPaths.length !== recentVaults.length) {
-        setPref('recentVaults', validatedPaths)
-      }
-
-      return ok(validatedPaths)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
   ipcMain.handle('vault:switch', async (_e, filePath: string) => {
     try {
       // Validate before closeVault() so a bad target never locks the current vault
@@ -547,7 +520,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   ipcMain.handle('vault:status', () => {
     try {
-      return ok({ isOpen: isVaultOpen(), vaultPath: getVaultPath() })
+      const path = getVaultPath()
+      return ok(
+        path !== null ? { isOpen: true as const, vaultPath: path } : { isOpen: false as const }
+      )
     } catch (e) {
       return fail(e)
     }
@@ -785,10 +761,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   // ── Prefs ─────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('prefs:get', (_e, key?: keyof Prefs) => {
+  ipcMain.handle('prefs:get', () => {
     try {
       const prefs = getPrefs()
-      return ok(key ? prefs[key as keyof typeof prefs] : prefs)
+      const validatedVaults = prefs.recentVaults.filter(
+        (v) => existsSync(v.path) && isValidNotvexFile(v.path)
+      )
+      if (validatedVaults.length !== prefs.recentVaults.length) {
+        setPref('recentVaults', validatedVaults)
+      }
+      return ok({ ...prefs, recentVaults: validatedVaults })
     } catch (e) {
       return fail(e)
     }
@@ -806,33 +788,6 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return fail(e)
     }
   })
-
-  ipcMain.handle('prefs:vault-path-has-key-file', (_e, vaultPath: string) => {
-    try {
-      return ok(vaultPathHasKeyFile(vaultPath))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  ipcMain.handle('prefs:get-current-vault-path', () => {
-    try {
-      return ok(getCurrentVaultPath())
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  ipcMain.handle(
-    'prefs:record-vault-used',
-    (_e, vaultPath: string, hasKeyFile: boolean = false) => {
-      try {
-        return ok(recordVaultUsed(vaultPath, hasKeyFile))
-      } catch (e) {
-        return fail(e)
-      }
-    }
-  )
 
   ipcMain.handle('shell:open-external', async (_e, url: string) => {
     try {
