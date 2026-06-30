@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'crypto'
-import { closeSync, existsSync, openSync, readSync } from 'fs'
+import { closeSync, existsSync, openSync, readdirSync, readSync, statSync, unlinkSync } from 'fs'
 import sodium from 'libsodium-wrappers-sumo'
 import os from 'os'
 import { join } from 'path'
@@ -168,4 +168,28 @@ export function isValidNotvexFile(filePath: string): boolean {
 
 export function makeTempDbPath(): string {
   return join(os.tmpdir(), `notvex_${randomBytes(8).toString('hex')}.db`)
+}
+
+export function cleanupOrphanedTempDbs(): void {
+  const tmpDir = os.tmpdir()
+  const ONE_HOUR_MS = 60 * 60 * 1000
+  const now = Date.now()
+  // Pattern matches exactly what makeTempDbPath() produces: notvex_<16 hex>.db
+  const notvexTempPattern = /^notvex_[a-f0-9]{16}\.db(-wal|-shm)?$/
+  try {
+    const files = readdirSync(tmpDir)
+    for (const file of files) {
+      if (!notvexTempPattern.test(file)) continue
+      try {
+        const { mtimeMs } = statSync(join(tmpDir, file))
+        if (now - mtimeMs > ONE_HOUR_MS) {
+          unlinkSync(join(tmpDir, file))
+        }
+      } catch {
+        /* in use, already deleted, or no permissions — skip */
+      }
+    }
+  } catch {
+    /* tmpdir not accessible — skip */
+  }
 }
