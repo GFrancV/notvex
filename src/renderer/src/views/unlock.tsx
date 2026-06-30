@@ -103,6 +103,23 @@ export function Unlock(): ReactNode {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshThrottleStatus, setPendingOpenVaultPath])
 
+  // React to vault:open-file push events while Unlock is already mounted (Scenario B)
+  useEffect(() => {
+    if (!pendingOpenVaultPath) return
+    void (async (): Promise<void> => {
+      setVaultPath(pendingOpenVaultPath)
+      setVaultExists(true)
+      setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(pendingOpenVaultPath))
+      setError('')
+      setPassword('')
+      setMnemonic('')
+      keyFileContentsRef.current = null
+      recoveryKeyFileContentsRef.current = null
+      setPendingOpenVaultPath(null)
+      await refreshThrottleStatus()
+    })()
+  }, [pendingOpenVaultPath, refreshThrottleStatus, setPendingOpenVaultPath])
+
   async function afterUnlock(viaRecovery = false): Promise<void> {
     await Promise.all([refreshAll(), usePrefsStore.getState().load()])
     if (viaRecovery) setNeedsRecoveryReset(true)

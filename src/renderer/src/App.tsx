@@ -12,7 +12,7 @@ import { Setup } from '@/views/setup'
 import { Unlock } from '@/views/unlock'
 
 export default function App(): ReactNode {
-  const { setStatus, setCurrentVaultPath } = useVaultStore()
+  const { setStatus, setCurrentVaultPath, setPendingOpenVaultPath } = useVaultStore()
   const { status, needsRecoveryReset, pendingNewVaultPath } = useVaultStore(
     useShallow((s) => ({
       status: s.status,
@@ -26,6 +26,16 @@ export default function App(): ReactNode {
   useEffect(() => {
     const init = async (): Promise<void> => {
       await loadPrefs()
+
+      // Consume any file path queued from process.argv / OS open-file event
+      const pendingRes = await notvex.vault.getPendingFile()
+      const pendingFilePath = pendingRes.success ? pendingRes.data : null
+      if (pendingFilePath) {
+        setPendingOpenVaultPath(pendingFilePath)
+        setStatus('locked')
+        return
+      }
+
       const lastOpenedVaultPath = usePrefsStore.getState().recentVaults[0]?.path ?? null
 
       if (!lastOpenedVaultPath) {
@@ -45,7 +55,15 @@ export default function App(): ReactNode {
     }
 
     void init()
-  }, [setStatus, setCurrentVaultPath, loadPrefs])
+  }, [setStatus, setCurrentVaultPath, loadPrefs, setPendingOpenVaultPath])
+
+  // Subscribe to vault:open-file push events (second-instance / open-file while running)
+  useEffect(() => {
+    return notvex.onOpenFile((filePath) => {
+      setPendingOpenVaultPath(filePath)
+      setStatus('locked')
+    })
+  }, [setStatus, setPendingOpenVaultPath])
 
   if (status === 'checking') {
     return (
