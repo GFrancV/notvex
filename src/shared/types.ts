@@ -153,6 +153,7 @@ export interface NotvexAPI {
     saveCopyAs(): Promise<IpcResult<string | null>>
     confirmMigration(createBackup: boolean): Promise<IpcResult<null>>
     cancelMigration(): Promise<IpcResult<null>>
+    getPendingFile(): Promise<IpcResult<string | null>>
     onMigrationRequired(
       callback: (data: { vaultPath: string; currentMin: number; backupTimestamp: number }) => void
     ): () => void
@@ -190,4 +191,5 @@ export interface NotvexAPI {
     openExternal(url: string): Promise<IpcResult<null>>
   }
   onAutoLocked(callback: () => void): () => void
+  onOpenFile(callback: (filePath: string) => void): () => void
 }

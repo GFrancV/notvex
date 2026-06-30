@@ -163,10 +163,21 @@ let migrationBackupTimestamp: number | null = null
 
 // ─── Register all handlers ────────────────────────────────────────────────────
 
-export function registerIpcHandlers(win: BrowserWindow): void {
+export function registerIpcHandlers(
+  win: BrowserWindow,
+  takePendingFilePath: () => string | null
+): void {
   startAutoLockTimer(win)
 
   // ── Vault ──────────────────────────────────────────────────────────────────
+
+  ipcMain.handle('vault:get-pending-file', () => {
+    try {
+      return ok(takePendingFilePath())
+    } catch (e) {
+      return fail(e)
+    }
+  })
 
   ipcMain.handle('vault:has-vault', (_e, filePath?: string) => {
     try {

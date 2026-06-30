@@ -60,6 +60,7 @@ const api: NotvexAPI = {
     confirmMigration: (createBackup) =>
       ipcRenderer.invoke('vault:migration-confirmed', createBackup),
     cancelMigration: () => ipcRenderer.invoke('vault:migration-cancelled'),
+    getPendingFile: () => ipcRenderer.invoke('vault:get-pending-file'),
     onMigrationRequired: (callback) => {
       const listener = (
         _e: unknown,
@@ -113,6 +114,13 @@ const api: NotvexAPI = {
     ipcRenderer.on('vault:auto-locked', listener)
     return (): void => {
       ipcRenderer.off('vault:auto-locked', listener)
+    }
+  },
+  onOpenFile: (callback) => {
+    const listener = (_e: unknown, filePath: string): void => callback(filePath)
+    ipcRenderer.on('vault:open-file', listener)
+    return (): void => {
+      ipcRenderer.off('vault:open-file', listener)
     }
   }
 }

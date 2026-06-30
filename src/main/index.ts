@@ -1,13 +1,25 @@
+import { app, BrowserWindow, powerMonitor, shell } from 'electron'
 import { readdirSync, statSync, unlinkSync } from 'fs'
 import os from 'os'
 import { join } from 'path'
 
-import { app, BrowserWindow, powerMonitor, shell } from 'electron'
-
+import {
+  extractNvxArgv,
+  resolveOpenFilePath,
+  setValidatedPending,
+  takePendingOpenFilePath
+} from './file-opener'
 import { lockVaultAndNotify, registerIpcHandlers, stopAutoLockTimer } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initSodium } from './vault/crypto'
 import { closeVault, isVaultOpen } from './vault/vault'
+
+// ─── Single-instance lock ──────────────────────────────────────────────────────
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+  process.exit(0)
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -89,7 +101,7 @@ function createWindow(): void {
     void mainWindow.loadFile(join(import.meta.dirname, '../renderer/index.html'))
   }
 
-  registerIpcHandlers(mainWindow)
+  registerIpcHandlers(mainWindow, takePendingOpenFilePath)
 
   mainWindow.setContentProtection(!getPref('allowScreenCapture'))
 
@@ -120,17 +132,37 @@ void app.whenReady().then(async (): Promise<void> => {
   })
 })
 
-app.on('window-all-closed', (): void => {
-  void (async (): Promise<void> => {
-    stopAutoLockTimer()
-    await closeVault()
-    if (process.platform !== 'darwin') app.quit()
-  })()
+app.on('window-all-closed', async (): Promise<void> => {
+  stopAutoLockTimer()
+  await closeVault()
+  if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', (): void => {
-  void (async (): Promise<void> => {
-    stopAutoLockTimer()
-    await closeVault()
-  })()
+app.on('before-quit', async (): Promise<void> => {
+  stopAutoLockTimer()
+  await closeVault()
+})
+
+app.on('second-instance', (_event, argv): void => {
+  if (mainWindow?.isMinimized()) mainWindow.restore()
+  mainWindow?.focus()
+  const filePath = extractNvxArgv(argv)
+
+  if (filePath) {
+    resolveOpenFilePath(mainWindow, filePath).catch((e) => {
+      console.error('[open-file] resolveOpenFilePath failed:', e)
+    })
+  }
+})
+
+app.on('open-file', (event, filePath): void => {
+  event.preventDefault()
+  if (mainWindow) {
+    resolveOpenFilePath(mainWindow, filePath).catch((e) => {
+      console.error('[open-file] resolveOpenFilePath failed:', e)
+    })
+    return
+  }
+
+  setValidatedPending(filePath)
 })

@@ -41,7 +41,7 @@ export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
   setPrefs({ [key]: value })
 }
 
-function samePath(a: string, b: string): boolean {
+export function samePath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
