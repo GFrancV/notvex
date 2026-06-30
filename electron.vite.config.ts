@@ -10,6 +10,9 @@ export default defineConfig({
         '@main': resolve('src/main'),
         '@shared': resolve('src/shared')
       }
+    },
+    build: {
+      minify: true
     }
   },
   preload: {
@@ -17,6 +20,9 @@ export default defineConfig({
       alias: {
         '@shared': resolve('src/shared')
       }
+    },
+    build: {
+      minify: true
     }
   },
   renderer: {
@@ -26,6 +32,9 @@ export default defineConfig({
         '@': resolve('src/renderer/src'),
         '@shared': resolve('src/shared')
       }
+    },
+    build: {
+      minify: true
     }
   }
 })
