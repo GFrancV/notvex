@@ -43,7 +43,7 @@ mac:
         - arm64
   icon: resources/icons/mac/icon.icns
   category: public.app-category.productivity
-  artifactName: Notvex-${version}.dmg
+  artifactName: Notvex-${version}-linux.${ext}
   notarize: false
 
 linux:
