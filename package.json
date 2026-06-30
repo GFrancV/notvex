@@ -4,6 +4,11 @@
   "private": true,
   "description": "Secure, fully-local encrypted notes for desktop",
   "main": "out/main/index.js",
+  "author": {
+    "name": "GFrancV",
+    "email": "gfrancv@hotmail.com",
+    "url": "https://gfrancv.vercel.app"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "preview": "electron-vite preview",
