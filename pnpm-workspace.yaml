@@ -1,0 +1,10 @@
+shamefullyHoist: true
+allowBuilds:
+  '@journeyapps/sqlcipher': true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  koffi: true
+  phantomjs-prebuilt: false
+  sharp: false
+  unrs-resolver: false
