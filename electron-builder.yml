@@ -2,58 +2,47 @@ appId: com.notvex.app
 productName: Notvex
 copyright: Copyright © 2026 Notvex
 
+asarUnpack:
+  - node_modules/@journeyapps/sqlcipher/**
+  - node_modules/koffi/**
+
+compression: maximum
+
 fileAssociations:
   - ext: nvx
     name: Notvex Vault
     description: Notvex Encrypted Vault
     mimeType: application/x-notvex-vault
-    role: Editor
-
-directories:
-  output: dist-release
-
-compression: maximum
 
 files:
-  - out/**/*
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierrc,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,pnpm-workspace.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!**/dxcompiler.dll'
   - '!**/dxil.dll'
-
-asar: true
-asarUnpack:
-  - node_modules/@journeyapps/sqlcipher/**
-  - node_modules/koffi/**
-
-npmRebuild: true
+  - out/**/*
 
 win:
-  target:
-    - target: nsis
-      arch:
-        - x64
-  icon: resources/icons/win/icon.ico
-  requestedExecutionLevel: asInvoker
-  artifactName: Notvex-Setup-${version}.exe
-
+  executableName: notvex
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
 mac:
-  target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
-  icon: resources/icons/mac/icon.icns
-  category: public.app-category.productivity
-  artifactName: Notvex-${version}-linux.${ext}
+  entitlements: build/entitlements.mac.plist
   notarize: false
-
+dmg:
+  artifactName: ${name}-${version}.${ext}
 linux:
   target:
-    - target: AppImage
-      arch:
-        - x64
-    - target: deb
-      arch:
-        - x64
-  icon: resources/icon.png
-  category: Office
-  artifactName: Notvex-${version}.AppImage
+    - AppImage
+    - snap
+    - deb
+  category: Utility
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false
