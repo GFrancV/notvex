@@ -1,11 +1,13 @@
 node_modules/
 out/
 dist/
-dist-release/
 *.local
 .DS_Store
+.eslintcache
 Thumbs.db
 *.db
 *.db-shm
 *.db-wal
 *.tsbuildinfo
+build/icon.*
+!build/icon.png
