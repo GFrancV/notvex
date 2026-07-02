@@ -2,6 +2,7 @@ import { type ReactNode, useEffect } from 'react'
 
 import { useShallow } from 'zustand/react/shallow'
 
+import { UpdateAvailableDialog } from '@/components/dialogs/UpdateAvailableDialog'
 import { Toaster } from '@/components/ui/sonner'
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
@@ -85,6 +86,7 @@ export default function App(): ReactNode {
         <Main />
       )}
       <Toaster position="bottom-right" />
+      <UpdateAvailableDialog />
     </>
   )
 }
