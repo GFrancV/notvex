@@ -3,6 +3,7 @@ import { join } from 'path'
 
 import { lockVaultAndNotify, registerIpcHandlers } from './ipc-handlers'
 import { getPref } from './prefs'
+import { initAutoUpdater } from './updater'
 import { isVaultOpen } from './vault/vault'
 
 const isMac = process.platform === 'darwin'
@@ -60,6 +61,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
   }
 
   registerIpcHandlers(win, takePendingFilePath)
+  initAutoUpdater(win)
 
   win.setContentProtection(!getPref('allowScreenCapture'))
 
