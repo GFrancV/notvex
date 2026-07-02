@@ -6,6 +6,7 @@ import {
   CommandIcon,
   CopyIcon,
   FileIcon,
+  InfoIcon,
   LockIcon,
   MoreHorizontalIcon,
   PenIcon,
@@ -30,6 +31,7 @@ import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
 import { ChangePasswordDialog } from './change-password-dialog'
+import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
@@ -110,6 +112,7 @@ export function Sidebar(): React.ReactNode {
   const { isCopied, copyToClipboard } = useCopyToClipboard()
 
   const searchContainerRef = useRef<HTMLDivElement>(null)
+  const [appVersionOpen, setAppVersionOpen] = useState(false)
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [securitySettingsOpen, setSecuritySettingsOpen] = useState(false)
@@ -160,9 +163,19 @@ export function Sidebar(): React.ReactNode {
             Notvex
           </span>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="titlebar-no-drag z-50"
+              onClick={() => {
+                setAppVersionOpen(true)
+              }}
+            >
+              <InfoIcon />
+            </Button>
             <DropdownMenu open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="xs" className="titlebar-no-drag z-100">
+                <Button variant="ghost" size="xs" className="titlebar-no-drag z-50">
                   <SettingsIcon />
                 </Button>
               </DropdownMenuTrigger>
@@ -383,6 +396,7 @@ export function Sidebar(): React.ReactNode {
         <VaultSwitcher />
       </SidebarFooter>
 
+      <AppVersionDialog open={appVersionOpen} onClose={() => setAppVersionOpen(false)} />
       <ChangePasswordDialog
         open={changePasswordOpen}
         onClose={() => setChangePasswordOpen(false)}
