@@ -191,17 +191,6 @@ export function NoteEditor(): ReactNode {
     [activeNoteId, saveContent]
   )
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        console.log('llegue')
-      }
-    }
-
-    window.addEventListener('keydown', onKey, true)
-    return (): void => window.removeEventListener('keydown', onKey, true)
-  }, [])
-
   const handleTitleBlur = async (): Promise<void> => {
     if (!activeNoteId || !note || title === note.title) return
     await notvex.notes.update(activeNoteId, { title })
