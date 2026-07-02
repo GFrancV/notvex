@@ -104,6 +104,18 @@ export interface VaultVersion {
   min: number
 }
 
+export interface UpdateInfo {
+  version: string
+  releaseNotes: string | null
+}
+
+export interface DownloadProgress {
+  percent: number
+  bytesPerSecond: number
+  transferred: number
+  total: number
+}
+
 export const CURRENT_VERSION_MAJ = 1
 export const CURRENT_VERSION_MIN = 0
 
@@ -189,6 +201,17 @@ export interface NotvexAPI {
   }
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>
+  }
+  updater: {
+    onUpdateAvailable(callback: (info: UpdateInfo) => void): () => void
+    onUpdateNotAvailable(callback: () => void): () => void
+    onDownloadProgress(callback: (progress: DownloadProgress) => void): () => void
+    onUpdateDownloaded(callback: () => void): () => void
+    onError(callback: (error: { message: string }) => void): () => void
+    checkNow(): Promise<IpcResult<string | null>>
+    download(): Promise<IpcResult<null>>
+    installNow(): Promise<IpcResult<null>>
+    getCurrentVersion(): Promise<IpcResult<string>>
   }
   onAutoLocked(callback: () => void): () => void
   onOpenFile(callback: (filePath: string) => void): () => void

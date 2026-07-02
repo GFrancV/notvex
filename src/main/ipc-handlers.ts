@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto'
 import type { BrowserWindow } from 'electron'
-import { dialog, ipcMain, shell } from 'electron'
+import { app, dialog, ipcMain, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, join } from 'node:path'
 
@@ -812,6 +813,44 @@ export function registerIpcHandlers(
       if (!/^https?:\/\//.test(url)) return fail('URL must start with http:// or https://')
       await shell.openExternal(url)
       return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // ── Updater ────────────────────────────────────────────────────────────────
+
+  ipcMain.handle('updater:check-now', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates()
+      const available = result?.isUpdateAvailable ?? false
+      return ok(available ? (result?.updateInfo.version ?? null) : null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('updater:download', async () => {
+    try {
+      await autoUpdater.downloadUpdate()
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('updater:install-now', () => {
+    try {
+      autoUpdater.quitAndInstall(false, true)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('updater:get-current-version', () => {
+    try {
+      return ok(app.getVersion())
     } catch (e) {
       return fail(e)
     }

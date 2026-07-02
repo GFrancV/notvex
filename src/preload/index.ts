@@ -19,14 +19,16 @@ export type {
   Platform,
   Prefs,
   RecentVault,
+  DownloadProgress,
   Tag,
   TagPatch,
   UnlockThrottleStatus,
+  UpdateInfo,
   VaultStatus,
   VaultVersion
 } from '@shared/types'
 
-import type { NotvexAPI, Platform } from '@shared/types'
+import type { DownloadProgress, NotvexAPI, Platform, UpdateInfo } from '@shared/types'
 
 // ─── Implementation ────────────────────────────────────────────────────────────
 
@@ -108,6 +110,47 @@ const api: NotvexAPI = {
   },
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
+  },
+  updater: {
+    onUpdateAvailable: (callback: (info: UpdateInfo) => void) => {
+      const listener = (_e: unknown, data: UpdateInfo): void => callback(data)
+      ipcRenderer.on('updater:update-available', listener)
+      return (): void => {
+        ipcRenderer.off('updater:update-available', listener)
+      }
+    },
+    onUpdateNotAvailable: (callback: () => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('updater:update-not-available', listener)
+      return (): void => {
+        ipcRenderer.off('updater:update-not-available', listener)
+      }
+    },
+    onDownloadProgress: (callback: (progress: DownloadProgress) => void) => {
+      const listener = (_e: unknown, data: DownloadProgress): void => callback(data)
+      ipcRenderer.on('updater:download-progress', listener)
+      return (): void => {
+        ipcRenderer.off('updater:download-progress', listener)
+      }
+    },
+    onUpdateDownloaded: (callback: () => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('updater:update-downloaded', listener)
+      return (): void => {
+        ipcRenderer.off('updater:update-downloaded', listener)
+      }
+    },
+    onError: (callback: (error: { message: string }) => void) => {
+      const listener = (_e: unknown, data: { message: string }): void => callback(data)
+      ipcRenderer.on('updater:error', listener)
+      return (): void => {
+        ipcRenderer.off('updater:error', listener)
+      }
+    },
+    checkNow: () => ipcRenderer.invoke('updater:check-now'),
+    download: () => ipcRenderer.invoke('updater:download'),
+    installNow: () => ipcRenderer.invoke('updater:install-now'),
+    getCurrentVersion: () => ipcRenderer.invoke('updater:get-current-version')
   },
   onAutoLocked: (callback) => {
     const listener = (): void => callback()
