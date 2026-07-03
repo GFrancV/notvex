@@ -7,13 +7,13 @@ function wrapSelection(view: EditorView, before: string, after: string): void {
     const placeholder = 'text'
     view.dispatch({
       changes: { from, insert: before + placeholder + after },
-      selection: { anchor: from + before.length, head: from + before.length + placeholder.length },
+      selection: { anchor: from + before.length, head: from + before.length + placeholder.length }
     })
   } else {
     const selected = state.sliceDoc(from, to)
     view.dispatch({
       changes: { from, to, insert: before + selected + after },
-      selection: { anchor: from + before.length, head: from + before.length + selected.length },
+      selection: { anchor: from + before.length, head: from + before.length + selected.length }
     })
   }
   view.focus()
@@ -24,7 +24,7 @@ function prefixLine(view: EditorView, prefix: string): void {
   const line = state.doc.lineAt(state.selection.main.head)
   view.dispatch({
     changes: { from: line.from, insert: prefix },
-    selection: { anchor: line.from + prefix.length },
+    selection: { anchor: line.from + prefix.length }
   })
   view.focus()
 }
@@ -38,5 +38,5 @@ export const toolbarActions: Record<string, (v: EditorView) => void> = {
   checkList: (v: EditorView): void => prefixLine(v, '- [ ] '),
   h1: (v: EditorView): void => prefixLine(v, '# '),
   h2: (v: EditorView): void => prefixLine(v, '## '),
-  h3: (v: EditorView): void => prefixLine(v, '### '),
+  h3: (v: EditorView): void => prefixLine(v, '### ')
 }
