@@ -9,7 +9,26 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run validations
+        run: pnpm validate
+
   release:
+    needs: [validate]
     strategy:
       fail-fast: false
       matrix:
@@ -32,10 +51,13 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - run: pnpm build
+      - name: Build
+        run: pnpm build
 
-      - run: pnpm exec electron-builder ${{ matrix.build-arg }} --publish always
+      - name: Upload artifacts
+        run: pnpm exec electron-builder ${{ matrix.build-arg }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
