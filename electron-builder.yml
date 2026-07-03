@@ -40,7 +40,6 @@ dmg:
 linux:
   target:
     - AppImage
-    - snap
     - deb
   category: Utility
 appImage:
