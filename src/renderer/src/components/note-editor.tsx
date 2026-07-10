@@ -1,8 +1,9 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { oneDark } from '@codemirror/theme-one-dark'
+import { languages as codeLanguages } from '@codemirror/language-data'
 import { EditorView } from '@codemirror/view'
+import { andromeda } from '@uiw/codemirror-theme-andromeda'
 import CodeMirror from '@uiw/react-codemirror'
 import {
   EllipsisIcon,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { livePreviewPlugin, livePreviewTheme } from '@/lib/editor/live-preview'
+import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -372,10 +373,11 @@ export function NoteEditor(): ReactNode {
               value={content}
               theme="dark"
               extensions={[
-                markdown({ base: markdownLanguage }),
-                oneDark,
+                markdown({ base: markdownLanguage, codeLanguages }),
+                andromeda,
                 notvexEditorTheme,
                 livePreviewPlugin,
+                tablePreviewField,
                 livePreviewTheme,
                 EditorView.lineWrapping
               ]}
