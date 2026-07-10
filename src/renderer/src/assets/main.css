@@ -169,3 +169,75 @@
 .prose-invert :where(code):not(:where(pre code))::after {
   content: none;
 }
+
+/* rehype-highlight theme — Andromeda (EliverLara), matching the @uiw/codemirror-theme-andromeda
+   used in the editor so edit/read modes share the same palette */
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1rem;
+  color: #d5ced9;
+  background: #23262e;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #a0a1a7;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-subst,
+.hljs-selector-class,
+.hljs-selector-pseudo,
+.hljs-meta {
+  color: #c74edd;
+}
+.hljs-tag,
+.hljs-name,
+.hljs-selector-tag {
+  color: #f92672;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-selector-attr {
+  color: #f39c12;
+}
+.hljs-string,
+.hljs-doctag,
+.hljs-regexp,
+.hljs-link,
+.hljs-addition {
+  color: #96e072;
+}
+.hljs-number,
+.hljs-literal {
+  color: #ee5d43;
+}
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params,
+.hljs-symbol,
+.hljs-bullet {
+  color: #00e8c6;
+}
+.hljs-title,
+.hljs-section,
+.hljs-selector-id,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-type,
+.hljs-class .hljs-title {
+  color: #ffe66d;
+  font-weight: bold;
+}
+.hljs-deletion {
+  color: #f92672;
+}
+.hljs-punctuation {
+  color: #d5ced9;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: bold;
+}
