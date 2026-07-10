@@ -1,5 +1,4 @@
-import { useRef } from 'react'
-
+import { isValidElement, useRef } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 
@@ -17,22 +16,31 @@ function Pre({ children }: React.ComponentProps<'pre'>): React.JSX.Element {
   const preRef = useRef<HTMLPreElement>(null)
   const { isCopied, copyToClipboard } = useCopyToClipboard()
 
+  const codeElement = isValidElement<{ className?: string }>(children) ? children : null
+  const language = /language-(\S+)/.exec(codeElement?.props.className ?? '')?.[1]
+
   return (
-    <div className="group relative">
-      <pre ref={preRef}>{children}</pre>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => void copyToClipboard(preRef.current?.textContent ?? '')}
-        className="text-muted-foreground absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100"
-        title="Copy code"
-      >
-        {isCopied ? (
-          <CheckIcon className="text-success size-3.5" />
-        ) : (
-          <CopyIcon className="size-3.5" />
-        )}
-      </Button>
+    <div className="border-border overflow-hidden rounded-md border">
+      <div className="bg-card text-muted-foreground flex items-center justify-between border-b px-3 py-1.5">
+        <span className="font-mono text-xs">{language ?? 'text'}</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => void copyToClipboard(preRef.current?.textContent ?? '')}
+          className="text-muted-foreground size-6"
+          title="Copy code"
+          aria-label="Copy code"
+        >
+          {isCopied ? (
+            <CheckIcon className="text-success size-3.5" />
+          ) : (
+            <CopyIcon className="size-3.5" />
+          )}
+        </Button>
+      </div>
+      <pre ref={preRef} className="m-0! rounded-none! border-0! bg-transparent! p-0!">
+        {children}
+      </pre>
     </div>
   )
 }
@@ -40,16 +48,16 @@ function Pre({ children }: React.ComponentProps<'pre'>): React.JSX.Element {
 const components: Components = {
   a({ href, children }) {
     return (
-      <a
-        href={href}
+      <Button
+        variant="link"
         onClick={(e) => {
           e.preventDefault()
           if (href) void notvex.shell.openExternal(href)
         }}
-        className="text-primary cursor-pointer underline"
+        className="h-fit p-0"
       >
         {children}
-      </a>
+      </Button>
     )
   },
   input({ type, checked }) {
