@@ -163,7 +163,7 @@ export function NoteList(): ReactNode {
       )}
 
       {/* Note list */}
-      <ScrollArea className="flex-1 px-2.5">
+      <ScrollArea className="min-h-0 flex-1 px-2.5">
         {displayedNotes.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center justify-center p-8">
             <p className="text-sm">{emptyMessage()}</p>
@@ -204,11 +204,13 @@ export function NoteList(): ReactNode {
                       setContextMenuOpen(true)
                     }}
                   >
-                    <div className="mb-1 flex items-center gap-1.5">
+                    <div className="mb-1 flex min-w-0 items-center gap-1.5">
                       {note.isPinned && (
                         <PinIcon className="text-primary fill-primary size-3 shrink-0" />
                       )}
-                      <h3 className="truncate text-sm font-medium">{note.title || 'Untitled'}</h3>
+                      <h3 className="flex-1 truncate text-sm font-medium text-pretty">
+                        {note.title || 'Untitled'}
+                      </h3>
                     </div>
                     <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
                       <span>{formatTimeAgo(note.updatedAt)}</span>
