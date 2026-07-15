@@ -1,13 +1,29 @@
 {
   "name": "notvex",
   "version": "0.1.0",
-  "description": "Secure, fully-local encrypted notes for desktop",
+  "description": "Encrypted notes, 100% local. No account, no server, no cloud",
+  "keywords": [
+    "security",
+    "encryption",
+    "self-hosted",
+    "electron-app",
+    "notes-app"
+  ],
+  "homepage": "https://notvex.vercel.app",
+  "bugs": {
+    "url": "https://github.com/GFrancV/notvex/issues",
+    "email": "gfrancv@hotmail.com"
+  },
   "license": "AGPL-3.0-only",
-  "main": "out/main/index.js",
   "author": {
     "name": "GFrancV",
     "email": "gfrancv@hotmail.com",
     "url": "https://gfrancv.vercel.app"
+  },
+  "main": "out/main/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GFrancV/notvex.git"
   },
   "scripts": {
     "dev": "electron-vite dev",
@@ -40,15 +56,6 @@
     "electron-updater": "^6.3.9",
     "koffi": "^3.0.2",
     "libsodium-wrappers-sumo": "^0.8.4"
-  },
-  "lint-staged": {
-    "src/**/*.{ts,tsx}": [
-      "eslint --fix --max-warnings 0",
-      "prettier --write"
-    ],
-    "*.{json,md,yml,yaml}": [
-      "prettier --write"
-    ]
   },
   "devDependencies": {
     "@codemirror/commands": "^6.10.4",
@@ -126,8 +133,17 @@
     "vitest": "^4.1.9",
     "zustand": "^5.0.14"
   },
-  "packageManager": "pnpm@11.1.1",
   "engines": {
     "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@11.1.1",
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }
