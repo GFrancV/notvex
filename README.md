@@ -166,20 +166,20 @@ Opening `vault.nvx` with a hex editor or any SQLite tool without the correct key
 ## Contributing
 
 1. Fork the repository
-1. Create a descriptive branch (`feat/feature-name`, `fix/bug-name`).
-2. Follow the project's conventions:
+2. Create a descriptive branch (`feat/feature-name`, `fix/bug-name`).
+3. Follow the project's conventions:
    - UI components: always reuse what already exists in `src/renderer/src/components/ui/` before building something new.
    - Never hardcode colors — use the semantic Tailwind tokens defined in `main.css`.
    - Dark mode only — no `dark:` variants or light-theme logic.
    - All renderer↔main communication goes through IPC (`ipc-handlers.ts` → `preload/index.ts` → `lib/ipc.ts`); the renderer never imports cryptography or SQL modules directly.
-3. Before opening a PR, run:
+4. Before opening a PR, run:
    ```bash
    pnpm validate   # typecheck + lint + format:check
    ```
-4. Use [Conventional Commits](https://www.conventionalcommits.org/) in lowercase (`feat:`, `fix:`, `chore:`, etc.), max 72 characters in the subject.
-5. Open the PR against `main`. CI (`react-doctor` and the release workflow) runs automatically on every push/PR.
+5. Use [Conventional Commits](https://www.conventionalcommits.org/) in lowercase (`feat:`, `fix:`, `chore:`, etc.), max 72 characters in the subject.
+6. Open the PR against `main`. CI (`react-doctor` and the release workflow) runs automatically on every push/PR.
 
-Found a security bug? Report it privately instead of opening a public issue.
+Found a security bug? See [SECURITY.md](./SECURITY.md) for how to report it privately.
 
 ## License
 
