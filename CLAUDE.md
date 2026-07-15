@@ -9,17 +9,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev          # Start Electron + Vite dev server
-npm run build        # Production build (all processes)
-npm run build:win    # Windows installer
-npm run build:mac    # macOS installer
-npm run build:linux  # Linux installer
-npm run typecheck    # Type-check main + preload + renderer
-npm run lint         # ESLint (zero warnings allowed)
-npm run lint:fix     # ESLint with auto-fix
-npm run format       # Prettier format (TS, CSS, JSON)
-npm run format:check # Check formatting without writing
-npm run validate     # typecheck + lint + format:check (run before committing)
+pnpm dev          # Start Electron + Vite dev server
+pnpm build        # Production build (all processes)
+pnpm build:win    # Windows installer
+pnpm build:mac    # macOS installer
+pnpm build:linux  # Linux installer
+pnpm typecheck    # Type-check main + preload + renderer
+pnpm lint         # ESLint (zero warnings allowed)
+pnpm lint:fix     # ESLint with auto-fix
+pnpm format       # Prettier format (TS, CSS, JSON)
+pnpm format:check # Check formatting without writing
+pnpm validate     # typecheck + lint + format:check (run before committing)
 ```
 
 ## Architecture
@@ -184,4 +184,4 @@ through Tailwind classes using the tokens above.
 4. **Use semantic color tokens** — no hardcoded colors (see UI Rules above)
 5. **Optimistic updates:** UI updates immediately, IPC call follows, revert + toast on error
 6. **`sodium.memzero`** on any sensitive buffer when done with it
-7. **Run `npm run validate`** before considering any feature complete
+7. **Run `pnpm validate`** before considering any feature complete
