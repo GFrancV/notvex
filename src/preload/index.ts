@@ -111,6 +111,9 @@ const api: NotvexAPI = {
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
   },
+  app: {
+    isDev: () => ipcRenderer.invoke('app:is-dev')
+  },
   updater: {
     onUpdateAvailable: (callback: (info: UpdateInfo) => void) => {
       const listener = (_e: unknown, data: UpdateInfo): void => callback(data)
