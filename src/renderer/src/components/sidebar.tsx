@@ -23,6 +23,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
+import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
 import { cn, truncatePath } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
@@ -35,6 +36,7 @@ import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
+import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -110,6 +112,7 @@ export function Sidebar(): React.ReactNode {
 
   const handleNewNote = useCreateNote()
   const { isCopied, copyToClipboard } = useCopyToClipboard()
+  const isDev = useIsDev()
 
   const searchContainerRef = useRef<HTMLDivElement>(null)
   const [appVersionOpen, setAppVersionOpen] = useState(false)
@@ -161,6 +164,7 @@ export function Sidebar(): React.ReactNode {
           <span className="flex items-center gap-1.5 text-lg font-bold select-none">
             <AppLogo className="size-6 rounded" />
             Notvex
+            {isDev && <Badge variant="secondary">Dev</Badge>}
           </span>
           <div className="flex items-center gap-1">
             <Button
