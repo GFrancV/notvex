@@ -226,16 +226,18 @@ export function registerIpcHandlers(
             const backupTimestamp = Date.now()
             migrationBackupTimestamp = backupTimestamp
             win.webContents.send('vault:migration-required', {
-              currentMin: header.versionMin,
+              reason: 'header',
               vaultPath: filePath,
-              backupTimestamp
+              backupTimestamp,
+              fromVersion: header.versionMin,
+              toVersion: CURRENT_VERSION_MIN
             })
             const migResult = await new Promise<{ confirmed: boolean; createBackup: boolean }>(
               (resolve) => {
                 migrationResolver = resolve
               }
             )
-            if (!migResult.confirmed) return ok(null)
+            if (!migResult.confirmed) return fail('MIGRATION_CANCELLED')
             if (migResult.createBackup && migrationBackupTimestamp !== null) {
               const vaultDir = dirname(filePath)
               const vaultName = basename(filePath, '.nvx')

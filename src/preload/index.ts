@@ -66,13 +66,14 @@ const api: NotvexAPI = {
     onMigrationRequired: (callback) => {
       const listener = (
         _e: unknown,
-        data: { currentMin: number; vaultPath: string; backupTimestamp: number }
-      ): void =>
-        callback({
-          vaultPath: data.vaultPath,
-          currentMin: data.currentMin,
-          backupTimestamp: data.backupTimestamp
-        })
+        data: {
+          reason: 'header'
+          vaultPath: string
+          backupTimestamp: number
+          fromVersion: number
+          toVersion: number
+        }
+      ): void => callback(data)
       ipcRenderer.on('vault:migration-required', listener)
       return (): void => {
         ipcRenderer.off('vault:migration-required', listener)
