@@ -12,6 +12,14 @@ import { initSodium } from './vault/crypto'
 import { closeVault } from './vault/vault'
 import { createWindow } from './window'
 
+// ─── Dev/prod isolation ─────────────────────────────────────────────────────────
+// Must run before requestSingleInstanceLock() and any getPath('userData') access,
+// since both are derived from the app name.
+
+if (!app.isPackaged) {
+  app.setName('Notvex Dev')
+}
+
 // ─── Single-instance lock ──────────────────────────────────────────────────────
 
 if (!app.requestSingleInstanceLock()) {

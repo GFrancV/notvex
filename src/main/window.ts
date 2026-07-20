@@ -1,4 +1,4 @@
-import { BrowserWindow, powerMonitor, shell } from 'electron'
+import { app, BrowserWindow, powerMonitor, shell } from 'electron'
 import { join } from 'path'
 
 import { lockVaultAndNotify, registerIpcHandlers } from './ipc-handlers'
@@ -39,6 +39,11 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
       sandbox: false // must be false for preload to work
     }
   })
+
+  if (!app.isPackaged) {
+    win.setTitle('Notvex - Dev')
+    win.on('page-title-updated', (event) => event.preventDefault())
+  }
 
   // Block navigation away from the app
   win.webContents.on('will-navigate', (event, url) => {
