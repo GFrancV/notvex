@@ -2,7 +2,26 @@ import type sqlite3 from '@journeyapps/sqlcipher'
 
 import { dbGet, dbRun } from './queries'
 
-export async function runMigrations(db: sqlite3.Database): Promise<void> {
+interface MigrationStep {
+  version: number
+  run: (db: sqlite3.Database) => Promise<void>
+}
+
+const MIGRATIONS: MigrationStep[] = [{ version: 1, run: migration_v1 }]
+// Future: append { version: 2, run: migration_v2 }
+
+export const MAX_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version
+
+export interface SchemaMigrationRequest {
+  fromVersion: number
+  toVersion: number
+}
+export type SchemaMigrationGate = (request: SchemaMigrationRequest) => Promise<boolean>
+
+export async function runMigrations(
+  db: sqlite3.Database,
+  onMigrationNeeded?: SchemaMigrationGate
+): Promise<void> {
   // PRAGMAs that affect the whole connection must run outside any transaction.
   await dbRun(db, 'PRAGMA journal_mode=WAL')
   await dbRun(db, 'PRAGMA foreign_keys=ON')
@@ -21,8 +40,25 @@ export async function runMigrations(db: sqlite3.Database): Promise<void> {
   )
   const currentVersion = row?.version ?? 0
 
-  if (currentVersion < 1) await applyMigration(db, 1, migration_v1)
-  // Future: if (currentVersion < 2) await applyMigration(db, 2, migration_v2)
+  if (currentVersion > MAX_SCHEMA_VERSION) {
+    throw new Error('SCHEMA_VERSION_TOO_NEW')
+  }
+
+  // currentVersion is only 0 for a brand-new DB (createVault calls this with no gate).
+  // An existing, previously-migrated vault can never be 0, so this cleanly separates
+  // "new vault, no prompt needed" from "genuinely behind, ask before migrating".
+  if (currentVersion > 0 && currentVersion < MAX_SCHEMA_VERSION) {
+    if (!onMigrationNeeded) throw new Error('SCHEMA_MIGRATION_CONFIRMATION_REQUIRED')
+    const proceed = await onMigrationNeeded({
+      fromVersion: currentVersion,
+      toVersion: MAX_SCHEMA_VERSION
+    })
+    if (!proceed) throw new Error('SCHEMA_MIGRATION_CANCELLED')
+  }
+
+  for (const step of MIGRATIONS) {
+    if (step.version > currentVersion) await applyMigration(db, step.version, step.run)
+  }
 }
 
 async function applyMigration(

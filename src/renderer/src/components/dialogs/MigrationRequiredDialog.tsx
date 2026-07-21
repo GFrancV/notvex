@@ -20,7 +20,7 @@ import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
 
 interface MigrationState {
-  reason: 'header'
+  reason: 'header' | 'schema'
   vaultPath: string
   fromVersion: number
   toVersion: number
@@ -69,8 +69,9 @@ export function MigrationRequiredDialog(): ReactNode {
               <span className="text-foreground block truncate">
                 {truncatePath(state.vaultPath)}
               </span>
-              was last opened by an older version of Notvex. Its internal format needs a one-time
-              update before it can be opened with this version of the app.
+              {state.reason === 'header'
+                ? ' was last opened by an older version of Notvex. Its internal format needs a one-time update before it can be opened with this version of the app.'
+                : ' was last modified by an older version of Notvex. Its internal data format needs a one-time update before it can be opened with this version of the app.'}
             </DialogDescription>
 
             <div className="flex items-center justify-center gap-2">

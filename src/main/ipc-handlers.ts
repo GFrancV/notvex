@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs } from '@shared/types'
+import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
   addTagToNote,
@@ -162,6 +163,65 @@ let migrationResolver: ((result: { confirmed: boolean; createBackup: boolean }) 
   null
 let migrationBackupTimestamp: number | null = null
 
+type MigrationPayload =
+  | { reason: 'header'; fromVersion: number; toVersion: number }
+  | { reason: 'schema'; fromVersion: number; toVersion: number }
+
+// Sends 'vault:migration-required' to the renderer and waits for the user's response.
+// Shared by the header-version and schema-version gates in vault:open and vault:open-with-recovery.
+async function confirmMigrationAndBackup(
+  win: BrowserWindow,
+  filePath: string,
+  payload: MigrationPayload
+): Promise<boolean> {
+  if (migrationResolver !== null) {
+    throw new Error('A migration dialog is already open. Complete or cancel it first.')
+  }
+  const backupTimestamp = Date.now()
+  migrationBackupTimestamp = backupTimestamp
+  win.webContents.send('vault:migration-required', {
+    vaultPath: filePath,
+    backupTimestamp,
+    ...payload
+  })
+  const migResult = await new Promise<{ confirmed: boolean; createBackup: boolean }>((resolve) => {
+    migrationResolver = resolve
+  })
+  if (migResult.confirmed && migResult.createBackup && migrationBackupTimestamp !== null) {
+    const vaultDir = dirname(filePath)
+    const vaultName = basename(filePath, '.nvx')
+    const ts = new Date(migrationBackupTimestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    copyFileSync(filePath, join(vaultDir, `${vaultName}_backup_${ts}.nvx`))
+  }
+  migrationBackupTimestamp = null
+  return migResult.confirmed
+}
+
+// Maps the internal error sentinels thrown by readContainer/runMigrations to
+// user-facing messages. 'MIGRATION_CANCELLED' is the same sentinel unlock.tsx
+// already special-cases to silently return to the idle unlock form.
+function mapOpenVaultError(e: unknown): IpcResult<never> {
+  if (e instanceof Error) {
+    if (e.message === 'VERSION_TOO_NEW') {
+      return fail(
+        'This vault was created using a newer version of Notvex. Please update the app to open it.'
+      )
+    }
+    if (e.message === 'NOT_NOTVEX_FILE') {
+      return fail('The selected file is not a Notvex vault.')
+    }
+    if (e.message === 'SCHEMA_VERSION_TOO_NEW') {
+      return fail(
+        'This vault was created or modified by a newer version of Notvex. Please update the app to open it.'
+      )
+    }
+    if (e.message === 'SCHEMA_MIGRATION_CANCELLED') {
+      return fail('MIGRATION_CANCELLED')
+    }
+  }
+  return fail(e)
+}
+
 // ─── Register all handlers ────────────────────────────────────────────────────
 
 export function registerIpcHandlers(
@@ -220,61 +280,39 @@ export function registerIpcHandlers(
           const header = readContainer(fileBytes)
           // Minor version: show migration dialog if needed (no-op for v1.0)
           if (header.versionMin < CURRENT_VERSION_MIN) {
-            if (migrationResolver !== null) {
-              return fail('A migration dialog is already open. Complete or cancel it first.')
-            }
-            const backupTimestamp = Date.now()
-            migrationBackupTimestamp = backupTimestamp
-            win.webContents.send('vault:migration-required', {
+            const confirmed = await confirmMigrationAndBackup(win, filePath, {
               reason: 'header',
-              vaultPath: filePath,
-              backupTimestamp,
               fromVersion: header.versionMin,
               toVersion: CURRENT_VERSION_MIN
             })
-            const migResult = await new Promise<{ confirmed: boolean; createBackup: boolean }>(
-              (resolve) => {
-                migrationResolver = resolve
-              }
-            )
-            if (!migResult.confirmed) return fail('MIGRATION_CANCELLED')
-            if (migResult.createBackup && migrationBackupTimestamp !== null) {
-              const vaultDir = dirname(filePath)
-              const vaultName = basename(filePath, '.nvx')
-              const ts = new Date(migrationBackupTimestamp)
-                .toISOString()
-                .replace(/[:.]/g, '-')
-                .slice(0, 19)
-              copyFileSync(filePath, join(vaultDir, `${vaultName}_backup_${ts}.nvx`))
-            }
-            migrationBackupTimestamp = null
+            if (!confirmed) return fail('MIGRATION_CANCELLED')
             await migrateHeaderIfNeeded(filePath, header.versionMin)
             migrationOccurred = true
           }
         } catch (e) {
           migrationBackupTimestamp = null
-          if (e instanceof Error) {
-            if (e.message === 'VERSION_TOO_NEW') {
-              return fail(
-                'This vault was created using a newer version of Notvex. Please update the app to open it.'
-              )
-            }
-            if (e.message === 'NOT_NOTVEX_FILE') {
-              return fail('The selected file is not a Notvex vault.')
-            }
-          }
-          return fail(e)
+          return mapOpenVaultError(e)
         }
 
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+        const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
+          confirmMigrationAndBackup(win, filePath, { reason: 'schema', fromVersion, toVersion })
+
         // Pass pre-read bytes to avoid a second readFileSync; after migration the file was
         // rewritten so openVault must re-read it (pass undefined to trigger the internal read).
-        const vaultVersion = await openVault(
-          filePath,
-          password,
-          kfContents,
-          migrationOccurred ? undefined : fileBytes
-        )
+        let vaultVersion: Awaited<ReturnType<typeof openVault>>
+        try {
+          vaultVersion = await openVault(
+            filePath,
+            password,
+            kfContents,
+            migrationOccurred ? undefined : fileBytes,
+            onSchemaMigrationNeeded
+          )
+        } catch (e) {
+          return mapOpenVaultError(e)
+        }
+
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
           unlockThrottle.lockedUntil = 0
@@ -338,8 +376,45 @@ export function registerIpcHandlers(
         if (throttleErr) return throttleErr
         isUnlocking = true
         try {
+          let fileBytes: Buffer
+          try {
+            fileBytes = readFileSync(filePath)
+          } catch {
+            return fail('Vault file not found or could not be read.')
+          }
+
+          try {
+            const header = readContainer(fileBytes)
+            if (header.versionMin < CURRENT_VERSION_MIN) {
+              const confirmed = await confirmMigrationAndBackup(win, filePath, {
+                reason: 'header',
+                fromVersion: header.versionMin,
+                toVersion: CURRENT_VERSION_MIN
+              })
+              if (!confirmed) return fail('MIGRATION_CANCELLED')
+              await migrateHeaderIfNeeded(filePath, header.versionMin)
+            }
+          } catch (e) {
+            migrationBackupTimestamp = null
+            return mapOpenVaultError(e)
+          }
+
           const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
-          const vaultVersion = await openVaultWithRecovery(filePath, mnemonic, kfContents)
+          const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
+            confirmMigrationAndBackup(win, filePath, { reason: 'schema', fromVersion, toVersion })
+
+          let vaultVersion: Awaited<ReturnType<typeof openVaultWithRecovery>>
+          try {
+            vaultVersion = await openVaultWithRecovery(
+              filePath,
+              mnemonic,
+              kfContents,
+              onSchemaMigrationNeeded
+            )
+          } catch (e) {
+            return mapOpenVaultError(e)
+          }
+
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
             unlockThrottle.lockedUntil = 0

@@ -168,7 +168,7 @@ export interface NotvexAPI {
     getPendingFile(): Promise<IpcResult<string | null>>
     onMigrationRequired(
       callback: (data: {
-        reason: 'header'
+        reason: 'header' | 'schema'
         vaultPath: string
         backupTimestamp: number
         fromVersion: number
