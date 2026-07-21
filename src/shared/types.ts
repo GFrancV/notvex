@@ -167,7 +167,13 @@ export interface NotvexAPI {
     cancelMigration(): Promise<IpcResult<null>>
     getPendingFile(): Promise<IpcResult<string | null>>
     onMigrationRequired(
-      callback: (data: { vaultPath: string; currentMin: number; backupTimestamp: number }) => void
+      callback: (data: {
+        reason: 'header'
+        vaultPath: string
+        backupTimestamp: number
+        fromVersion: number
+        toVersion: number
+      }) => void
     ): () => void
   }
   notes: {
