@@ -6,6 +6,7 @@ import { AppLogo } from '@/components/AppLogo'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -16,6 +17,7 @@ import {
   InputGroupButton,
   InputGroupInput
 } from '@/components/ui/input-group'
+import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { useVaultStore } from '@/store/vault.store'
@@ -23,6 +25,7 @@ import { useVaultStore } from '@/store/vault.store'
 type Step = 'location' | 'password' | 'recovery'
 
 export function Setup(): ReactNode {
+  const isDev = useIsDev()
   const { setStatus, pendingNewVaultPath, setPendingNewVaultPath, setPendingOpenVaultPath } =
     useVaultStore()
 
@@ -95,7 +98,10 @@ export function Setup(): ReactNode {
         <div className="mb-8 flex flex-col items-center gap-3">
           <AppLogo />
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
+            <h1 className="flex items-center justify-center gap-2 text-2xl font-bold tracking-tight">
+              Notvex
+              {isDev && <Badge variant="secondary">Dev</Badge>}
+            </h1>
             <p className="text-muted mt-1 text-sm">Create your secure vault</p>
           </div>
         </div>

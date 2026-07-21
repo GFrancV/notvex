@@ -7,6 +7,7 @@ import { AppLogo } from '@/components/AppLogo'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function AppVersionDialog({ open, onClose }: Props): ReactNode {
+  const isDev = useIsDev()
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [isCheckingLoading, setIsCheckingLoading] = useState(false)
 
@@ -50,7 +52,10 @@ export function AppVersionDialog({ open, onClose }: Props): ReactNode {
             <div className="flex flex-col items-center gap-3">
               <AppLogo />
               <div className="text-center">
-                <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
+                <h1 className="flex items-center justify-center gap-2 text-2xl font-bold tracking-tight">
+                  Notvex
+                  {isDev && <Badge variant="secondary">Dev</Badge>}
+                </h1>
                 <div className="text-muted mt-1">
                   {appVersion && (
                     <>

@@ -4,6 +4,7 @@ import { ChevronDownIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, Loader2Icon } fro
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/input-group'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
@@ -25,6 +27,7 @@ import type { UnlockThrottleStatus } from '@shared/types'
 type UnlockMode = 'password' | 'recovery'
 
 export function Unlock(): ReactNode {
+  const isDev = useIsDev()
   const {
     setStatus,
     setNeedsRecoveryReset,
@@ -216,7 +219,10 @@ export function Unlock(): ReactNode {
         <div className="mb-8 flex flex-col items-center gap-3">
           <AppLogo />
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Notvex</h1>
+            <h1 className="flex items-center justify-center gap-2 text-2xl font-bold tracking-tight">
+              Notvex
+              {isDev && <Badge variant="secondary">Dev</Badge>}
+            </h1>
             <p className="text-muted mt-1 text-sm">
               {vaultExists === true && mode === 'recovery'
                 ? 'Account Recovery'

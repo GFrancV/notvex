@@ -202,6 +202,9 @@ export interface NotvexAPI {
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>
   }
+  app: {
+    isDev(): Promise<IpcResult<boolean>>
+  }
   updater: {
     onUpdateAvailable(callback: (info: UpdateInfo) => void): () => void
     onUpdateNotAvailable(callback: () => void): () => void

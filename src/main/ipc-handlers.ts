@@ -855,4 +855,12 @@ export function registerIpcHandlers(
       return fail(e)
     }
   })
+
+  ipcMain.handle('app:is-dev', () => {
+    try {
+      return ok(!app.isPackaged)
+    } catch (e) {
+      return fail(e)
+    }
+  })
 }
