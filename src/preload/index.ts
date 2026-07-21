@@ -67,7 +67,7 @@ const api: NotvexAPI = {
       const listener = (
         _e: unknown,
         data: {
-          reason: 'header'
+          reason: 'header' | 'schema'
           vaultPath: string
           backupTimestamp: number
           fromVersion: number
@@ -78,7 +78,8 @@ const api: NotvexAPI = {
       return (): void => {
         ipcRenderer.off('vault:migration-required', listener)
       }
-    }
+    },
+    openBackupsFolder: () => ipcRenderer.invoke('vault:open-backups-folder')
   },
   notes: {
     create: (input) => ipcRenderer.invoke('notes:create', input),

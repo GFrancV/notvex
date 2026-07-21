@@ -166,6 +166,7 @@ export interface NotvexAPI {
     confirmMigration(createBackup: boolean): Promise<IpcResult<null>>
     cancelMigration(): Promise<IpcResult<null>>
     getPendingFile(): Promise<IpcResult<string | null>>
+    openBackupsFolder(): Promise<IpcResult<null>>
     onMigrationRequired(
       callback: (data: {
         reason: 'header' | 'schema'
