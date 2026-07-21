@@ -4,10 +4,8 @@ import { CheckIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useVaultCapabilities } from '@/hooks/use-vault-capabilities'
+import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
-import { useVaultStore } from '@/store/vault.store'
-import { CURRENT_VERSION_MAJ, CURRENT_VERSION_MIN } from '@shared/types'
 import { KeyFileSetting } from './settings/KeyFileSetting'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
@@ -19,13 +17,12 @@ interface Props {
   onClose: () => void
 }
 
-function handleUpgradeFormat(): void {
-  toast.info('To upgrade the vault format, close and reopen the vault.')
+async function handleOpenBackupsFolder(): Promise<void> {
+  const res = await notvex.vault.openBackupsFolder()
+  if (!res.success) toast.error(res.error)
 }
 
 export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
-  const vaultVersion = useVaultStore((s) => s.vaultVersion)
-
   const { setPref } = usePrefsStore()
   const { lockOnMinimize, allowScreenCapture } = usePrefsStore(
     useShallow((s) => ({
@@ -33,8 +30,6 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
       allowScreenCapture: s.allowScreenCapture
     }))
   )
-
-  const { canUpgradeFormat } = useVaultCapabilities()
 
   const handleLockOnMinimize = (checked: boolean): void => {
     void setPref('lockOnMinimize', checked)
@@ -114,23 +109,28 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
           {/* ── Key file ── */}
           <KeyFileSetting />
 
-          {canUpgradeFormat && vaultVersion !== null && (
-            <>
-              <Separator />
-              <section className="space-y-3">
-                <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
-                  Vault format
-                </p>
-                <p className="text-sm">
-                  Your vault uses format v{vaultVersion.maj}.{vaultVersion.min}. The current format
-                  is v{CURRENT_VERSION_MAJ}.{CURRENT_VERSION_MIN}.
-                </p>
-                <Button variant="secondary" size="sm" onClick={handleUpgradeFormat}>
-                  Upgrade vault format
-                </Button>
-              </section>
-            </>
-          )}
+          <Separator />
+
+          {/* ── Backups ── */}
+          <section className="space-y-3">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+              Backups
+            </p>
+            <p className="text-muted-foreground text-xs">
+              Plain point-in-time copies of your vault file, created automatically before
+              format-changing updates. Safe to delete — not a restore feature, just browsable via
+              your file explorer.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void handleOpenBackupsFolder()
+              }}
+            >
+              Open backups folder
+            </Button>
+          </section>
 
           <Separator />
 

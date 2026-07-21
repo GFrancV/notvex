@@ -37,6 +37,12 @@ import {
   recordVaultUsed,
   setPref
 } from './prefs'
+import {
+  createVaultBackup,
+  ensureVaultBackupDir,
+  getVaultBackupDir,
+  hasAnyBackups
+} from './vault/backups'
 import { isValidNotvexFile, readContainer } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
@@ -188,10 +194,7 @@ async function confirmMigrationAndBackup(
     migrationResolver = resolve
   })
   if (migResult.confirmed && migResult.createBackup && migrationBackupTimestamp !== null) {
-    const vaultDir = dirname(filePath)
-    const vaultName = basename(filePath, '.nvx')
-    const ts = new Date(migrationBackupTimestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    copyFileSync(filePath, join(vaultDir, `${vaultName}_backup_${ts}.nvx`))
+    createVaultBackup(filePath, payload.reason, payload.fromVersion, payload.toVersion)
   }
   migrationBackupTimestamp = null
   return migResult.confirmed
@@ -294,6 +297,8 @@ export function registerIpcHandlers(
           return mapOpenVaultError(e)
         }
 
+        ensureVaultBackupDir(filePath)
+
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
         const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
           confirmMigrationAndBackup(win, filePath, { reason: 'schema', fromVersion, toVersion })
@@ -334,9 +339,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:migration-confirmed', (_e, createBackup: boolean) => {
     try {
+      // Resolving here only schedules the awaiting migration-flow code's continuation as a
+      // microtask — it doesn't run inline. Nulling migrationBackupTimestamp here would race
+      // that continuation (which still needs to read it to decide whether to back up), so
+      // leave it to that code to clear once it's done reading it.
       migrationResolver?.({ confirmed: true, createBackup })
       migrationResolver = null
-      migrationBackupTimestamp = null
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -347,7 +355,6 @@ export function registerIpcHandlers(
     try {
       migrationResolver?.({ confirmed: false, createBackup: false })
       migrationResolver = null
-      migrationBackupTimestamp = null
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -398,6 +405,8 @@ export function registerIpcHandlers(
             migrationBackupTimestamp = null
             return mapOpenVaultError(e)
           }
+
+          ensureVaultBackupDir(filePath)
 
           const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
           const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
@@ -535,6 +544,18 @@ export function registerIpcHandlers(
 
       copyFileSync(vaultPath, filePath)
       return ok(filePath)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:open-backups-folder', async () => {
+    try {
+      const filePath = getVaultPath()
+      if (!filePath) return fail('No vault is currently open.')
+      if (!hasAnyBackups(filePath)) return fail('No backups yet.')
+      const result = await shell.openPath(getVaultBackupDir(filePath))
+      return result ? fail(result) : ok(null)
     } catch (e) {
       return fail(e)
     }
