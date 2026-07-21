@@ -334,9 +334,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:migration-confirmed', (_e, createBackup: boolean) => {
     try {
+      // Resolving here only schedules the awaiting migration-flow code's continuation as a
+      // microtask — it doesn't run inline. Nulling migrationBackupTimestamp here would race
+      // that continuation (which still needs to read it to decide whether to back up), so
+      // leave it to that code to clear once it's done reading it.
       migrationResolver?.({ confirmed: true, createBackup })
       migrationResolver = null
-      migrationBackupTimestamp = null
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -347,7 +350,6 @@ export function registerIpcHandlers(
     try {
       migrationResolver?.({ confirmed: false, createBackup: false })
       migrationResolver = null
-      migrationBackupTimestamp = null
       return ok(null)
     } catch (e) {
       return fail(e)
