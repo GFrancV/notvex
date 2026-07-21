@@ -169,6 +169,9 @@ export function Unlock(): ReactNode {
     )
     setLoading(false)
     if (!res.success) {
+      // User declined the vault-format update prompt — not a credential failure,
+      // so return to an idle unlock form instead of showing an error.
+      if (res.error === 'MIGRATION_CANCELLED') return
       setError(res.error)
       return
     }
