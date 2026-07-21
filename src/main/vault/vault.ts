@@ -22,7 +22,7 @@ import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 
 import { CURRENT_VERSION_MIN, type VaultVersion } from '@shared/types'
-import { runMigrations } from '../db/migrations'
+import { runMigrations, type SchemaMigrationGate } from '../db/migrations'
 import { dbAll, dbGet, dbRun } from '../db/queries'
 import {
   type ContainerMetadata,
@@ -356,7 +356,8 @@ export async function openVault(
   filePath: string,
   password: string,
   keyFileContents?: Uint8Array,
-  preReadBytes?: Buffer
+  preReadBytes?: Buffer,
+  onSchemaMigrationNeeded?: SchemaMigrationGate
 ): Promise<VaultVersion | null> {
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
@@ -393,7 +394,7 @@ export async function openVault(
     // authenticateVaultKey verified and closed the DB. Reopen for the session.
     database = await openDatabase(tmp)
     await applyKey(database, auth.masterKey)
-    await runMigrations(database)
+    await runMigrations(database, onSchemaMigrationNeeded)
 
     const meta = await dbGet<{ has_key_file: number }>(
       database,
@@ -431,7 +432,8 @@ export async function openVault(
 export async function openVaultWithRecovery(
   filePath: string,
   mnemonic: string,
-  keyFileContents?: Uint8Array
+  keyFileContents?: Uint8Array,
+  onSchemaMigrationNeeded?: SchemaMigrationGate
 ): Promise<VaultVersion | null> {
   // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
@@ -475,7 +477,7 @@ export async function openVaultWithRecovery(
   try {
     database = await openDatabase(tmp)
     await applyKey(database, rawKey)
-    await runMigrations(database)
+    await runMigrations(database, onSchemaMigrationNeeded)
 
     const meta = await dbGet<{ id: number; has_key_file: number }>(
       database,
