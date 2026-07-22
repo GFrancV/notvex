@@ -26,12 +26,10 @@ import { useCreateNote } from '@/hooks/use-create-note'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
 import { cn, truncatePath } from '@/lib/utils'
-import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
-import { ChangePasswordDialog } from './change-password-dialog'
 import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
@@ -49,14 +47,6 @@ import {
 } from './ui/dropdown-menu'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
 import { Kbd } from './ui/kbd'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from './ui/select'
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -84,6 +74,11 @@ const handleSaveCopy = async (): Promise<void> => {
   if (result.data) toast.success('Copy saved successfully')
 }
 
+const handleOpenBackupsFolder = async (): Promise<void> => {
+  const res = await notvex.vault.openBackupsFolder()
+  if (!res.success) toast.error(res.error)
+}
+
 export function Sidebar(): React.ReactNode {
   const { loadTags, loadTagCounts, setStatus, setActiveNoteId, setNotes } = useVaultStore()
   const { tags, tagCounts, notes, currentVaultPath } = useVaultStore(
@@ -107,9 +102,6 @@ export function Sidebar(): React.ReactNode {
     }))
   )
 
-  const { setPref } = usePrefsStore()
-  const autoLockMinutes = usePrefsStore((s) => s.autoLockMinutes)
-
   const handleNewNote = useCreateNote()
   const { isCopied, copyToClipboard } = useCopyToClipboard()
   const isDev = useIsDev()
@@ -117,7 +109,6 @@ export function Sidebar(): React.ReactNode {
   const searchContainerRef = useRef<HTMLDivElement>(null)
   const [appVersionOpen, setAppVersionOpen] = useState(false)
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [securitySettingsOpen, setSecuritySettingsOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createModalKey, setCreateModalKey] = useState(0)
@@ -139,10 +130,6 @@ export function Sidebar(): React.ReactNode {
     setStatus('locked')
     setActiveNoteId(null)
     setNotes([])
-  }
-
-  const handleAutoLockChange = (minutes: string): void => {
-    void setPref('autoLockMinutes', Number(minutes))
   }
 
   const allNotesCount = notes.filter((n) => !n.isTrashed).length
@@ -184,28 +171,8 @@ export function Sidebar(): React.ReactNode {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="right" sideOffset={4} className="w-64">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Auto-lock</DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                    <Select value={String(autoLockMinutes)} onValueChange={handleAutoLockChange}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a lock-out time" />
-                      </SelectTrigger>
-                      <SelectContent position="popper">
-                        <SelectGroup>
-                          <SelectItem value="0">Never</SelectItem>
-                          <SelectItem value="5">After 5 minutes</SelectItem>
-                          <SelectItem value="15">After 15 minutes</SelectItem>
-                          <SelectItem value="30">After 30 minutes</SelectItem>
-                          <SelectItem value="60">After 1 hour</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
                 {currentVaultPath && (
                   <>
-                    <DropdownMenuSeparator />
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>Vault Location</DropdownMenuLabel>
                       <DropdownMenuItem>
@@ -221,29 +188,17 @@ export function Sidebar(): React.ReactNode {
                           </InputGroupAddon>
                         </InputGroup>
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        role="button"
-                        className="text-primary"
-                        onClick={handleSaveCopy}
-                      >
+                      <DropdownMenuItem className="text-primary" onClick={handleSaveCopy}>
                         Save a vault copy as...
                       </DropdownMenuItem>
+                      <DropdownMenuItem className="text-primary" onClick={handleOpenBackupsFolder}>
+                        Open backups folder
+                      </DropdownMenuItem>
                     </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
                   </>
                 )}
-                <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel>Security</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    role="button"
-                    className="text-primary"
-                    onClick={() => {
-                      setChangePasswordOpen(true)
-                      setSettingsPopoverOpen(false)
-                    }}
-                  >
-                    Change password
-                  </DropdownMenuItem>
                   <DropdownMenuItem
                     role="button"
                     className="text-primary"
@@ -401,10 +356,6 @@ export function Sidebar(): React.ReactNode {
       </SidebarFooter>
 
       <AppVersionDialog open={appVersionOpen} onClose={() => setAppVersionOpen(false)} />
-      <ChangePasswordDialog
-        open={changePasswordOpen}
-        onClose={() => setChangePasswordOpen(false)}
-      />
       <SecuritySettingsDialog
         open={securitySettingsOpen}
         onClose={() => setSecuritySettingsOpen(false)}
