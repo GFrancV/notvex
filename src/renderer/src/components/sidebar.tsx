@@ -356,10 +356,7 @@ export function Sidebar(): React.ReactNode {
       </SidebarFooter>
 
       <AppVersionDialog open={appVersionOpen} onClose={() => setAppVersionOpen(false)} />
-      <SecuritySettingsDialog
-        open={securitySettingsOpen}
-        onClose={() => setSecuritySettingsOpen(false)}
-      />
+      <SecuritySettingsDialog open={securitySettingsOpen} onOpenChange={setSecuritySettingsOpen} />
       <TagCreateModal
         key={createModalKey}
         open={createModalOpen}

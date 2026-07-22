@@ -1,11 +1,12 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
-import { LockIcon } from 'lucide-react'
+import { KeyIcon, LockIcon, ShieldCheckIcon, ShieldOffIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
+import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
 import { ChangePasswordDialog } from './change-password-dialog'
-import { KeyFileSetting } from './settings/KeyFileSetting'
+import { KeyFileDialog } from './settings/KeyFileDialog'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
@@ -21,10 +22,10 @@ import { Separator } from './ui/separator'
 
 interface Props {
   open: boolean
-  onClose: () => void
+  onOpenChange: (open: boolean) => void
 }
 
-export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
+export function SecuritySettingsDialog({ open, onOpenChange }: Props): ReactNode {
   const { setPref } = usePrefsStore()
   const { autoLockMinutes, lockOnMinimize, allowScreenCapture } = usePrefsStore(
     useShallow((s) => ({
@@ -35,6 +36,15 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
   )
 
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [keyFileDialogOpen, setKeyFileDialogOpen] = useState(false)
+  const [hasKeyFile, setHasKeyFile] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    void notvex.vault.getHasKeyFile().then((r) => {
+      setHasKeyFile(r.success ? r.data : false)
+    })
+  }, [open])
 
   const handleAutoLockChange = (minutes: string): void => {
     void setPref('autoLockMinutes', Number(minutes))
@@ -49,12 +59,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onClose()
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Security settings</DialogTitle>
@@ -132,7 +137,7 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
                 variant="secondary"
                 size="sm"
                 onClick={() => {
-                  onClose()
+                  onOpenChange(false)
                   setChangePasswordOpen(true)
                 }}
               >
@@ -141,7 +146,31 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
               </Button>
             </SettingRow>
 
-            <KeyFileSetting />
+            <SettingRow
+              label="Key file"
+              description={
+                <span className="flex items-center gap-1.5">
+                  {hasKeyFile ? (
+                    <ShieldCheckIcon className="text-primary h-3.5 w-3.5" />
+                  ) : (
+                    <ShieldOffIcon className="h-3.5 w-3.5" />
+                  )}
+                  {hasKeyFile ? 'Configured' : 'Not configured'}
+                </span>
+              }
+            >
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  onOpenChange(false)
+                  setKeyFileDialogOpen(true)
+                }}
+              >
+                <KeyIcon />
+                Manage
+              </Button>
+            </SettingRow>
           </section>
 
           <Separator />
@@ -162,7 +191,19 @@ export function SecuritySettingsDialog({ open, onClose }: Props): ReactNode {
 
       <ChangePasswordDialog
         open={changePasswordOpen}
-        onClose={() => setChangePasswordOpen(false)}
+        onClose={() => {
+          setChangePasswordOpen(false)
+          onOpenChange(true)
+        }}
+      />
+      <KeyFileDialog
+        open={keyFileDialogOpen}
+        onClose={() => {
+          setKeyFileDialogOpen(false)
+          onOpenChange(true)
+        }}
+        hasKeyFile={hasKeyFile}
+        onHasKeyFileChange={setHasKeyFile}
       />
     </Dialog>
   )
@@ -174,14 +215,14 @@ function SettingRow({
   children
 }: {
   label: string
-  description?: string
+  description?: ReactNode
   children: React.ReactNode
 }): ReactNode {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="flex-1 space-y-0.5">
         <p className="text-sm">{label}</p>
-        {description && <p className="text-muted-foreground text-xs">{description}</p>}
+        {description && <div className="text-muted-foreground text-xs">{description}</div>}
       </div>
       <div className="mt-0.5 shrink-0">{children}</div>
     </div>
