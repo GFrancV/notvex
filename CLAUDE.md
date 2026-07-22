@@ -44,7 +44,7 @@ The project uses electron-vite with three separate build targets:
   - `editor/` — `EditorToolbar.tsx` (formatting toolbar for the CodeMirror editor)
   - `tags/` — `TagChip.tsx`, `TagCreateModal.tsx`, `TagDeleteModal.tsx`, `TagFilter.tsx`, `TagSelector.tsx`
   - `dialogs/` — `UpdateAvailableDialog.tsx`, `AppVersionDialog.tsx`
-  - `settings/` — `KeyFileSetting.tsx`
+  - `settings/` — `KeyFileDialog.tsx`
 - `hooks/` — Custom React hooks: `use-copy-to-clipboard.ts`, `use-create-note.ts`, `use-mobile.ts`, `use-vault-capabilities.ts`, `use-pick-vault.ts`
 - `store/` — Zustand stores: `vault.store.ts` (vault state, notes, tags), `ui.store.ts` (UI state), `prefs.store.ts` (user preferences: auto-lock, key file, screen capture)
 - `lib/ipc.ts` — Typed IPC client (renderer side)
