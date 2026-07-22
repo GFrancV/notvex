@@ -128,14 +128,13 @@ export function KeyFileSetting(): ReactNode {
 
   return (
     <section className="space-y-3">
-      <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
-        Key file
-      </p>
-
-      <p className="text-muted-foreground text-xs">
-        A key file adds a second factor to unlock your vault. You need both your password and the
-        key file to access your notes. If you lose the key file, access is permanently lost.
-      </p>
+      <div className="flex-1 space-y-0.5">
+        <p className="text-sm">Key file</p>
+        <p className="text-muted-foreground text-xs">
+          A key file adds a second factor to unlock your vault. You need both your password and the
+          key file to access your notes. If you lose the key file, access is permanently lost.
+        </p>
+      </div>
 
       {keyFileStep === 'idle' && (
         <>
