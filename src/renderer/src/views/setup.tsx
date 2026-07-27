@@ -1,8 +1,9 @@
 import { type ReactNode, useState } from 'react'
 
-import { AlertTriangleIcon, EyeIcon, EyeOffIcon, FolderOpenIcon } from 'lucide-react'
+import { AlertTriangleIcon, FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
+import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -11,12 +12,6 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput
-} from '@/components/ui/input-group'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
@@ -36,8 +31,6 @@ export function Setup(): ReactNode {
   const [vaultPath, setVaultPath] = useState(pendingNewVaultPath ?? '')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState('')
@@ -168,43 +161,27 @@ export function Setup(): ReactNode {
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="password">Master password</FieldLabel>
-                <InputGroup>
-                  <InputGroupInput
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 12 characters"
-                  />
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupButton onClick={() => setShowPassword((v) => !v)}>
-                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                    </InputGroupButton>
-                  </InputGroupAddon>
-                </InputGroup>
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 12 characters"
+                />
                 {password.length > 0 && <PasswordStrengthBar password={password} />}
               </Field>
 
               <Field data-invalid={confirmTouched && !passwordsMatch}>
                 <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
-                <InputGroup>
-                  <InputGroupInput
-                    id="confirm"
-                    type={showConfirm ? 'text' : 'password'}
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    placeholder="Repeat password"
-                    onKeyDown={(e): void => {
-                      if (e.key === 'Enter') void handleCreate()
-                    }}
-                    aria-invalid={confirmTouched && !passwordsMatch}
-                  />
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupButton onClick={() => setShowConfirm((v) => !v)}>
-                      {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
-                    </InputGroupButton>
-                  </InputGroupAddon>
-                </InputGroup>
+                <PasswordInput
+                  id="confirm"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="Repeat password"
+                  onKeyDown={(e): void => {
+                    if (e.key === 'Enter') void handleCreate()
+                  }}
+                  aria-invalid={confirmTouched && !passwordsMatch}
+                />
                 {confirmTouched && !passwordsMatch && (
                   <FieldDescription className="text-destructive">
                     ✕ Passwords do not match

@@ -9,13 +9,13 @@ import {
 } from 'lucide-react'
 
 import { KeyFileInput } from '@/components/KeyFileInput'
+import { PasswordInput } from '@/components/PasswordInput'
 import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { notvex } from '@/lib/ipc'
 
@@ -240,13 +240,12 @@ export function KeyFileDialog({
               <p className="text-muted-foreground text-xs">
                 File: <span className="font-mono">{pendingKeyFilename ?? ''}</span>
               </p>
-              <div className="space-y-1.5">
-                <Label htmlFor="kf-password" className="text-xs">
+              <Field>
+                <FieldLabel htmlFor="kf-password" className="text-xs">
                   Current password
-                </Label>
-                <Input
+                </FieldLabel>
+                <PasswordInput
                   id="kf-password"
-                  type="password"
                   value={pendingKeyFilePassword}
                   onChange={(e) => setPendingKeyFilePassword(e.target.value)}
                   placeholder="Enter your password to confirm"
@@ -254,7 +253,7 @@ export function KeyFileDialog({
                     if (e.key === 'Enter') void handleActivateKeyFile()
                   }}
                 />
-              </div>
+              </Field>
               {pendingKeyFileError && (
                 <p className="text-destructive text-xs">{pendingKeyFileError}</p>
               )}
@@ -327,13 +326,12 @@ export function KeyFileDialog({
                   onClear={() => setRemoveKeyFileContents(null)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="rm-password" className="text-xs">
+              <Field>
+                <FieldLabel htmlFor="rm-password" className="text-xs">
                   Password
-                </Label>
-                <Input
+                </FieldLabel>
+                <PasswordInput
                   id="rm-password"
-                  type="password"
                   value={removePassword}
                   onChange={(e) => setRemovePassword(e.target.value)}
                   placeholder="Enter your password"
@@ -341,7 +339,7 @@ export function KeyFileDialog({
                     if (e.key === 'Enter') void handleRemoveKeyFile()
                   }}
                 />
-              </div>
+              </Field>
               {removeError && <p className="text-destructive text-xs">{removeError}</p>}
               <div className="flex gap-2">
                 <Button
