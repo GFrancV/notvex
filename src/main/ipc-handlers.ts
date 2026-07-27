@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs } from '@shared/types'
+import { scheduleClipboardClear } from './clipboard-guard'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
@@ -160,7 +161,8 @@ function checkAndSetThrottle(): IpcResult<never> | null {
 const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = {
   autoLockMinutes: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 480,
   allowScreenCapture: (v) => typeof v === 'boolean',
-  lockOnMinimize: (v) => typeof v === 'boolean'
+  lockOnMinimize: (v) => typeof v === 'boolean',
+  clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v)
 }
 
 // ─── Migration coordinator ────────────────────────────────────────────────────
@@ -900,6 +902,18 @@ export function registerIpcHandlers(
       if (!validator(value)) return fail(`Invalid value for preference: ${key}`)
 
       setPref(key, value)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // ── Clipboard ────────────────────────────────────────────────────────────
+
+  ipcMain.handle('clipboard:schedule-clear', (_e, value: unknown) => {
+    try {
+      if (typeof value !== 'string') return fail('Invalid clipboard value')
+      scheduleClipboardClear(value)
       return ok(null)
     } catch (e) {
       return fail(e)

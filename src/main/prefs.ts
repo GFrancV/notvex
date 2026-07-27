@@ -8,7 +8,8 @@ const DEFAULTS: Prefs = {
   recentVaults: [],
   autoLockMinutes: 15,
   allowScreenCapture: false,
-  lockOnMinimize: false
+  lockOnMinimize: false,
+  clipboardClearSeconds: 60
 }
 
 const MAX_RECENT_VAULTS = 5

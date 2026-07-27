@@ -10,6 +10,7 @@ interface PrefsStore {
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
+  clipboardClearSeconds: number
   recentVaults: RecentVault[]
   load: () => Promise<void>
   setPref: <K extends SettingKey>(key: K, value: Prefs[K]) => Promise<void>
@@ -21,6 +22,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
   autoLockMinutes: 15,
   allowScreenCapture: false,
   lockOnMinimize: false,
+  clipboardClearSeconds: 60,
   recentVaults: [],
 
   load: async () => {
@@ -32,6 +34,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
         autoLockMinutes: p.autoLockMinutes,
         allowScreenCapture: p.allowScreenCapture,
         lockOnMinimize: p.lockOnMinimize,
+        clipboardClearSeconds: p.clipboardClearSeconds,
         recentVaults: p.recentVaults
       })
     } else {

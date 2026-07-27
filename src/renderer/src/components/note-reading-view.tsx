@@ -1,4 +1,4 @@
-import { isValidElement, useRef } from 'react'
+import { isValidElement, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 
@@ -7,6 +7,7 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 
+import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { notvex } from '@/lib/ipc'
 import { Button } from './ui/button'
@@ -26,7 +27,11 @@ function Pre({ children }: React.ComponentProps<'pre'>): React.JSX.Element {
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => void copyToClipboard(preRef.current?.textContent ?? '')}
+          onClick={() => {
+            const text = preRef.current?.textContent ?? ''
+            void copyToClipboard(text)
+            void notvex.clipboard.scheduleClear(text)
+          }}
           className="text-muted-foreground size-6"
           title="Copy code"
           aria-label="Copy code"
@@ -64,7 +69,7 @@ const components: Components = {
     if (type === 'checkbox') {
       return <Checkbox checked={checked ?? false} disabled className="mr-1.5 align-middle" />
     }
-    return <input type={type} readOnly />
+    return <input type={type} aria-label="Checkbox" readOnly />
   },
   pre: Pre
 }
@@ -74,9 +79,12 @@ interface NoteReadingViewProps {
 }
 
 export function NoteReadingView({ content }: NoteReadingViewProps): React.JSX.Element {
+  const [container, setContainer] = useState<HTMLDivElement | null>(null)
+  useClipboardAutoClear(container)
+
   return (
     <div className="h-full overflow-auto">
-      <div className="prose prose-invert prose-sm max-w-none p-6">
+      <div ref={setContainer} className="prose prose-invert prose-sm max-w-none p-6">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSanitize, rehypeHighlight]}
