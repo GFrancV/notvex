@@ -1,19 +1,14 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import { ChevronDownIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
+import { ChevronDownIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
+import { PasswordInput } from '@/components/PasswordInput'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput
-} from '@/components/ui/input-group'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIsDev } from '@/hooks/use-is-dev'
@@ -52,7 +47,6 @@ export function Unlock(): ReactNode {
   )
   const [mode, setMode] = useState<UnlockMode>('password')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -302,23 +296,15 @@ export function Unlock(): ReactNode {
               <>
                 <Field>
                   <FieldLabel htmlFor="unlock-password">Master password</FieldLabel>
-                  <InputGroup>
-                    <InputGroupInput
-                      id="unlock-password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      onKeyDown={(e): void => {
-                        if (e.key === 'Enter' && !isThrottled) void handleUnlockVault()
-                      }}
-                    />
-                    <InputGroupAddon align="inline-end">
-                      <InputGroupButton onClick={() => setShowPassword((v) => !v)}>
-                        {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  </InputGroup>
+                  <PasswordInput
+                    id="unlock-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    onKeyDown={(e): void => {
+                      if (e.key === 'Enter' && !isThrottled) void handleUnlockVault()
+                    }}
+                  />
                 </Field>
 
                 <Collapsible
