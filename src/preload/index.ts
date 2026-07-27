@@ -110,6 +110,9 @@ const api: NotvexAPI = {
     get: () => ipcRenderer.invoke('prefs:get'),
     set: (key, value) => ipcRenderer.invoke('prefs:set', key, value)
   },
+  clipboard: {
+    scheduleClear: (value) => ipcRenderer.invoke('clipboard:schedule-clear', value)
+  },
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
   },

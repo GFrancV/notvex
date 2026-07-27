@@ -91,6 +91,7 @@ export interface Prefs {
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
+  clipboardClearSeconds: number
 }
 
 export interface UnlockThrottleStatus {
@@ -205,6 +206,9 @@ export interface NotvexAPI {
   prefs: {
     get(): Promise<IpcResult<Prefs>>
     set<K extends keyof Prefs>(key: K, value: Prefs[K]): Promise<IpcResult<void>>
+  }
+  clipboard: {
+    scheduleClear(value: string): Promise<IpcResult<null>>
   }
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>
