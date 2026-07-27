@@ -27,13 +27,15 @@ interface Props {
 
 export function SecuritySettingsDialog({ open, onOpenChange }: Props): ReactNode {
   const { setPref } = usePrefsStore()
-  const { autoLockMinutes, lockOnMinimize, allowScreenCapture } = usePrefsStore(
-    useShallow((s) => ({
-      autoLockMinutes: s.autoLockMinutes,
-      lockOnMinimize: s.lockOnMinimize,
-      allowScreenCapture: s.allowScreenCapture
-    }))
-  )
+  const { autoLockMinutes, lockOnMinimize, allowScreenCapture, clipboardClearSeconds } =
+    usePrefsStore(
+      useShallow((s) => ({
+        autoLockMinutes: s.autoLockMinutes,
+        lockOnMinimize: s.lockOnMinimize,
+        allowScreenCapture: s.allowScreenCapture,
+        clipboardClearSeconds: s.clipboardClearSeconds
+      }))
+    )
 
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [keyFileDialogOpen, setKeyFileDialogOpen] = useState(false)
@@ -56,6 +58,10 @@ export function SecuritySettingsDialog({ open, onOpenChange }: Props): ReactNode
 
   const handleAllowScreenCapture = (checked: boolean): void => {
     void setPref('allowScreenCapture', checked)
+  }
+
+  const handleClipboardClearChange = (seconds: string): void => {
+    void setPref('clipboardClearSeconds', Number(seconds))
   }
 
   return (
@@ -100,6 +106,39 @@ export function SecuritySettingsDialog({ open, onOpenChange }: Props): ReactNode
                 checked={lockOnMinimize}
                 onCheckedChange={(v) => handleLockOnMinimize(v === true)}
               />
+            </SettingRow>
+          </section>
+
+          <Separator />
+
+          {/* ── Clipboard ── */}
+          <section className="space-y-3">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+              Clipboard
+            </p>
+
+            <SettingRow
+              label="Auto-clear"
+              description="Automatically clear the clipboard after copying text from the note editor."
+            >
+              <Select
+                value={String(clipboardClearSeconds)}
+                onValueChange={handleClipboardClearChange}
+              >
+                <SelectTrigger className="w-40" size="sm">
+                  <SelectValue placeholder="Select a duration" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectGroup>
+                    <SelectItem value="0">Never</SelectItem>
+                    <SelectItem value="10">After 10 seconds</SelectItem>
+                    <SelectItem value="30">After 30 seconds</SelectItem>
+                    <SelectItem value="60">After 1 minute</SelectItem>
+                    <SelectItem value="120">After 2 minutes</SelectItem>
+                    <SelectItem value="300">After 5 minutes</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </SettingRow>
           </section>
 
