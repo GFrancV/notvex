@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
@@ -212,6 +213,8 @@ export function NoteEditor(): ReactNode {
     void loadNotes()
     void loadTagCounts()
   }
+
+  useClipboardAutoClear(editorView?.dom ?? null)
 
   // Derive assigned tags from noteTagsMap (kept in sync by optimistic store)
   const assignedTagIds = activeNoteId ? (noteTagsMap[activeNoteId] ?? []) : []
