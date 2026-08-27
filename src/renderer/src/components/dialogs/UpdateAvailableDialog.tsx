@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
+import DOMPurify from 'dompurify'
 import { TagIcon, TriangleAlertIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
@@ -24,8 +25,28 @@ type Phase =
   | { phase: 'installing' }
   | { phase: 'error'; message: string }
 
+const RELEASE_NOTES_SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ['p', 'br', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'code', 'h1', 'h2', 'h3'],
+  ALLOWED_ATTR: ['href']
+}
+
+// Release notes come from the GitHub API over the network — force external
+// links to open via the OS browser (handled by setWindowOpenHandler in
+// main/window.ts) instead of navigating inside the app window.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
 export function UpdateAvailableDialog(): ReactNode {
   const [state, setState] = useState<Phase | null>(null)
+
+  const releaseNotesHtml = useMemo(() => {
+    const raw = state?.phase === 'available' ? state.info.releaseNotes : null
+    return raw ? DOMPurify.sanitize(raw, RELEASE_NOTES_SANITIZE_CONFIG) : null
+  }, [state])
 
   useEffect(() => {
     const offFns = [
@@ -75,11 +96,12 @@ export function UpdateAvailableDialog(): ReactNode {
                 </DialogTitle>
               </div>
             </DialogHeader>
-            {state.info.releaseNotes && (
+            {releaseNotesHtml && (
               <ScrollArea className="max-h-48">
-                <p className="text-muted-foreground text-sm whitespace-pre-line">
-                  {state.info.releaseNotes}
-                </p>
+                <div
+                  className="text-muted-foreground [&_a]:text-primary space-y-2 text-sm [&_a]:underline [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"
+                  dangerouslySetInnerHTML={{ __html: releaseNotesHtml }}
+                />
               </ScrollArea>
             )}
             <DialogFooter>
