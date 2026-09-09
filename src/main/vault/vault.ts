@@ -562,7 +562,17 @@ export async function openVaultWithRecovery(
   }
 }
 
-export async function changePassword(
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  keyFileContents?: Uint8Array
+): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doChangePassword(currentPassword, newPassword, keyFileContents))
+}
+
+async function doChangePassword(
   currentPassword: string,
   newPassword: string,
   keyFileContents?: Uint8Array
@@ -687,7 +697,13 @@ export async function changePassword(
   }
 }
 
-export async function rotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function rotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doRotateVaultCredentials(newPassword))
+}
+
+async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
   if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
@@ -889,7 +905,16 @@ async function reencryptNotes(oldKey: Uint8Array, newKey: Uint8Array): Promise<v
 }
 
 // Add or change the key file on the open vault.
-export async function configureKeyFile(
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function configureKeyFile(
+  password: string,
+  keyFileContents: Uint8Array
+): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doConfigureKeyFile(password, keyFileContents))
+}
+
+async function doConfigureKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
@@ -1008,7 +1033,16 @@ export async function configureKeyFile(
 }
 
 // Remove the key file from the open vault. Requires the current password + key file.
-export async function removeKeyFile(
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function removeKeyFile(
+  password: string,
+  keyFileContents: Uint8Array
+): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doRemoveKeyFile(password, keyFileContents))
+}
+
+async function doRemoveKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
