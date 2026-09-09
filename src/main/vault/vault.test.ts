@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createNote, dbAll } from '../db/queries'
 import { readContainer } from './container'
 import { decryptField } from './crypto'
-import { closeVault, createVault, getDb, getMasterKey, syncContainer } from './vault'
+import { closeVault, createVault, getDb, getMasterKey, isVaultOpen, syncContainer } from './vault'
 
 interface RawNoteRow {
   id: string
@@ -101,4 +101,57 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       expect(persisted.get(id)).toBe(title)
     }
   }, 60_000) // real Argon2id calibration + KDF run on vault creation; observed ~25-35s
+
+  it('persists notes written just before closeVault(), even without an explicit syncContainer() call', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    const NOTE_COUNT = 10
+    const expectedTitles = new Map<string, string>()
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      const title = `Closing note ${i}`
+      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
+      expectedTitles.set(note.id, title)
+    }
+
+    // Characterization test, not a negative-control regression test:
+    // verified by hand that this still passes even if closeVault() closes
+    // `db` before calling packContainer() (packContainer()'s internal
+    // checkpoint then silently no-ops on the null connection). SQLite
+    // performs an implicit WAL checkpoint when the last connection to a
+    // database closes, so closeDatabase() alone already flushes -wal into
+    // the main file here. closeVault() still calls packContainer() before
+    // closing — explicit over implicit, and it stops depending on that
+    // SQLite behavior if a second connection is ever introduced — but
+    // that ordering isn't what this test is proving.
+    const masterKeyCopy = Buffer.from(getMasterKey())
+    await closeVault()
+
+    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, masterKeyCopy)
+    masterKeyCopy.fill(0)
+
+    expect(persisted.size).toBe(NOTE_COUNT)
+    for (const [id, title] of expectedTitles) {
+      expect(persisted.get(id)).toBe(title)
+    }
+  }, 60_000)
+
+  it("doesn't disrupt the session when packContainer() fails to write (vault directory removed)", async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+    await createNote(getDb(), { title: 'Note', content: 'Body' }, getMasterKey())
+
+    // tempDbPath lives in os.tmpdir(), independent of vaultDir, so
+    // removing vaultDir breaks only the final atomicWrite — the
+    // checkpoint and the temp-file read still succeed, isolating the
+    // write failure syncContainer() is required to swallow.
+    rmSync(vaultDir, { recursive: true, force: true })
+
+    await expect(syncContainer()).resolves.toBeUndefined()
+    expect(isVaultOpen()).toBe(true)
+  }, 60_000)
 })

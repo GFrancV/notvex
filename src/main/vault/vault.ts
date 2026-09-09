@@ -771,9 +771,12 @@ export async function syncContainer(): Promise<void> {
 }
 
 export async function closeVault(): Promise<void> {
-  // packContainer() checkpoints via `db`, so it must run before the
-  // connection closes below — not after, when there'd be nothing left to
-  // checkpoint against.
+  // packContainer() checkpoints via `db`, so it runs before the connection
+  // closes below, while there's still something to checkpoint against.
+  // (SQLite implicitly checkpoints WAL when the last connection to a
+  // database closes, so closeDatabase() alone would likely be enough today —
+  // but that's relying on an implementation detail we don't control here.
+  // Explicit beats implicit, and this stops depending on it entirely.)
   if (tempDbPath && currentVaultPath && currentMetadata) {
     try {
       await packContainer()
