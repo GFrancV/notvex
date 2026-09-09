@@ -59,6 +59,27 @@ interface RawNote {
   content_iv: Buffer
 }
 
+// ─── Concurrency lock ────────────────────────────────────────────────────────
+
+// Serializes packContainer() against itself and against every credential-
+// rotation function (changePassword, rotateVaultCredentials, configureKeyFile,
+// removeKeyFile). Without this, packContainer() — now async, with a real
+// await at the checkpoint — can resume mid-rekey: those functions PRAGMA
+// rekey the on-disk temp DB several awaits before reassigning the in-memory
+// masterKey, so an interleaved repack can write a .nvx header encrypted
+// under the stale key over a body already re-keyed to the new one, bricking
+// the vault. A plain FIFO queue (not coalescing) is required, not just
+// dedup: two calls can carry different arguments (e.g. two changePassword()
+// calls), so a second caller must run its own body, not reuse the first
+// caller's result. Exported only so the test suite can verify the ordering
+// directly and fast, without real Argon2id/SQLCipher timing.
+let vaultOpLock: Promise<unknown> = Promise.resolve()
+export function withVaultLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = vaultOpLock.then(fn, fn)
+  vaultOpLock = run.catch(() => undefined)
+  return run
+}
+
 // ─── Module state ────────────────────────────────────────────────────────────
 
 let db: sqlite3.Database | null = null
@@ -191,10 +212,28 @@ function atomicWrite(filePath: string, bytes: Buffer): void {
 // tempDbPath + '-wal' until an auto-checkpoint (every ~1000 pages) flushes
 // them into the main file, which small-note sessions can go an entire run
 // without hitting — packContainer only ever reads the main file.
-export async function packContainer(): Promise<void> {
+//
+// Goes through withVaultLock: see its docstring for why an unserialized
+// version of this function is unsafe.
+export function packContainer(): Promise<void> {
+  return withVaultLock(doPackContainer)
+}
+
+async function doPackContainer(): Promise<void> {
   if (!currentVaultPath || !currentMetadata || !tempDbPath || !masterKey) return
   if (db) {
-    await dbRun(db, 'PRAGMA wal_checkpoint(TRUNCATE)')
+    // wal_checkpoint(TRUNCATE) reports (busy, log, checkpointed) rather than
+    // throwing when it can only partially complete (busy=1, e.g. a reader
+    // holding a lock) — dbRun() discards that row, so a partial checkpoint
+    // would otherwise look identical to a full one. Treat busy as a hard
+    // failure rather than silently reading a possibly under-flushed file.
+    const checkpoint = await dbGet<{ busy: number; log: number; checkpointed: number }>(
+      db,
+      'PRAGMA wal_checkpoint(TRUNCATE)'
+    )
+    if (checkpoint?.busy) {
+      throw new Error('WAL checkpoint incomplete (busy) — refusing to pack a possibly stale DB')
+    }
   }
   const { salt } = getArgon2Params(currentMetadata.kdfInput)
   const dbBytes = readFileSync(tempDbPath)
