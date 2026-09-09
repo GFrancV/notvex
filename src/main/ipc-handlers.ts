@@ -59,6 +59,7 @@ import {
   migrateHeaderIfNeeded,
   openVault,
   openVaultWithRecovery,
+  packContainer,
   removeKeyFile,
   rotateVaultCredentials,
   syncContainer
@@ -530,7 +531,10 @@ export function registerIpcHandlers(
       const vaultPath = getVaultPath()
       if (!vaultPath) return fail('No vault open')
 
-      await syncContainer()
+      // Unlike syncContainer() (used by the periodic timer, which must never
+      // throw), this is a deliberate user-initiated backup — a failed sync
+      // here must surface as a failed backup, not silently copy stale data.
+      await packContainer()
 
       const vaultDir = dirname(vaultPath)
       const vaultName = basename(vaultPath, '.nvx')
