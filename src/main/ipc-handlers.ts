@@ -113,8 +113,8 @@ function startAutoLockTimer(win: BrowserWindow): void {
   }, 60_000)
 
   if (syncTimer) clearInterval(syncTimer)
-  syncTimer = setInterval(() => {
-    syncContainer()
+  syncTimer = setInterval((): void => {
+    void syncContainer()
   }, VAULT_SYNC_INTERVAL_MS)
 }
 
@@ -530,7 +530,7 @@ export function registerIpcHandlers(
       const vaultPath = getVaultPath()
       if (!vaultPath) return fail('No vault open')
 
-      syncContainer()
+      await syncContainer()
 
       const vaultDir = dirname(vaultPath)
       const vaultName = basename(vaultPath, '.nvx')
