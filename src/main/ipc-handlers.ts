@@ -534,7 +534,16 @@ export function registerIpcHandlers(
       // Unlike syncContainer() (used by the periodic timer, which must never
       // throw), this is a deliberate user-initiated backup — a failed sync
       // here must surface as a failed backup, not silently copy stale data.
-      await packContainer()
+      // Caught separately (generic message, real error logged here only)
+      // because packContainer() can throw fs errors (ENOENT/EACCES/etc.)
+      // whose message embeds local filesystem paths — those shouldn't cross
+      // the IPC boundary to the renderer.
+      try {
+        await packContainer()
+      } catch (e) {
+        console.error('vault:save-copy-as: sync before copy failed:', e)
+        return fail('Failed to sync the vault before copying — try again')
+      }
 
       const vaultDir = dirname(vaultPath)
       const vaultName = basename(vaultPath, '.nvx')

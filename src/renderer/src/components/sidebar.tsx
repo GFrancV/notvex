@@ -64,16 +64,6 @@ import {
 } from './ui/sidebar'
 import { VaultSwitcher } from './VaultSwitcher'
 
-const handleSaveCopy = async (): Promise<void> => {
-  const result = await notvex.vault.saveCopyAs()
-  if (!result.success) {
-    toast.error('Failed to save copy')
-    return
-  }
-
-  if (result.data) toast.success('Copy saved successfully')
-}
-
 const handleOpenBackupsFolder = async (): Promise<void> => {
   const res = await notvex.vault.openBackupsFolder()
   if (!res.success) toast.error(res.error)
@@ -114,6 +104,21 @@ export function Sidebar(): React.ReactNode {
   const [createModalKey, setCreateModalKey] = useState(0)
   const [editingTag, setEditingTag] = useState<Tag | null>(null)
   const [deletingTag, setDeletingTag] = useState<Tag | null>(null)
+  const [savingCopy, setSavingCopy] = useState(false)
+
+  const handleSaveCopy = async (): Promise<void> => {
+    setSavingCopy(true)
+    try {
+      const result = await notvex.vault.saveCopyAs()
+      if (!result.success) {
+        toast.error('Failed to save copy')
+        return
+      }
+      if (result.data) toast.success('Copy saved successfully')
+    } finally {
+      setSavingCopy(false)
+    }
+  }
 
   useEffect(() => {
     if (focusSearchRequest === 0) return
@@ -188,8 +193,12 @@ export function Sidebar(): React.ReactNode {
                           </InputGroupAddon>
                         </InputGroup>
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-primary" onClick={handleSaveCopy}>
-                        Save a vault copy as...
+                      <DropdownMenuItem
+                        className="text-primary"
+                        disabled={savingCopy}
+                        onClick={handleSaveCopy}
+                      >
+                        {savingCopy ? 'Saving a copy…' : 'Save a vault copy as...'}
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-primary" onClick={handleOpenBackupsFolder}>
                         Open backups folder
