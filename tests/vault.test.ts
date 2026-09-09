@@ -10,7 +10,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createNote, dbAll } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
 import { decryptField } from '../src/main/vault/crypto'
-import { closeVault, createVault, getDb, getMasterKey, isVaultOpen, syncContainer } from '../src/main/vault/vault'
+import {
+  closeVault,
+  createVault,
+  getDb,
+  getMasterKey,
+  isVaultOpen,
+  packContainer,
+  syncContainer
+} from '../src/main/vault/vault'
 
 interface RawNoteRow {
   id: string
@@ -153,5 +161,21 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await expect(syncContainer()).resolves.toBeUndefined()
     expect(isVaultOpen()).toBe(true)
+  }, 60_000)
+
+  it('packContainer() rejects on the same write failure syncContainer() swallows (vault directory removed)', async () => {
+    // vault:save-copy-as calls packContainer() directly rather than
+    // syncContainer(), specifically so a failed sync surfaces as a failed
+    // backup instead of silently copying stale data. This proves the
+    // rejection it depends on actually happens.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+    await createNote(getDb(), { title: 'Note', content: 'Body' }, getMasterKey())
+
+    rmSync(vaultDir, { recursive: true, force: true })
+
+    await expect(packContainer()).rejects.toThrow()
   }, 60_000)
 })

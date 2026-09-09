@@ -191,7 +191,7 @@ function atomicWrite(filePath: string, bytes: Buffer): void {
 // tempDbPath + '-wal' until an auto-checkpoint (every ~1000 pages) flushes
 // them into the main file, which small-note sessions can go an entire run
 // without hitting — packContainer only ever reads the main file.
-async function packContainer(): Promise<void> {
+export async function packContainer(): Promise<void> {
   if (!currentVaultPath || !currentMetadata || !tempDbPath || !masterKey) return
   if (db) {
     await dbRun(db, 'PRAGMA wal_checkpoint(TRUNCATE)')
