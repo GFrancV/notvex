@@ -17,7 +17,8 @@ import {
   getMasterKey,
   isVaultOpen,
   packContainer,
-  syncContainer
+  syncContainer,
+  withVaultLock
 } from './vault'
 
 interface RawNoteRow {
@@ -178,4 +179,48 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await expect(packContainer()).rejects.toThrow()
   }, 60_000)
+})
+
+// Pure ordering test — no vault/crypto involved, deliberately fast and
+// deterministic. Proving a race is closed needs controlled timing, which
+// real Argon2id/SQLCipher calls can't reliably provide; the existing tests
+// above already prove packContainer()/rotateVaultCredentials() etc. are
+// individually correct.
+describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
+  it('runs queued calls strictly after the one already in flight settles', async () => {
+    const order: string[] = []
+
+    // `first` finishes after a real (if short) delay; `second` finishes
+    // immediately once it runs. If withVaultLock let them run concurrently,
+    // `second` would push before `first` despite being queued after it.
+    const first = withVaultLock(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      order.push('first')
+    })
+    const second = withVaultLock(async () => {
+      order.push('second')
+    })
+
+    await first
+    await second
+
+    expect(order).toEqual(['first', 'second'])
+  })
+
+  it('still runs a queued call after the one ahead of it rejects', async () => {
+    const order: string[] = []
+
+    const first = withVaultLock(async () => {
+      order.push('first')
+      throw new Error('boom')
+    })
+    const second = withVaultLock(async () => {
+      order.push('second')
+    })
+
+    await expect(first).rejects.toThrow('boom')
+    await second
+
+    expect(order).toEqual(['first', 'second'])
+  })
 })
