@@ -9,5 +9,6 @@ Thumbs.db
 *.db-shm
 *.db-wal
 *.tsbuildinfo
+coverage/
 build/icon.*
 !build/icon.png
