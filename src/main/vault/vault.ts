@@ -185,10 +185,17 @@ function atomicWrite(filePath: string, bytes: Buffer): void {
   renameSync(tmp, filePath)
 }
 
-// Reads the current temp DB and repacks the .nvx container. Safe to call while
-// the DB is idle (not mid-transaction). Does nothing if state is incomplete.
-function packContainer(): void {
+// Flushes the -wal into tempDbPath, then repacks the .nvx container from it.
+// Safe to call while the DB is idle (not mid-transaction). Does nothing if
+// state is incomplete. The checkpoint is required: WAL-mode commits live in
+// tempDbPath + '-wal' until an auto-checkpoint (every ~1000 pages) flushes
+// them into the main file, which small-note sessions can go an entire run
+// without hitting — packContainer only ever reads the main file.
+async function packContainer(): Promise<void> {
   if (!currentVaultPath || !currentMetadata || !tempDbPath || !masterKey) return
+  if (db) {
+    await dbRun(db, 'PRAGMA wal_checkpoint(TRUNCATE)')
+  }
   const { salt } = getArgon2Params(currentMetadata.kdfInput)
   const dbBytes = readFileSync(tempDbPath)
   const bytes = writeContainer({
@@ -754,22 +761,27 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
 
 // Repacks the .nvx container from the current temp DB without closing the session.
 // Called periodically for crash safety. No-op if vault is closed.
-export function syncContainer(): void {
+export async function syncContainer(): Promise<void> {
   if (!isVaultOpen()) return
   try {
-    packContainer()
+    await packContainer()
   } catch {
     /* don't disrupt the session */
   }
 }
 
 export async function closeVault(): Promise<void> {
-  if (db) {
+  // packContainer() checkpoints via `db`, so it must run before the
+  // connection closes below — not after, when there'd be nothing left to
+  // checkpoint against.
+  if (tempDbPath && currentVaultPath && currentMetadata) {
     try {
-      await dbRun(db, 'PRAGMA wal_checkpoint(TRUNCATE)')
+      await packContainer()
     } catch {
-      /* non-fatal */
+      /* don't throw on close */
     }
+  }
+  if (db) {
     try {
       await closeDatabase(db)
     } catch {
@@ -777,12 +789,7 @@ export async function closeVault(): Promise<void> {
     }
     db = null
   }
-  if (tempDbPath && currentVaultPath && currentMetadata) {
-    try {
-      packContainer()
-    } catch {
-      /* don't throw on close */
-    }
+  if (tempDbPath) {
     try {
       unlinkSync(tempDbPath)
     } catch {
