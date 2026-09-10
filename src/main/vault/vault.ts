@@ -691,7 +691,11 @@ async function doChangePassword(
         )
       })
     } catch {
-      await closeVault()
+      // doCloseVault(), not closeVault(): we're already running inside
+      // withVaultLock here (this catch block belongs to one of the four
+      // doX functions it wraps) — calling the locked closeVault() would
+      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
+      await doCloseVault()
     }
     throw err
   }
@@ -808,7 +812,11 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
         )
       })
     } catch {
-      await closeVault()
+      // doCloseVault(), not closeVault(): we're already running inside
+      // withVaultLock here (this catch block belongs to one of the four
+      // doX functions it wraps) — calling the locked closeVault() would
+      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
+      await doCloseVault()
     }
     throw err
   }
@@ -825,16 +833,37 @@ export async function syncContainer(): Promise<void> {
   }
 }
 
-export async function closeVault(): Promise<void> {
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()/credential rotation) are unsafe.
+//
+// IMPORTANT: doCloseVault() must never be reached through the exported,
+// lock-wrapped closeVault() from code that is already running inside
+// withVaultLock — e.g. the catch-block fallbacks in doChangePassword() /
+// doRotateVaultCredentials() / doConfigureKeyFile() / doRemoveKeyFile().
+// withVaultLock is a plain FIFO queue, not reentrant: a nested call to it
+// waits for the outer call to settle, which itself is waiting on the
+// nested call — a permanent deadlock that also wedges every future queued
+// operation (including the 30s sync timer) and leaves masterKey un-zeroed.
+// Those fallbacks call doCloseVault() directly for this reason.
+export function closeVault(): Promise<void> {
+  return withVaultLock(doCloseVault)
+}
+
+async function doCloseVault(): Promise<void> {
   // packContainer() checkpoints via `db`, so it runs before the connection
   // closes below, while there's still something to checkpoint against.
   // (SQLite implicitly checkpoints WAL when the last connection to a
   // database closes, so closeDatabase() alone would likely be enough today —
   // but that's relying on an implementation detail we don't control here.
   // Explicit beats implicit, and this stops depending on it entirely.)
+  //
+  // Calls doPackContainer() directly, not packContainer() — this function
+  // already runs inside withVaultLock, and packContainer() is that same
+  // lock, so calling it here would be the exact reentrant deadlock this
+  // function's docstring warns callers about.
   if (tempDbPath && currentVaultPath && currentMetadata) {
     try {
-      await packContainer()
+      await doPackContainer()
     } catch {
       /* don't throw on close */
     }
@@ -1026,7 +1055,11 @@ async function doConfigureKeyFile(
         )
       })
     } catch {
-      await closeVault()
+      // doCloseVault(), not closeVault(): we're already running inside
+      // withVaultLock here (this catch block belongs to one of the four
+      // doX functions it wraps) — calling the locked closeVault() would
+      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
+      await doCloseVault()
     }
     throw err
   }
@@ -1155,7 +1188,11 @@ async function doRemoveKeyFile(
         )
       })
     } catch {
-      await closeVault()
+      // doCloseVault(), not closeVault(): we're already running inside
+      // withVaultLock here (this catch block belongs to one of the four
+      // doX functions it wraps) — calling the locked closeVault() would
+      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
+      await doCloseVault()
     }
     throw err
   }

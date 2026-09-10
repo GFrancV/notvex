@@ -5,7 +5,7 @@ import { join } from 'path'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createNote, dbAll } from '../db/queries'
 import { readContainer } from './container'
@@ -229,6 +229,70 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       expect(persisted.get(id)).toBe(title)
     }
   }, 60_000)
+
+  it("doesn't deadlock when rotateVaultCredentials()'s rollback also fails and falls back to closing the vault", async () => {
+    // Forces the exact double-failure path found by /agent-skills:ship's
+    // security-auditor: the primary rekey attempt succeeds, something
+    // inside the transaction then fails, and the rollback rekey (back to
+    // the old key) *also* fails — the catch block that used to call the
+    // locked closeVault() from inside this already-locked function. Before
+    // the doCloseVault() fix, this deadlocked the entire withVaultLock
+    // queue permanently (verified by hand: reverting the catch blocks to
+    // call closeVault() instead of doCloseVault() makes this test time out).
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    let rekeyCalls = 0
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
+        // Primary failure: something inside the rotation's transaction
+        // fails, after the rekey to the new password already succeeded.
+        callback(new Error('simulated transaction failure'))
+        return liveDb
+      }
+      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
+        rekeyCalls += 1
+        if (rekeyCalls === 2) {
+          // Secondary failure: the rollback rekey (back to the old
+          // password) also fails.
+          callback(new Error('simulated rollback rekey failure'))
+          return liveDb
+        }
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    try {
+      const rotation = rotateVaultCredentials('a different correct horse battery staple')
+
+      const outcome = await Promise.race([
+        rotation.then(
+          () => 'resolved' as const,
+          () => 'rejected' as const
+        ),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 10_000))
+      ])
+
+      expect(outcome).toBe('rejected')
+      await expect(rotation).rejects.toThrow('simulated transaction failure')
+
+      // The queue must still be usable afterward — proves doCloseVault()
+      // actually ran to completion (including releasing the lock) rather
+      // than leaving withVaultLock permanently wedged.
+      const pingOrder: string[] = []
+      await withVaultLock(async () => {
+        pingOrder.push('ping')
+      })
+      expect(pingOrder).toEqual(['ping'])
+    } finally {
+      runSpy.mockRestore()
+    }
+  }, 30_000)
 })
 
 // Pure ordering test — no vault/crypto involved, deliberately fast and
@@ -272,5 +336,31 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
     await second
 
     expect(order).toEqual(['first', 'second'])
+  })
+
+  it('deadlocks permanently on a reentrant call — this is why closeVault()s catch-block fallbacks call doCloseVault() directly, never closeVault()', async () => {
+    // withVaultLock is a plain FIFO queue, not a reentrant mutex: calling
+    // it again from inside a function it's already running deadlocks that
+    // call AND wedges the queue for every future caller (see #16 follow-up
+    // — security-auditor found this via an identical isolated repro when
+    // changePassword()'s double-rollback-failure catch block called the
+    // locked closeVault() from inside doChangePassword(), itself already
+    // running under withVaultLock). This test locks in that the primitive
+    // itself is inherently non-reentrant, as a permanent guardrail against
+    // ever "fixing" withVaultLock into something that silently tolerates
+    // reentrancy instead of raising the alarm that a caller is misusing it.
+    const reentrant = withVaultLock(async () => {
+      await withVaultLock(async () => {})
+    })
+
+    const outcome = await Promise.race([
+      reentrant.then(
+        () => 'resolved' as const,
+        () => 'rejected' as const
+      ),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500))
+    ])
+
+    expect(outcome).toBe('timeout')
   })
 })
