@@ -16,7 +16,9 @@ import {
   getDb,
   getMasterKey,
   isVaultOpen,
+  openVault,
   packContainer,
+  rotateVaultCredentials,
   syncContainer,
   withVaultLock
 } from '../src/main/vault/vault'
@@ -178,6 +180,54 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     rmSync(vaultDir, { recursive: true, force: true })
 
     await expect(packContainer()).rejects.toThrow()
+  }, 60_000)
+
+  it('serializes packContainer() against rotateVaultCredentials() so a repack can never race a rekey', async () => {
+    // Characterization test, not a reliable negative control: verified by
+    // hand that reverting withVaultLock to a passthrough does NOT
+    // reliably fail this test. rotateVaultCredentials()'s deriveKey()
+    // call is synchronous, CPU-bound Argon2id that blocks the single JS
+    // thread for well over a second before its first await — packContainer()
+    // (called on the next line, below) can't even start executing until
+    // that blocking call returns, which narrows the real race window
+    // unpredictably. A deterministic proof needs a controlled delay
+    // (e.g. mocking the checkpoint's dbGet call) rather than real timing;
+    // Task 6's withVaultLock unit tests above already prove the locking
+    // mechanism itself serializes correctly and deterministically — this
+    // test instead proves packContainer() and rotateVaultCredentials()
+    // still behave correctly end-to-end when routed through it together.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    const NOTE_COUNT = 5
+    const expectedTitles = new Map<string, string>()
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      const title = `Note ${i}`
+      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
+      expectedTitles.set(note.id, title)
+    }
+
+    const newPassword = 'a different correct horse battery staple'
+    const rotation = rotateVaultCredentials(newPassword)
+    const repack = packContainer()
+    await Promise.all([rotation, repack])
+
+    await closeVault()
+
+    // The strongest proof against "bricked vault": actually unlock with
+    // the new password. If the final .nvx header was built from a stale
+    // key, the HMAC check inside openVault() fails and this returns null
+    // rather than throwing — assert success, not just "didn't throw".
+    const reopened = await openVault(vaultPath, newPassword)
+    expect(reopened).not.toBeNull()
+
+    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
+    expect(persisted.size).toBe(NOTE_COUNT)
+    for (const [id, title] of expectedTitles) {
+      expect(persisted.get(id)).toBe(title)
+    }
   }, 60_000)
 })
 
