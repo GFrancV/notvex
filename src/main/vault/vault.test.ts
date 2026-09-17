@@ -408,13 +408,21 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
     })
 
+    let rejection: unknown
     try {
-      await expect(
-        rotateVaultCredentials('a different correct horse battery staple')
-      ).rejects.toThrow('restored to its previous state')
+      await rotateVaultCredentials('a different correct horse battery staple')
+      throw new Error('expected rotateVaultCredentials() to reject')
+    } catch (err) {
+      rejection = err
     } finally {
       runSpy.mockRestore()
     }
+
+    expect(rejection).toBeInstanceOf(Error)
+    expect((rejection as Error).message).toContain('restored to its previous state')
+    // Task 13's acceptance criterion is that the error tells the user
+    // *where* the backup is, not just that one exists somewhere.
+    expect((rejection as Error).message).toContain(backupPath)
 
     // doCloseVault(true) already ran as part of the double-failure fallback.
     expect(isVaultOpen()).toBe(false)
@@ -423,12 +431,40 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
+    // openVault()'s internal cleanupOrphanedTempFiles() call must not sweep
+    // the .bak it just walked past — see the dedicated test below.
+    expect(existsSync(backupPath)).toBe(true)
 
     const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
     expect(persisted.size).toBe(NOTE_COUNT)
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
+  }, 60_000)
+
+  it('openVault() leaves a leftover .bak in place while still cleaning up a leftover .tmp (issue #17)', async () => {
+    // Simulates a fresh app start finding the leftovers of a previous,
+    // interrupted double-failure rollback (see the test above). Before the
+    // issue #17 fix, cleanupOrphanedTempFiles() swept .bak unconditionally
+    // on every open — destroying the user's only recovery copy the moment
+    // they reopened the app.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+    await closeVault()
+
+    const backupPath = vaultPath + '.bak'
+    const tmpPath = vaultPath + '.tmp'
+    writeFileSync(backupPath, 'stale backup left by a previous crashed rollback')
+    writeFileSync(tmpPath, 'stale atomicWrite temp file left by a previous crash')
+
+    const reopened = await openVault(vaultPath, originalPassword)
+    expect(reopened).not.toBeNull()
+
+    expect(existsSync(backupPath)).toBe(true)
+    expect(existsSync(tmpPath)).toBe(false)
   }, 60_000)
 })
 
