@@ -11,13 +11,16 @@ import { createNote, dbAll } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
 import { decryptField } from '../src/main/vault/crypto'
 import {
+  changePassword,
   closeVault,
+  configureKeyFile,
   createVault,
   getDb,
   getMasterKey,
   isVaultOpen,
   openVault,
   packContainer,
+  removeKeyFile,
   rotateVaultCredentials,
   syncContainer,
   withVaultLock
@@ -70,6 +73,46 @@ async function readNoteTitlesFromPackedContainer(
     } catch {
       /* ignore */
     }
+  }
+}
+
+// Shared by the double-failure regression tests below for all 4
+// credential-rotation functions: they share the exact same catch-block
+// restructure (see vault.ts), reached the exact same way — the primary
+// operation fails inside its transaction (BEGIN TRANSACTION), then the
+// rollback rekey back to the old key also fails. Mocks the live
+// connection's `run` accordingly, runs `action`, and returns the rejection
+// for the caller to assert on. Does NOT interfere with authenticateVaultKey()
+// (used by changePassword/configureKeyFile/removeKeyFile to verify the
+// caller's current credentials before any of this) — that opens its own
+// short-lived connection, never the live `db` mocked here.
+async function triggerDoubleRollbackFailure(action: () => Promise<unknown>): Promise<Error> {
+  const liveDb = getDb()
+  const originalRun = liveDb.run.bind(liveDb)
+  let rekeyCalls = 0
+  const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+    const callback = rest[rest.length - 1] as (err: Error | null) => void
+    if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
+      callback(new Error('simulated transaction failure'))
+      return liveDb
+    }
+    if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
+      rekeyCalls += 1
+      if (rekeyCalls === 2) {
+        callback(new Error('simulated rollback rekey failure'))
+        return liveDb
+      }
+    }
+    return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+  })
+
+  try {
+    await action()
+    throw new Error('expected action() to reject')
+  } catch (err) {
+    return err as Error
+  } finally {
+    runSpy.mockRestore()
   }
 }
 
@@ -466,6 +509,152 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expect(existsSync(backupPath)).toBe(true)
     expect(existsSync(tmpPath)).toBe(false)
   }, 60_000)
+
+  // The 3 tests below extend Task 14's rollback-double-failure coverage
+  // (previously scoped to rotateVaultCredentials() only — see plan.md's
+  // documented scope decision) to the other 3 credential-rotation
+  // functions, since they share the exact same catch-block restructure.
+  // Each confirmed by hand to fail against pre-Task-13 vault.ts.
+
+  it('changePassword(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+    const backupPath = vaultPath + '.bak'
+
+    await createVault(vaultPath, originalPassword)
+
+    const NOTE_COUNT = 5
+    const expectedTitles = new Map<string, string>()
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      const title = `Note ${i}`
+      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
+      expectedTitles.set(note.id, title)
+    }
+    await syncContainer()
+
+    const rejection = await triggerDoubleRollbackFailure(() =>
+      changePassword(originalPassword, 'a different correct horse battery staple')
+    )
+
+    expect(rejection.message).toContain('restored to its previous state')
+    expect(rejection.message).toContain(backupPath)
+    expect(isVaultOpen()).toBe(false)
+    expect(existsSync(backupPath)).toBe(true)
+
+    const reopened = await openVault(vaultPath, originalPassword)
+    expect(reopened).not.toBeNull()
+
+    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
+    expect(persisted.size).toBe(NOTE_COUNT)
+    for (const [id, title] of expectedTitles) {
+      expect(persisted.get(id)).toBe(title)
+    }
+  }, 60_000)
+
+  it('configureKeyFile(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+    const backupPath = vaultPath + '.bak'
+
+    await createVault(vaultPath, originalPassword)
+
+    const NOTE_COUNT = 5
+    const expectedTitles = new Map<string, string>()
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      const title = `Note ${i}`
+      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
+      expectedTitles.set(note.id, title)
+    }
+    await syncContainer()
+
+    // The vault has no key file yet, so the restored backup — and thus the
+    // reopen below — needs neither this key file nor any key file at all.
+    const keyFileContents = randomBytes(32)
+    const rejection = await triggerDoubleRollbackFailure(() =>
+      configureKeyFile(originalPassword, keyFileContents)
+    )
+
+    expect(rejection.message).toContain('restored to its previous state')
+    expect(rejection.message).toContain(backupPath)
+    expect(isVaultOpen()).toBe(false)
+    expect(existsSync(backupPath)).toBe(true)
+
+    const reopened = await openVault(vaultPath, originalPassword)
+    expect(reopened).not.toBeNull()
+
+    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
+    expect(persisted.size).toBe(NOTE_COUNT)
+    for (const [id, title] of expectedTitles) {
+      expect(persisted.get(id)).toBe(title)
+    }
+  }, 60_000)
+
+  it('removeKeyFile(): keeps the backup and the vault still reopens with the original password and key file when the rollback rekey also fails (issue #17)', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+    const backupPath = vaultPath + '.bak'
+
+    await createVault(vaultPath, originalPassword)
+
+    const NOTE_COUNT = 5
+    const expectedTitles = new Map<string, string>()
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      const title = `Note ${i}`
+      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
+      expectedTitles.set(note.id, title)
+    }
+
+    // removeKeyFile() requires a key file to already be configured — this
+    // real call establishes that (and, as its own successful rotation,
+    // persists the notes above to currentVaultPath in the process).
+    const keyFileContents = randomBytes(32)
+    await configureKeyFile(originalPassword, keyFileContents)
+
+    const rejection = await triggerDoubleRollbackFailure(() =>
+      removeKeyFile(originalPassword, keyFileContents)
+    )
+
+    expect(rejection.message).toContain('restored to its previous state')
+    expect(rejection.message).toContain(backupPath)
+    expect(isVaultOpen()).toBe(false)
+    expect(existsSync(backupPath)).toBe(true)
+
+    // The restored backup still has the key file configureKeyFile() just
+    // set up — removeKeyFile() never got far enough to actually remove it.
+    const reopened = await openVault(vaultPath, originalPassword, keyFileContents)
+    expect(reopened).not.toBeNull()
+
+    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
+    expect(persisted.size).toBe(NOTE_COUNT)
+    for (const [id, title] of expectedTitles) {
+      expect(persisted.get(id)).toBe(title)
+    }
+  }, 90_000)
+
+  it('changePassword(): a second rotation in the same open session accepts the password the first rotation just set', async () => {
+    // Found while extending issue #17's coverage to the other 3 credential-
+    // rotation functions, not part of #17 itself: after any successful
+    // rotation, currentMetadata was patched in place rather than re-derived
+    // from the container bytes actually written, leaving
+    // hmacCoveredBytes/storedHmac pointing at the PRE-rotation header. Any
+    // later authenticateVaultKey() call in the same open session (the first
+    // step of changePassword/configureKeyFile/removeKeyFile) then verified
+    // the correct new password against that stale header and rejected it.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const firstPassword = 'correct horse battery staple'
+    const secondPassword = 'a different correct horse battery staple'
+
+    await createVault(vaultPath, firstPassword)
+    await changePassword(firstPassword, secondPassword)
+
+    await expect(
+      changePassword(secondPassword, 'yet another correct horse battery staple')
+    ).resolves.toMatchObject({ mnemonic: expect.any(String) })
+  }, 90_000)
 })
 
 // Pure ordering test — no vault/crypto involved, deliberately fast and

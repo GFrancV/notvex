@@ -666,11 +666,12 @@ async function doChangePassword(
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
+    // Re-derive from containerBytes itself, not a manual field patch — that
+    // previously left hmacCoveredBytes/storedHmac pointing at the pre-
+    // rotation header, so a second rotation in the same open session (e.g.
+    // configureKeyFile() right after changePassword()) authenticated the
+    // correct new credentials against a stale HMAC and rejected them.
+    currentMetadata = readContainer(containerBytes)
 
     return { mnemonic }
   } catch (err) {
@@ -803,11 +804,12 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
+    // Re-derive from containerBytes itself, not a manual field patch — that
+    // previously left hmacCoveredBytes/storedHmac pointing at the pre-
+    // rotation header, so a second rotation in the same open session (e.g.
+    // configureKeyFile() right after changePassword()) authenticated the
+    // correct new credentials against a stale HMAC and rejected them.
+    currentMetadata = readContainer(containerBytes)
     currentHasKeyFile = newHasKeyFile
 
     return { mnemonic }
@@ -1069,11 +1071,12 @@ async function doConfigureKeyFile(
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
+    // Re-derive from containerBytes itself, not a manual field patch — that
+    // previously left hmacCoveredBytes/storedHmac pointing at the pre-
+    // rotation header, so a second rotation in the same open session (e.g.
+    // configureKeyFile() right after changePassword()) authenticated the
+    // correct new credentials against a stale HMAC and rejected them.
+    currentMetadata = readContainer(containerBytes)
     currentHasKeyFile = true
 
     return { mnemonic }
@@ -1219,11 +1222,12 @@ async function doRemoveKeyFile(
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
+    // Re-derive from containerBytes itself, not a manual field patch — that
+    // previously left hmacCoveredBytes/storedHmac pointing at the pre-
+    // rotation header, so a second rotation in the same open session (e.g.
+    // configureKeyFile() right after changePassword()) authenticated the
+    // correct new credentials against a stale HMAC and rejected them.
+    currentMetadata = readContainer(containerBytes)
     currentHasKeyFile = false
 
     return { mnemonic }
