@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Read [`CONSTRAINTS.md`](./CONSTRAINTS.md) before starting work.** It's the enforced quality/security bar (types, lint, format, IPC/vault boundary, secrets/vuln scanning status, speed budget). Never weaken a rule in it to make a change pass — fix the change, or edit CONSTRAINTS.md in its own commit with a stated reason.
+
 ## What This Project Is
 
 **Notvex** is a cross-platform Electron desktop app for secure, fully-local encrypted notes. All data lives in a single SQLCipher-encrypted SQLite database — no account, no server, no network. Core crypto stack: Argon2id (KDF), XChaCha20-Poly1305 (note encryption), SQLCipher (AES-256 database), BIP39 recovery key, optional key-file second factor.
