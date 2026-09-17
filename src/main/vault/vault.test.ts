@@ -279,7 +279,13 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       ])
 
       expect(outcome).toBe('rejected')
-      await expect(rotation).rejects.toThrow('simulated transaction failure')
+      // Issue #17 fix: the double-failure path now throws a new,
+      // more actionable error (the original is chained via `cause`)
+      // instead of the raw transaction error — see doChangePassword() etc.
+      await expect(rotation).rejects.toThrow('restored to its previous state')
+      await expect(rotation).rejects.toMatchObject({
+        cause: expect.objectContaining({ message: 'simulated transaction failure' })
+      })
 
       // The queue must still be usable afterward — proves doCloseVault()
       // actually ran to completion (including releasing the lock) rather
