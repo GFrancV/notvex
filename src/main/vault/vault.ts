@@ -819,17 +819,7 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    // Parsed before atomicWrite so a hypothetical parse failure is caught
-    // while still before the point of no return — the catch block's
-    // restore-and-rollback logic below assumes nothing has been written to
-    // currentVaultPath yet.
-    const newMetadata = readContainer(containerBytes)
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     if (pendingKeyFileContents) {
       memzero(pendingKeyFileContents)
@@ -839,12 +829,6 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    // Re-derived from containerBytes itself, not a manual field patch —
-    // that previously left hmacCoveredBytes/storedHmac pointing at the
-    // pre-rotation header, so a second rotation in the same open session
-    // (e.g. configureKeyFile() right after changePassword()) authenticated
-    // the correct new credentials against a stale HMAC and rejected them.
-    currentMetadata = newMetadata
     currentHasKeyFile = newHasKeyFile
 
     return { mnemonic }
@@ -1056,27 +1040,11 @@ async function doConfigureKeyFile(
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    // Parsed before atomicWrite so a hypothetical parse failure is caught
-    // while still before the point of no return — the catch block's
-    // restore-and-rollback logic below assumes nothing has been written to
-    // currentVaultPath yet.
-    const newMetadata = readContainer(containerBytes)
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    // Re-derived from containerBytes itself, not a manual field patch —
-    // that previously left hmacCoveredBytes/storedHmac pointing at the
-    // pre-rotation header, so a second rotation in the same open session
-    // (e.g. configureKeyFile() right after changePassword()) authenticated
-    // the correct new credentials against a stale HMAC and rejected them.
-    currentMetadata = newMetadata
     currentHasKeyFile = true
 
     return { mnemonic }
@@ -1172,27 +1140,11 @@ async function doRemoveKeyFile(
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    // Parsed before atomicWrite so a hypothetical parse failure is caught
-    // while still before the point of no return — the catch block's
-    // restore-and-rollback logic below assumes nothing has been written to
-    // currentVaultPath yet.
-    const newMetadata = readContainer(containerBytes)
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    // Re-derived from containerBytes itself, not a manual field patch —
-    // that previously left hmacCoveredBytes/storedHmac pointing at the
-    // pre-rotation header, so a second rotation in the same open session
-    // (e.g. configureKeyFile() right after changePassword()) authenticated
-    // the correct new credentials against a stale HMAC and rejected them.
-    currentMetadata = newMetadata
     currentHasKeyFile = false
 
     return { mnemonic }
