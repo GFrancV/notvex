@@ -108,12 +108,16 @@ async function triggerDoubleRollbackFailure(action: () => Promise<unknown>): Pro
 
   try {
     await action()
-    throw new Error('expected action() to reject')
   } catch (err) {
     return err as Error
   } finally {
     runSpy.mockRestore()
   }
+  // Outside the try/catch above so it's never mistaken for action()'s own
+  // rejection — a caller asserting on the returned error's message would
+  // otherwise get a confusing "expected action() to reject" instead of
+  // learning that action() unexpectedly succeeded.
+  throw new Error('expected action() to reject, but it resolved')
 }
 
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
@@ -282,6 +286,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // the doCloseVault() fix, this deadlocked the entire withVaultLock
     // queue permanently (verified by hand: reverting the catch blocks to
     // call closeVault() instead of doCloseVault() makes this test time out).
+    //
+    // Uses its own inline mock rather than triggerDoubleRollbackFailure()
+    // below — this test needs the bounded-time Promise.race to distinguish
+    // "rejected" from "hung" in 10s, instead of vitest's full test timeout.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -432,40 +440,14 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // matching comment in the rollback-succeeds test above.
     await syncContainer()
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    let rekeyCalls = 0
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-        callback(new Error('simulated transaction failure'))
-        return liveDb
-      }
-      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
-        rekeyCalls += 1
-        if (rekeyCalls === 2) {
-          callback(new Error('simulated rollback rekey failure'))
-          return liveDb
-        }
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const rejection = await triggerDoubleRollbackFailure(() =>
+      rotateVaultCredentials('a different correct horse battery staple')
+    )
 
-    let rejection: unknown
-    try {
-      await rotateVaultCredentials('a different correct horse battery staple')
-      throw new Error('expected rotateVaultCredentials() to reject')
-    } catch (err) {
-      rejection = err
-    } finally {
-      runSpy.mockRestore()
-    }
-
-    expect(rejection).toBeInstanceOf(Error)
-    expect((rejection as Error).message).toContain('restored to its previous state')
+    expect(rejection.message).toContain('restored to its previous state')
     // Task 13's acceptance criterion is that the error tells the user
     // *where* the backup is, not just that one exists somewhere.
-    expect((rejection as Error).message).toContain(backupPath)
+    expect(rejection.message).toContain(backupPath)
 
     // doCloseVault(true) already ran as part of the double-failure fallback.
     expect(isVaultOpen()).toBe(false)
