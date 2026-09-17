@@ -144,16 +144,17 @@ function releaseLock(): void {
   }
 }
 
-// Removes leftover .tmp and .bak files from a previous re-keying crash.
+// Removes a leftover .tmp file from a previous re-keying crash.
+// A .bak is deliberately NOT cleaned up here — its presence means a re-key
+// rollback also failed (see the catch blocks in doChangePassword() etc.),
+// and it must survive an app restart as the user's only recovery copy.
 function cleanupOrphanedTempFiles(vaultPath: string): void {
-  for (const suffix of ['.bak', '.tmp']) {
-    const p = vaultPath + suffix
-    if (existsSync(p)) {
-      try {
-        unlinkSync(p)
-      } catch {
-        /* ignore — not critical */
-      }
+  const p = vaultPath + '.tmp'
+  if (existsSync(p)) {
+    try {
+      unlinkSync(p)
+    } catch {
+      /* ignore — not critical */
     }
   }
 }
@@ -680,7 +681,6 @@ async function doChangePassword(
     }
     try {
       copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
     } catch {
       /* ignore */
     }
@@ -690,12 +690,30 @@ async function doChangePassword(
           e ? reject(e) : resolve()
         )
       })
+      // Rollback succeeded — live connection and currentVaultPath are both
+      // back on the old key, so the backup is genuinely redundant now.
+      try {
+        unlinkSync(backupPath)
+      } catch {
+        /* ignore */
+      }
     } catch {
+      // Rollback also failed: masterKey/currentMetadata still hold the OLD
+      // key (never reassigned on this failure path) while tempDbPath's
+      // bytes are keyed with the NEW one — doCloseVault(true) skips the
+      // pack step so it doesn't atomicWrite that inconsistent container
+      // over the just-restored currentVaultPath, and backupPath is kept as
+      // the user's recovery copy instead of being deleted.
+      //
       // doCloseVault(), not closeVault(): we're already running inside
       // withVaultLock here (this catch block belongs to one of the four
       // doX functions it wraps) — calling the locked closeVault() would
       // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault()
+      await doCloseVault(true)
+      throw new Error(
+        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
+        { cause: err }
+      )
     }
     throw err
   }
@@ -801,7 +819,6 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
     }
     try {
       copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
     } catch {
       /* ignore */
     }
@@ -811,12 +828,30 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
           e ? reject(e) : resolve()
         )
       })
+      // Rollback succeeded — live connection and currentVaultPath are both
+      // back on the old key, so the backup is genuinely redundant now.
+      try {
+        unlinkSync(backupPath)
+      } catch {
+        /* ignore */
+      }
     } catch {
+      // Rollback also failed: masterKey/currentMetadata still hold the OLD
+      // key (never reassigned on this failure path) while tempDbPath's
+      // bytes are keyed with the NEW one — doCloseVault(true) skips the
+      // pack step so it doesn't atomicWrite that inconsistent container
+      // over the just-restored currentVaultPath, and backupPath is kept as
+      // the user's recovery copy instead of being deleted.
+      //
       // doCloseVault(), not closeVault(): we're already running inside
       // withVaultLock here (this catch block belongs to one of the four
       // doX functions it wraps) — calling the locked closeVault() would
       // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault()
+      await doCloseVault(true)
+      throw new Error(
+        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
+        { cause: err }
+      )
     }
     throw err
   }
@@ -849,7 +884,13 @@ export function closeVault(): Promise<void> {
   return withVaultLock(doCloseVault)
 }
 
-async function doCloseVault(): Promise<void> {
+// skipPack=true is used by the 4 credential-rotation fallbacks when the
+// re-key rollback itself also failed: at that point masterKey/currentMetadata
+// still hold the OLD key material (never reassigned on this failure path)
+// while tempDbPath's bytes are keyed with the NEW key, so packing now would
+// atomicWrite an internally-inconsistent container over the just-restored
+// currentVaultPath, destroying it. Every other cleanup step still runs.
+async function doCloseVault(skipPack = false): Promise<void> {
   // packContainer() checkpoints via `db`, so it runs before the connection
   // closes below, while there's still something to checkpoint against.
   // (SQLite implicitly checkpoints WAL when the last connection to a
@@ -861,7 +902,7 @@ async function doCloseVault(): Promise<void> {
   // already runs inside withVaultLock, and packContainer() is that same
   // lock, so calling it here would be the exact reentrant deadlock this
   // function's docstring warns callers about.
-  if (tempDbPath && currentVaultPath && currentMetadata) {
+  if (!skipPack && tempDbPath && currentVaultPath && currentMetadata) {
     try {
       await doPackContainer()
     } catch {
@@ -1044,7 +1085,6 @@ async function doConfigureKeyFile(
     }
     try {
       copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
     } catch {
       /* ignore */
     }
@@ -1054,12 +1094,30 @@ async function doConfigureKeyFile(
           e ? reject(e) : resolve()
         )
       })
+      // Rollback succeeded — live connection and currentVaultPath are both
+      // back on the old key, so the backup is genuinely redundant now.
+      try {
+        unlinkSync(backupPath)
+      } catch {
+        /* ignore */
+      }
     } catch {
+      // Rollback also failed: masterKey/currentMetadata still hold the OLD
+      // key (never reassigned on this failure path) while tempDbPath's
+      // bytes are keyed with the NEW one — doCloseVault(true) skips the
+      // pack step so it doesn't atomicWrite that inconsistent container
+      // over the just-restored currentVaultPath, and backupPath is kept as
+      // the user's recovery copy instead of being deleted.
+      //
       // doCloseVault(), not closeVault(): we're already running inside
       // withVaultLock here (this catch block belongs to one of the four
       // doX functions it wraps) — calling the locked closeVault() would
       // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault()
+      await doCloseVault(true)
+      throw new Error(
+        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
+        { cause: err }
+      )
     }
     throw err
   }
@@ -1177,7 +1235,6 @@ async function doRemoveKeyFile(
     }
     try {
       copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
     } catch {
       /* ignore */
     }
@@ -1187,12 +1244,30 @@ async function doRemoveKeyFile(
           e ? reject(e) : resolve()
         )
       })
+      // Rollback succeeded — live connection and currentVaultPath are both
+      // back on the old key, so the backup is genuinely redundant now.
+      try {
+        unlinkSync(backupPath)
+      } catch {
+        /* ignore */
+      }
     } catch {
+      // Rollback also failed: masterKey/currentMetadata still hold the OLD
+      // key (never reassigned on this failure path) while tempDbPath's
+      // bytes are keyed with the NEW one — doCloseVault(true) skips the
+      // pack step so it doesn't atomicWrite that inconsistent container
+      // over the just-restored currentVaultPath, and backupPath is kept as
+      // the user's recovery copy instead of being deleted.
+      //
       // doCloseVault(), not closeVault(): we're already running inside
       // withVaultLock here (this catch block belongs to one of the four
       // doX functions it wraps) — calling the locked closeVault() would
       // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault()
+      await doCloseVault(true)
+      throw new Error(
+        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
+        { cause: err }
+      )
     }
     throw err
   }
