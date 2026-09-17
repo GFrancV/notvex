@@ -44,8 +44,13 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{ts,mjs,json}\"",
     "doctor": "react-doctor",
     "doctor:staged": "react-doctor --staged --verbose",
-    "test:vault": "vitest run",
+    "test:vault": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
+    "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "validate": "pnpm typecheck && pnpm lint && pnpm format:check",
+    "check:fast": "pnpm typecheck && pnpm lint",
+    "check:task": "pnpm validate && pnpm depcruise && pnpm test:vault",
+    "check:full": "pnpm check:task && pnpm test:coverage",
     "prepare": "husky"
   },
   "dependencies": {
@@ -96,6 +101,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
+    "dependency-cruiser": "^18.2.0",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
