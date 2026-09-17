@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -299,6 +299,137 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       runSpy.mockRestore()
     }
   }, 30_000)
+
+  // Characterization test, not a regression guard: verified by hand that
+  // this passes unchanged against pre-Task-13 code too — the rollback-
+  // succeeds path already deleted the backup and threw the original error
+  // correctly before this fix. Issue #17's bug was specifically in the
+  // double-failure path (the next test). Kept here to prove Task 13's
+  // restructure didn't regress the already-working success path.
+  it('rotateVaultCredentials(): deletes the backup and the vault reopens with the original password once the rollback rekey succeeds (issue #17)', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+    const backupPath = vaultPath + '.bak'
+
+    await createVault(vaultPath, originalPassword)
+
+    const NOTE_COUNT = 5
+    const expectedTitles = new Map<string, string>()
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      const title = `Note ${i}`
+      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
+      expectedTitles.set(note.id, title)
+    }
+    // Persist the notes to currentVaultPath before rotating, so the
+    // backupPath copy taken at the start of the rotation actually contains
+    // them — otherwise "restore the backup" would restore the vault's
+    // original empty state, not a meaningful data-safety proof.
+    await syncContainer()
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    // Only the primary transaction fails here — the rollback rekey (back
+    // to the old password) runs for real and succeeds, unlike the
+    // double-failure test above.
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
+        callback(new Error('simulated transaction failure'))
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    try {
+      await expect(
+        rotateVaultCredentials('a different correct horse battery staple')
+      ).rejects.toThrow('simulated transaction failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    // Rollback succeeded — the backup is genuinely redundant and must be gone.
+    expect(existsSync(backupPath)).toBe(false)
+
+    await closeVault()
+    const reopened = await openVault(vaultPath, originalPassword)
+    expect(reopened).not.toBeNull()
+
+    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
+    expect(persisted.size).toBe(NOTE_COUNT)
+    for (const [id, title] of expectedTitles) {
+      expect(persisted.get(id)).toBe(title)
+    }
+  }, 60_000)
+
+  it('rotateVaultCredentials(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
+    // Before the issue #17 fix, this exact path deleted the backup
+    // immediately after restoring it (before the rollback rekey was even
+    // attempted) and then, post-Phase-6, ran doCloseVault()'s pack step
+    // with mismatched key material — silently overwriting the just-restored
+    // currentVaultPath with a container neither password could open, with
+    // no backup left to recover from. Verified by hand: reverting Task 13
+    // reproduces exactly that — openVault() below fails afterward.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+    const backupPath = vaultPath + '.bak'
+
+    await createVault(vaultPath, originalPassword)
+
+    const NOTE_COUNT = 5
+    const expectedTitles = new Map<string, string>()
+    for (let i = 0; i < NOTE_COUNT; i++) {
+      const title = `Note ${i}`
+      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
+      expectedTitles.set(note.id, title)
+    }
+    // Persist the notes to currentVaultPath before rotating — see the
+    // matching comment in the rollback-succeeds test above.
+    await syncContainer()
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    let rekeyCalls = 0
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
+        callback(new Error('simulated transaction failure'))
+        return liveDb
+      }
+      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
+        rekeyCalls += 1
+        if (rekeyCalls === 2) {
+          callback(new Error('simulated rollback rekey failure'))
+          return liveDb
+        }
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    try {
+      await expect(
+        rotateVaultCredentials('a different correct horse battery staple')
+      ).rejects.toThrow('restored to its previous state')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    // doCloseVault(true) already ran as part of the double-failure fallback.
+    expect(isVaultOpen()).toBe(false)
+    // Rollback also failed — the backup must survive as the recovery copy.
+    expect(existsSync(backupPath)).toBe(true)
+
+    const reopened = await openVault(vaultPath, originalPassword)
+    expect(reopened).not.toBeNull()
+
+    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
+    expect(persisted.size).toBe(NOTE_COUNT)
+    for (const [id, title] of expectedTitles) {
+      expect(persisted.get(id)).toBe(title)
+    }
+  }, 60_000)
 })
 
 // Pure ordering test — no vault/crypto involved, deliberately fast and
