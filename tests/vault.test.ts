@@ -120,6 +120,20 @@ async function triggerDoubleRollbackFailure(action: () => Promise<unknown>): Pro
   throw new Error('expected action() to reject, but it resolved')
 }
 
+// Shared by the 4 credential-rotation double-failure tests below: asserts
+// the standard outcome of the rollback-also-fails path — an actionable
+// error naming backupPath, the vault closed, and the backup kept on disk.
+function expectRestoredWithBackupKept(rejection: Error, backupPath: string): void {
+  expect(rejection.message).toContain('restored to its previous state')
+  // Task 13's acceptance criterion is that the error tells the user
+  // *where* the backup is, not just that one exists somewhere.
+  expect(rejection.message).toContain(backupPath)
+  // doCloseVault(true) already ran as part of the double-failure fallback.
+  expect(isVaultOpen()).toBe(false)
+  // Rollback also failed — the backup must survive as the recovery copy.
+  expect(existsSync(backupPath)).toBe(true)
+}
+
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   let vaultDir: string | undefined
 
@@ -444,15 +458,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       rotateVaultCredentials('a different correct horse battery staple')
     )
 
-    expect(rejection.message).toContain('restored to its previous state')
-    // Task 13's acceptance criterion is that the error tells the user
-    // *where* the backup is, not just that one exists somewhere.
-    expect(rejection.message).toContain(backupPath)
-
-    // doCloseVault(true) already ran as part of the double-failure fallback.
-    expect(isVaultOpen()).toBe(false)
-    // Rollback also failed — the backup must survive as the recovery copy.
-    expect(existsSync(backupPath)).toBe(true)
+    expectRestoredWithBackupKept(rejection, backupPath)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -519,10 +525,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       changePassword(originalPassword, 'a different correct horse battery staple')
     )
 
-    expect(rejection.message).toContain('restored to its previous state')
-    expect(rejection.message).toContain(backupPath)
-    expect(isVaultOpen()).toBe(false)
-    expect(existsSync(backupPath)).toBe(true)
+    expectRestoredWithBackupKept(rejection, backupPath)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -558,10 +561,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       configureKeyFile(originalPassword, keyFileContents)
     )
 
-    expect(rejection.message).toContain('restored to its previous state')
-    expect(rejection.message).toContain(backupPath)
-    expect(isVaultOpen()).toBe(false)
-    expect(existsSync(backupPath)).toBe(true)
+    expectRestoredWithBackupKept(rejection, backupPath)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -599,10 +599,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       removeKeyFile(originalPassword, keyFileContents)
     )
 
-    expect(rejection.message).toContain('restored to its previous state')
-    expect(rejection.message).toContain(backupPath)
-    expect(isVaultOpen()).toBe(false)
-    expect(existsSync(backupPath)).toBe(true)
+    expectRestoredWithBackupKept(rejection, backupPath)
 
     // The restored backup still has the key file configureKeyFile() just
     // set up — removeKeyFile() never got far enough to actually remove it.

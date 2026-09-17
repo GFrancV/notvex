@@ -563,6 +563,87 @@ export async function openVaultWithRecovery(
   }
 }
 
+// Shared by the 4 credential-rotation functions' failure paths — identical
+// by construction now, not by discipline (see the plan's root-cause trace
+// for why a divergence here is exactly how this class of bug slips back
+// in). Restores backupPath over vaultPath, then attempts to rekey the live
+// connection back to the old key. Returns normally if that rollback
+// succeeds (the backup is deleted — genuinely redundant at that point).
+// Throws a new, actionable error (chaining `err` via `cause`) if the
+// rollback also fails.
+async function rollbackCredentialRotation(
+  vaultPath: string,
+  backupPath: string,
+  oldKeyHex: string,
+  err: unknown
+): Promise<void> {
+  try {
+    unlinkSync(vaultPath + '.tmp')
+  } catch {
+    /* ignore */
+  }
+  try {
+    copyFileSync(backupPath, vaultPath)
+  } catch {
+    /* ignore */
+  }
+  try {
+    await new Promise<void>((resolve, reject) => {
+      db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) => (e ? reject(e) : resolve()))
+    })
+    // Rollback succeeded — live connection and vaultPath are both back on
+    // the old key, so the backup is genuinely redundant now.
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+  } catch {
+    // Rollback also failed: masterKey/currentMetadata still hold the OLD
+    // key (never reassigned on this failure path) while tempDbPath's bytes
+    // are keyed with the NEW one — doCloseVault(true) skips the pack step
+    // so it doesn't atomicWrite that inconsistent container over the
+    // just-restored vaultPath, and backupPath is kept as the user's
+    // recovery copy instead of being deleted.
+    //
+    // doCloseVault(), not closeVault(): we're already running inside
+    // withVaultLock here (this function is only called from one of the
+    // four doX functions it wraps) — calling the locked closeVault() would
+    // deadlock the whole queue permanently. See doCloseVault()'s docstring.
+    await doCloseVault(true)
+    throw new Error(
+      `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
+      { cause: err }
+    )
+  }
+}
+
+// Parses the just-written container bytes before atomicWrite so a
+// hypothetical parse failure is caught while still before the point of no
+// return — rollbackCredentialRotation() above assumes nothing has been
+// written to vaultPath yet. Deletes the backup afterward: it's the last
+// step of a successful rotation, so it's genuinely redundant once this
+// returns. Re-derives metadata from containerBytes itself, not a manual
+// field patch — that previously left hmacCoveredBytes/storedHmac pointing
+// at the pre-rotation header, so a second rotation in the same open
+// session (e.g. configureKeyFile() right after changePassword())
+// authenticated the correct new credentials against a stale HMAC and
+// rejected them.
+function commitRotatedContainer(
+  vaultPath: string,
+  backupPath: string,
+  containerBytes: Buffer
+): ContainerMetadata {
+  const newMetadata = readContainer(containerBytes)
+  atomicWrite(vaultPath, containerBytes)
+  try {
+    unlinkSync(backupPath)
+  } catch {
+    /* ignore */
+  }
+  return newMetadata
+}
+
 // Goes through withVaultLock: see its docstring for why concurrent calls
 // here (or a concurrent packContainer()) are unsafe.
 export function changePassword(
@@ -656,71 +737,15 @@ async function doChangePassword(
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    // Parsed before atomicWrite so a hypothetical parse failure is caught
-    // while still before the point of no return — the catch block's
-    // restore-and-rollback logic below assumes nothing has been written to
-    // currentVaultPath yet.
-    const newMetadata = readContainer(containerBytes)
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    // Re-derived from containerBytes itself, not a manual field patch —
-    // that previously left hmacCoveredBytes/storedHmac pointing at the
-    // pre-rotation header, so a second rotation in the same open session
-    // (e.g. configureKeyFile() right after changePassword()) authenticated
-    // the correct new credentials against a stale HMAC and rejected them.
-    currentMetadata = newMetadata
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-      // Rollback succeeded — live connection and currentVaultPath are both
-      // back on the old key, so the backup is genuinely redundant now.
-      try {
-        unlinkSync(backupPath)
-      } catch {
-        /* ignore */
-      }
-    } catch {
-      // Rollback also failed: masterKey/currentMetadata still hold the OLD
-      // key (never reassigned on this failure path) while tempDbPath's
-      // bytes are keyed with the NEW one — doCloseVault(true) skips the
-      // pack step so it doesn't atomicWrite that inconsistent container
-      // over the just-restored currentVaultPath, and backupPath is kept as
-      // the user's recovery copy instead of being deleted.
-      //
-      // doCloseVault(), not closeVault(): we're already running inside
-      // withVaultLock here (this catch block belongs to one of the four
-      // doX functions it wraps) — calling the locked closeVault() would
-      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault(true)
-      throw new Error(
-        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
-        { cause: err }
-      )
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
@@ -824,47 +849,7 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-      // Rollback succeeded — live connection and currentVaultPath are both
-      // back on the old key, so the backup is genuinely redundant now.
-      try {
-        unlinkSync(backupPath)
-      } catch {
-        /* ignore */
-      }
-    } catch {
-      // Rollback also failed: masterKey/currentMetadata still hold the OLD
-      // key (never reassigned on this failure path) while tempDbPath's
-      // bytes are keyed with the NEW one — doCloseVault(true) skips the
-      // pack step so it doesn't atomicWrite that inconsistent container
-      // over the just-restored currentVaultPath, and backupPath is kept as
-      // the user's recovery copy instead of being deleted.
-      //
-      // doCloseVault(), not closeVault(): we're already running inside
-      // withVaultLock here (this catch block belongs to one of the four
-      // doX functions it wraps) — calling the locked closeVault() would
-      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault(true)
-      throw new Error(
-        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
-        { cause: err }
-      )
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
@@ -1096,47 +1081,7 @@ async function doConfigureKeyFile(
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-      // Rollback succeeded — live connection and currentVaultPath are both
-      // back on the old key, so the backup is genuinely redundant now.
-      try {
-        unlinkSync(backupPath)
-      } catch {
-        /* ignore */
-      }
-    } catch {
-      // Rollback also failed: masterKey/currentMetadata still hold the OLD
-      // key (never reassigned on this failure path) while tempDbPath's
-      // bytes are keyed with the NEW one — doCloseVault(true) skips the
-      // pack step so it doesn't atomicWrite that inconsistent container
-      // over the just-restored currentVaultPath, and backupPath is kept as
-      // the user's recovery copy instead of being deleted.
-      //
-      // doCloseVault(), not closeVault(): we're already running inside
-      // withVaultLock here (this catch block belongs to one of the four
-      // doX functions it wraps) — calling the locked closeVault() would
-      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault(true)
-      throw new Error(
-        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
-        { cause: err }
-      )
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
@@ -1252,47 +1197,7 @@ async function doRemoveKeyFile(
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-      // Rollback succeeded — live connection and currentVaultPath are both
-      // back on the old key, so the backup is genuinely redundant now.
-      try {
-        unlinkSync(backupPath)
-      } catch {
-        /* ignore */
-      }
-    } catch {
-      // Rollback also failed: masterKey/currentMetadata still hold the OLD
-      // key (never reassigned on this failure path) while tempDbPath's
-      // bytes are keyed with the NEW one — doCloseVault(true) skips the
-      // pack step so it doesn't atomicWrite that inconsistent container
-      // over the just-restored currentVaultPath, and backupPath is kept as
-      // the user's recovery copy instead of being deleted.
-      //
-      // doCloseVault(), not closeVault(): we're already running inside
-      // withVaultLock here (this catch block belongs to one of the four
-      // doX functions it wraps) — calling the locked closeVault() would
-      // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-      await doCloseVault(true)
-      throw new Error(
-        `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
-        { cause: err }
-      )
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
