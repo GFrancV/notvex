@@ -28,6 +28,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let mainWindow: BrowserWindow | null = null
+let isQuitting = false
+let readyToQuit = false
 
 void app.whenReady().then(async (): Promise<void> => {
   cleanupOrphanedTempDbs()
@@ -41,15 +43,37 @@ void app.whenReady().then(async (): Promise<void> => {
   })
 })
 
-app.on('window-all-closed', async (): Promise<void> => {
-  stopAutoLockTimer()
-  await closeVault()
-  if (process.platform !== 'darwin') app.quit()
+app.on('window-all-closed', (): void => {
+  if (process.platform === 'darwin') {
+    // Closing the last window doesn't quit the app on macOS (dock
+    // convention), so the vault still needs to lock here. This call can
+    // also fire mid-shutdown (e.g. during autoUpdater.quitAndInstall(),
+    // which closes windows before before-quit) — safe either way because
+    // closeVault() is serialized (withVaultLock) and idempotent, not
+    // because no quit could be in progress.
+    stopAutoLockTimer()
+    void closeVault()
+    return
+  }
+  app.quit() // before-quit does the real shutdown
 })
 
-app.on('before-quit', async (): Promise<void> => {
-  stopAutoLockTimer()
-  await closeVault()
+app.on('before-quit', (event): void => {
+  if (readyToQuit) return // our own re-entrant app.quit(): let it through
+  event.preventDefault() // synchronous, before any await
+  if (isQuitting) return // a duplicate quit signal while one is already in flight
+  isQuitting = true
+  void (async (): Promise<void> => {
+    try {
+      stopAutoLockTimer()
+      await closeVault()
+    } catch (e) {
+      console.error('[quit] closeVault failed:', e)
+    } finally {
+      readyToQuit = true
+      app.quit() // re-enters before-quit, which now lets it through
+    }
+  })()
 })
 
 app.on('second-instance', (_event, argv): void => {
