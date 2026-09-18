@@ -79,6 +79,32 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     await vi.waitFor(() => expect(closeVault).toHaveBeenCalledTimes(1))
   })
 
+  it('a duplicate before-quit signal while closeVault() is still in flight is still prevented', async () => {
+    let resolveClose: () => void = () => {}
+    closeVault.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveClose = resolve
+        })
+    )
+
+    const firstEvent = { preventDefault: vi.fn() }
+    app.emit('before-quit', firstEvent)
+
+    // closeVault() is still pending here — simulates a second, external
+    // quit signal (e.g. a duplicate Cmd+Q) arriving before the first close
+    // has settled, as opposed to the internal re-entrant app.quit() the
+    // finally block calls once it has.
+    const secondEvent = { preventDefault: vi.fn() }
+    app.emit('before-quit', secondEvent)
+
+    expect(secondEvent.preventDefault).toHaveBeenCalledTimes(1)
+    expect(closeVault).toHaveBeenCalledTimes(1) // still guarded: no second closeVault() call
+
+    resolveClose()
+    await vi.waitFor(() => expect(quit).toHaveBeenCalledTimes(1))
+  })
+
   it('if closeVault() rejects, it logs the error and still calls app.quit() in the finally', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     closeVault.mockRejectedValueOnce(new Error('boom'))
