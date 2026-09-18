@@ -64,14 +64,21 @@ import {
 } from './ui/sidebar'
 import { VaultSwitcher } from './VaultSwitcher'
 
+// The dropdown closes as soon as this item is clicked (standard menu
+// behavior), so any loading state on the item itself is never visible — a
+// persistent toast is the only feedback that survives the menu closing.
 const handleSaveCopy = async (): Promise<void> => {
+  const toastId = toast.loading('Saving a copy…')
   const result = await notvex.vault.saveCopyAs()
   if (!result.success) {
-    toast.error('Failed to save copy')
+    toast.error('Failed to save copy', { id: toastId })
     return
   }
-
-  if (result.data) toast.success('Copy saved successfully')
+  if (result.data) {
+    toast.success('Copy saved successfully', { id: toastId })
+  } else {
+    toast.dismiss(toastId) // user canceled the save dialog
+  }
 }
 
 const handleOpenBackupsFolder = async (): Promise<void> => {

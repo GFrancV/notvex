@@ -38,10 +38,10 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm typecheck:node && pnpm typecheck:web",
-    "lint": "eslint src --max-warnings 0 --cache",
-    "lint:fix": "eslint src --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{ts,mjs,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{ts,mjs,json}\"",
+    "lint": "eslint src tests --max-warnings 0 --cache",
+    "lint:fix": "eslint src tests --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,mjs,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,mjs,json}\"",
     "doctor": "react-doctor",
     "doctor:staged": "react-doctor --staged --verbose",
     "test:vault": "vitest run --passWithNoTests",
@@ -146,6 +146,10 @@
   "packageManager": "pnpm@11.1.1",
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "tests/**/*.ts": [
       "eslint --fix --max-warnings 0",
       "prettier --write"
     ],

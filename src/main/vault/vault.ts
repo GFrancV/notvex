@@ -59,6 +59,27 @@ interface RawNote {
   content_iv: Buffer
 }
 
+// ─── Concurrency lock ────────────────────────────────────────────────────────
+
+// Serializes packContainer() against itself and against every credential-
+// rotation function (changePassword, rotateVaultCredentials, configureKeyFile,
+// removeKeyFile). Without this, packContainer() — now async, with a real
+// await at the checkpoint — can resume mid-rekey: those functions PRAGMA
+// rekey the on-disk temp DB several awaits before reassigning the in-memory
+// masterKey, so an interleaved repack can write a .nvx header encrypted
+// under the stale key over a body already re-keyed to the new one, bricking
+// the vault. A plain FIFO queue (not coalescing) is required, not just
+// dedup: two calls can carry different arguments (e.g. two changePassword()
+// calls), so a second caller must run its own body, not reuse the first
+// caller's result. Exported only so the test suite can verify the ordering
+// directly and fast, without real Argon2id/SQLCipher timing.
+let vaultOpLock: Promise<unknown> = Promise.resolve()
+export function withVaultLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = vaultOpLock.then(fn, fn)
+  vaultOpLock = run.catch(() => undefined)
+  return run
+}
+
 // ─── Module state ────────────────────────────────────────────────────────────
 
 let db: sqlite3.Database | null = null
@@ -123,16 +144,17 @@ function releaseLock(): void {
   }
 }
 
-// Removes leftover .tmp and .bak files from a previous re-keying crash.
+// Removes a leftover .tmp file from a previous re-keying crash.
+// A .bak is deliberately NOT cleaned up here — its presence means a re-key
+// rollback also failed (see the catch blocks in doChangePassword() etc.),
+// and it must survive an app restart as the user's only recovery copy.
 function cleanupOrphanedTempFiles(vaultPath: string): void {
-  for (const suffix of ['.bak', '.tmp']) {
-    const p = vaultPath + suffix
-    if (existsSync(p)) {
-      try {
-        unlinkSync(p)
-      } catch {
-        /* ignore — not critical */
-      }
+  const p = vaultPath + '.tmp'
+  if (existsSync(p)) {
+    try {
+      unlinkSync(p)
+    } catch {
+      /* ignore — not critical */
     }
   }
 }
@@ -185,10 +207,35 @@ function atomicWrite(filePath: string, bytes: Buffer): void {
   renameSync(tmp, filePath)
 }
 
-// Reads the current temp DB and repacks the .nvx container. Safe to call while
-// the DB is idle (not mid-transaction). Does nothing if state is incomplete.
-function packContainer(): void {
+// Flushes the -wal into tempDbPath, then repacks the .nvx container from it.
+// Safe to call while the DB is idle (not mid-transaction). Does nothing if
+// state is incomplete. The checkpoint is required: WAL-mode commits live in
+// tempDbPath + '-wal' until an auto-checkpoint (every ~1000 pages) flushes
+// them into the main file, which small-note sessions can go an entire run
+// without hitting — packContainer only ever reads the main file.
+//
+// Goes through withVaultLock: see its docstring for why an unserialized
+// version of this function is unsafe.
+export function packContainer(): Promise<void> {
+  return withVaultLock(doPackContainer)
+}
+
+async function doPackContainer(): Promise<void> {
   if (!currentVaultPath || !currentMetadata || !tempDbPath || !masterKey) return
+  if (db) {
+    // wal_checkpoint(TRUNCATE) reports (busy, log, checkpointed) rather than
+    // throwing when it can only partially complete (busy=1, e.g. a reader
+    // holding a lock) — dbRun() discards that row, so a partial checkpoint
+    // would otherwise look identical to a full one. Treat busy as a hard
+    // failure rather than silently reading a possibly under-flushed file.
+    const checkpoint = await dbGet<{ busy: number; log: number; checkpointed: number }>(
+      db,
+      'PRAGMA wal_checkpoint(TRUNCATE)'
+    )
+    if (checkpoint?.busy) {
+      throw new Error('WAL checkpoint incomplete (busy) — refusing to pack a possibly stale DB')
+    }
+  }
   const { salt } = getArgon2Params(currentMetadata.kdfInput)
   const dbBytes = readFileSync(tempDbPath)
   const bytes = writeContainer({
@@ -516,7 +563,98 @@ export async function openVaultWithRecovery(
   }
 }
 
-export async function changePassword(
+// Shared by the 4 credential-rotation functions' failure paths — identical
+// by construction now, not by discipline (see the plan's root-cause trace
+// for why a divergence here is exactly how this class of bug slips back
+// in). Restores backupPath over vaultPath, then attempts to rekey the live
+// connection back to the old key. Returns normally if that rollback
+// succeeds (the backup is deleted — genuinely redundant at that point).
+// Throws a new, actionable error (chaining `err` via `cause`) if the
+// rollback also fails.
+async function rollbackCredentialRotation(
+  vaultPath: string,
+  backupPath: string,
+  oldKeyHex: string,
+  err: unknown
+): Promise<void> {
+  try {
+    unlinkSync(vaultPath + '.tmp')
+  } catch {
+    /* ignore */
+  }
+  try {
+    copyFileSync(backupPath, vaultPath)
+  } catch {
+    /* ignore */
+  }
+  try {
+    await new Promise<void>((resolve, reject) => {
+      db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) => (e ? reject(e) : resolve()))
+    })
+    // Rollback succeeded — live connection and vaultPath are both back on
+    // the old key, so the backup is genuinely redundant now.
+    try {
+      unlinkSync(backupPath)
+    } catch {
+      /* ignore */
+    }
+  } catch {
+    // Rollback also failed: masterKey/currentMetadata still hold the OLD
+    // key (never reassigned on this failure path) while tempDbPath's bytes
+    // are keyed with the NEW one — doCloseVault(true) skips the pack step
+    // so it doesn't atomicWrite that inconsistent container over the
+    // just-restored vaultPath, and backupPath is kept as the user's
+    // recovery copy instead of being deleted.
+    //
+    // doCloseVault(), not closeVault(): we're already running inside
+    // withVaultLock here (this function is only called from one of the
+    // four doX functions it wraps) — calling the locked closeVault() would
+    // deadlock the whole queue permanently. See doCloseVault()'s docstring.
+    await doCloseVault(true)
+    throw new Error(
+      `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
+      { cause: err }
+    )
+  }
+}
+
+// Parses the just-written container bytes before atomicWrite so a
+// hypothetical parse failure is caught while still before the point of no
+// return — rollbackCredentialRotation() above assumes nothing has been
+// written to vaultPath yet. Deletes the backup afterward: it's the last
+// step of a successful rotation, so it's genuinely redundant once this
+// returns. Re-derives metadata from containerBytes itself, not a manual
+// field patch — that previously left hmacCoveredBytes/storedHmac pointing
+// at the pre-rotation header, so a second rotation in the same open
+// session (e.g. configureKeyFile() right after changePassword())
+// authenticated the correct new credentials against a stale HMAC and
+// rejected them.
+function commitRotatedContainer(
+  vaultPath: string,
+  backupPath: string,
+  containerBytes: Buffer
+): ContainerMetadata {
+  const newMetadata = readContainer(containerBytes)
+  atomicWrite(vaultPath, containerBytes)
+  try {
+    unlinkSync(backupPath)
+  } catch {
+    /* ignore */
+  }
+  return newMetadata
+}
+
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  keyFileContents?: Uint8Array
+): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doChangePassword(currentPassword, newPassword, keyFileContents))
+}
+
+async function doChangePassword(
   currentPassword: string,
   newPassword: string,
   keyFileContents?: Uint8Array
@@ -599,49 +737,26 @@ export async function changePassword(
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-    } catch {
-      await closeVault()
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
 
-export async function rotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function rotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doRotateVaultCredentials(newPassword))
+}
+
+async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
   if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
@@ -704,12 +819,7 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     if (pendingKeyFileContents) {
       memzero(pendingKeyFileContents)
@@ -719,57 +829,68 @@ export async function rotateVaultCredentials(newPassword: string): Promise<{ mne
     const newSecureKey = storeKey(newRawKey) // zeros newRawKey
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
     currentHasKeyFile = newHasKeyFile
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-    } catch {
-      await closeVault()
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
 
 // Repacks the .nvx container from the current temp DB without closing the session.
 // Called periodically for crash safety. No-op if vault is closed.
-export function syncContainer(): void {
+export async function syncContainer(): Promise<void> {
   if (!isVaultOpen()) return
   try {
-    packContainer()
+    await packContainer()
   } catch {
     /* don't disrupt the session */
   }
 }
 
-export async function closeVault(): Promise<void> {
-  if (db) {
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()/credential rotation) are unsafe.
+//
+// IMPORTANT: doCloseVault() must never be reached through the exported,
+// lock-wrapped closeVault() from code that is already running inside
+// withVaultLock — e.g. the catch-block fallbacks in doChangePassword() /
+// doRotateVaultCredentials() / doConfigureKeyFile() / doRemoveKeyFile().
+// withVaultLock is a plain FIFO queue, not reentrant: a nested call to it
+// waits for the outer call to settle, which itself is waiting on the
+// nested call — a permanent deadlock that also wedges every future queued
+// operation (including the 30s sync timer) and leaves masterKey un-zeroed.
+// Those fallbacks call doCloseVault() directly for this reason.
+export function closeVault(): Promise<void> {
+  return withVaultLock(doCloseVault)
+}
+
+// skipPack=true is used by the 4 credential-rotation fallbacks when the
+// re-key rollback itself also failed: at that point masterKey/currentMetadata
+// still hold the OLD key material (never reassigned on this failure path)
+// while tempDbPath's bytes are keyed with the NEW key, so packing now would
+// atomicWrite an internally-inconsistent container over the just-restored
+// currentVaultPath, destroying it. Every other cleanup step still runs.
+async function doCloseVault(skipPack = false): Promise<void> {
+  // packContainer() checkpoints via `db`, so it runs before the connection
+  // closes below, while there's still something to checkpoint against.
+  // (SQLite implicitly checkpoints WAL when the last connection to a
+  // database closes, so closeDatabase() alone would likely be enough today —
+  // but that's relying on an implementation detail we don't control here.
+  // Explicit beats implicit, and this stops depending on it entirely.)
+  //
+  // Calls doPackContainer() directly, not packContainer() — this function
+  // already runs inside withVaultLock, and packContainer() is that same
+  // lock, so calling it here would be the exact reentrant deadlock this
+  // function's docstring warns callers about.
+  if (!skipPack && tempDbPath && currentVaultPath && currentMetadata) {
     try {
-      await dbRun(db, 'PRAGMA wal_checkpoint(TRUNCATE)')
+      await doPackContainer()
     } catch {
-      /* non-fatal */
+      /* don't throw on close */
     }
+  }
+  if (db) {
     try {
       await closeDatabase(db)
     } catch {
@@ -777,12 +898,7 @@ export async function closeVault(): Promise<void> {
     }
     db = null
   }
-  if (tempDbPath && currentVaultPath && currentMetadata) {
-    try {
-      packContainer()
-    } catch {
-      /* don't throw on close */
-    }
+  if (tempDbPath) {
     try {
       unlinkSync(tempDbPath)
     } catch {
@@ -840,7 +956,16 @@ async function reencryptNotes(oldKey: Uint8Array, newKey: Uint8Array): Promise<v
 }
 
 // Add or change the key file on the open vault.
-export async function configureKeyFile(
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function configureKeyFile(
+  password: string,
+  keyFileContents: Uint8Array
+): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doConfigureKeyFile(password, keyFileContents))
+}
+
+async function doConfigureKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
@@ -915,51 +1040,31 @@ export async function configureKeyFile(
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
     currentHasKeyFile = true
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-    } catch {
-      await closeVault()
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
 
 // Remove the key file from the open vault. Requires the current password + key file.
-export async function removeKeyFile(
+// Goes through withVaultLock: see its docstring for why concurrent calls
+// here (or a concurrent packContainer()) are unsafe.
+export function removeKeyFile(
+  password: string,
+  keyFileContents: Uint8Array
+): Promise<{ mnemonic: string }> {
+  return withVaultLock(() => doRemoveKeyFile(password, keyFileContents))
+}
+
+async function doRemoveKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
@@ -1035,45 +1140,16 @@ export async function removeKeyFile(
       dbBytes,
       existingVersionMin: currentMetadata.versionMin
     })
-    atomicWrite(currentVaultPath, containerBytes)
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
+    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
     const newSecureKey = storeKey(newRawKey)
     freeSecure(masterKey)
     masterKey = newSecureKey
-    currentMetadata = {
-      ...currentMetadata,
-      kdfInput: { version: 1, salt: newSalt, kdfTier: currentMetadata.kdfInput.kdfTier },
-      recoveryBlob: newRecoveryBlob
-    }
     currentHasKeyFile = false
 
     return { mnemonic }
   } catch (err) {
-    try {
-      unlinkSync(currentVaultPath + '.tmp')
-    } catch {
-      /* ignore */
-    }
-    try {
-      copyFileSync(backupPath, currentVaultPath)
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
-    try {
-      await new Promise<void>((resolve, reject) => {
-        db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) =>
-          e ? reject(e) : resolve()
-        )
-      })
-    } catch {
-      await closeVault()
-    }
+    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
     throw err
   }
 }
