@@ -20,6 +20,7 @@ import { toast } from 'sonner'
 import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
+import { createPendingSave, type PendingSave } from '@/lib/pending-save'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Note, Tag } from '@shared/types'
@@ -106,14 +107,39 @@ export function NoteEditor(): ReactNode {
     if (removeTagNoteId) setRemoveTagNoteId(null)
   }
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const activeIdRef = useRef<string | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const lastFocusTitleRef = useRef(0)
 
+  const saveContent = useCallback(
+    async (id: string, newContent: string): Promise<void> => {
+      setSaving(true)
+      const result = await notvex.notes.update(id, { content: newContent })
+      setSaving(false)
+      if (!result.success) {
+        toast.error('Failed to save note. Your changes may not be saved.')
+        return
+      }
+      void loadNotes({ trashed: useUiStore.getState().showTrash })
+    },
+    [loadNotes]
+  )
+
+  // The saver is created once and outlives note switches, so it commits through
+  // a ref rather than closing over the first saveContent it ever saw.
+  const saveContentRef = useRef(saveContent)
   useEffect(() => {
-    clearTimeout(saveTimer.current)
+    saveContentRef.current = saveContent
+  }, [saveContent])
+
+  const contentSaverRef = useRef<PendingSave | null>(null)
+  contentSaverRef.current ??= createPendingSave(
+    (id, value) => saveContentRef.current(id, value),
+    AUTOSAVE_DELAY
+  )
+
+  useEffect(() => {
     if (!activeNoteId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setNote(null)
@@ -161,36 +187,34 @@ export function NoteEditor(): ReactNode {
     }
     window.addEventListener('keydown', onKey, true)
 
+    // Drain, never discard: this cleanup also runs when the note changes, and
+    // anything still inside the debounce window would otherwise be lost (#19).
     return () => {
-      clearTimeout(saveTimer.current)
+      void contentSaverRef.current?.flush()
       window.removeEventListener('keydown', onKey, true)
     }
   }, [activeNoteId, setActiveNoteId])
 
-  const saveContent = useCallback(
-    async (id: string, newContent: string): Promise<void> => {
-      setSaving(true)
-      const result = await notvex.notes.update(id, { content: newContent })
-      setSaving(false)
-      if (!result.success) {
-        toast.error('Failed to save note. Your changes may not be saved.')
-        return
-      }
-      void loadNotes({ trashed: useUiStore.getState().showTrash })
-    },
-    [loadNotes]
-  )
+  // Dispose only on unmount — the saver outlives note switches. The flush above
+  // runs first and captures the pending value synchronously, so the dispose here
+  // cannot drop anything still unsaved.
+  useEffect(() => {
+    const saver = contentSaverRef.current
+    return () => {
+      void saver?.flush()
+      saver?.dispose()
+    }
+  }, [])
 
   const handleContentChange = useCallback(
     (value: string): void => {
       if (!activeNoteId) return
       setContent(value)
-      clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout((): void => {
-        void saveContent(activeNoteId, value)
-      }, AUTOSAVE_DELAY)
+      // The id is captured here, at schedule time. A flush fired by a note
+      // switch must persist against *this* note, not whichever is open by then.
+      contentSaverRef.current?.schedule(activeNoteId, value)
     },
-    [activeNoteId, saveContent]
+    [activeNoteId]
   )
 
   const handleTitleBlur = async (): Promise<void> => {
