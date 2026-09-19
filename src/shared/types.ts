@@ -227,6 +227,12 @@ export interface NotvexAPI {
     installNow(): Promise<IpcResult<null>>
     getCurrentVersion(): Promise<IpcResult<string>>
   }
+  /**
+   * Fires just before the vault is locked, so pending work can be persisted
+   * while the database is still open. The main process waits for the callback
+   * to settle, but only briefly — it locks regardless.
+   */
+  onWillLock(callback: () => Promise<void>): () => void
   onAutoLocked(callback: () => void): () => void
   onOpenFile(callback: (filePath: string) => void): () => void
 }

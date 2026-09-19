@@ -160,6 +160,17 @@ const api: NotvexAPI = {
     installNow: () => ipcRenderer.invoke('updater:install-now'),
     getCurrentVersion: () => ipcRenderer.invoke('updater:get-current-version')
   },
+  onWillLock: (callback) => {
+    const listener = (): void => {
+      // Always ack, even on failure: a rejected flush must not hold the lock
+      // hostage until the main process times out.
+      void callback().finally(() => ipcRenderer.send('vault:flush-complete'))
+    }
+    ipcRenderer.on('vault:will-lock', listener)
+    return (): void => {
+      ipcRenderer.off('vault:will-lock', listener)
+    }
+  },
   onAutoLocked: (callback) => {
     const listener = (): void => callback()
     ipcRenderer.on('vault:auto-locked', listener)
