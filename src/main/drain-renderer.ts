@@ -14,26 +14,26 @@ export const FLUSH_ACK_TIMEOUT_MS = 200
 export async function drainRenderer(win: BrowserWindow): Promise<void> {
   if (win.isDestroyed()) return
 
-  let onAck!: () => void
-  const acked = new Promise<void>((resolve) => {
-    onAck = (): void => resolve()
-  })
-  ipcMain.once('vault:flush-complete', onAck)
+  await new Promise<void>((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer)
+      // Only this drain's listener: a concurrent lock must keep its own.
+      ipcMain.off('vault:flush-complete', done)
+      resolve()
+    }
+    // The timer is what bounds the wait: it always fires, so this promise
+    // always settles even if the renderer never answers.
+    const timer = setTimeout(done, FLUSH_ACK_TIMEOUT_MS)
+    ipcMain.once('vault:flush-complete', done)
 
-  try {
-    // Inside the try: webContents can be gone while the window still reports
-    // alive, and that throw must not escape — see the catch.
-    win.webContents.send('vault:will-lock')
-    await Promise.race([
-      acked,
-      new Promise<void>((resolve) => setTimeout(resolve, FLUSH_ACK_TIMEOUT_MS))
-    ])
-  } catch {
-    // An unreachable renderer is just a renderer that cannot ack. Draining is
-    // best-effort; letting this propagate would stop the caller from ever
-    // reaching closeVault() and leave the vault open.
-  } finally {
-    // Only this drain's listener: a concurrent lock must keep its own.
-    ipcMain.off('vault:flush-complete', onAck)
-  }
+    try {
+      win.webContents.send('vault:will-lock')
+    } catch {
+      // webContents can be gone while the window still reports alive. An
+      // unreachable renderer is just one that cannot ack, and draining is
+      // best-effort — but this must not escape, or the caller would never
+      // reach closeVault() and the vault would stay open.
+      done()
+    }
+  })
 }

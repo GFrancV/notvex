@@ -34,14 +34,16 @@ export function createPendingSave(commit: Commit, delayMs: number): PendingSave 
   // Reads `pending`, never any outside state: the value is persisted against the
   // id captured at schedule() time. Resolving it later would write note A's text
   // into whichever note happens to be open by then.
-  const commitPending = async (): Promise<void> => {
+  //
+  // Deliberately not async — starting a write and waiting for one are separate
+  // jobs, and flush() needs them separately.
+  const startCommit = (): void => {
     const entry = pending
     if (!entry) return
     pending = null
     inFlight = commit(entry.id, entry.value).finally(() => {
       inFlight = null
     })
-    await inFlight
   }
 
   const saver: PendingSave = {
@@ -52,17 +54,15 @@ export function createPendingSave(commit: Commit, delayMs: number): PendingSave 
       liveSavers.add(saver)
       pending = { id, value }
       clearTimeout(timer)
-      timer = setTimeout(() => {
-        void commitPending()
-      }, delayMs)
+      timer = setTimeout(startCommit, delayMs)
     },
 
     async flush() {
       clearTimeout(timer)
       timer = undefined
-      await commitPending()
-      // Nothing was pending, but the timer may have started a write moments
-      // ago. Callers treat a resolved flush as "on disk", so wait for it.
+      startCommit()
+      // Covers both the write just started and one the timer started moments
+      // ago: callers treat a resolved flush as "on disk".
       await inFlight
     },
 
