@@ -43,12 +43,18 @@ First test file landed with issue #16's fix: `tests/vault.test.ts`
 (regression test for `packContainer()` ignoring the WAL — see git history).
 Measured via `pnpm test:coverage`:
 
-| Metric | Value |
-|---|---|
-| Statements | 8.06% (268/3325) |
-| Branches | 4.77% (78/1633) |
-| Functions | 7.09% (58/818) |
-| Lines | 8.67% (262/3019) |
+| Metric | Value | Previous floor |
+|---|---|---|
+| Statements | 15.77% (534/3385) | 8.06% (268/3325) |
+| Branches | 9.46% (155/1638) | 4.77% (78/1633) |
+| Functions | 11.88% (101/850) | 7.09% (58/818) |
+| Lines | 16.76% (514/3066) | 8.67% (262/3019) |
+
+The previous floor was recorded before PR #28 landed its vault regression
+tests, and was never refreshed on merge — so most of the jump above is that
+backlog being measured, not new work. Issue #19 contributed
+`tests/pending-save.test.ts` (9 tests, `src/renderer/src/lib/pending-save.ts`
+at 25/25 statements); the other ~240 covered statements were already earned.
 
 - Floor: the numbers above. From here, coverage must not regress below this
   floor — re-run `pnpm test:coverage` and update this table when it improves.
