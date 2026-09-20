@@ -60,24 +60,25 @@ Measured via `pnpm test:coverage`:
 
 | Metric | Value | Floor before #19 |
 |---|---|---|
-| Statements | 19.52% (661/3385) | 8.06% (268/3325) |
+| Statements | 19.64% (666/3391) | 8.06% (268/3325) |
 | Branches | 12.27% (201/1638) | 4.77% (78/1633) |
-| Functions | 15.29% (130/850) | 7.09% (58/818) |
-| Lines | 20.67% (634/3066) | 8.67% (262/3019) |
+| Functions | 15.37% (131/852) | 7.09% (58/818) |
+| Lines | 20.79% (639/3073) | 8.67% (262/3019) |
 
 Read the jump carefully — it is two separate things:
 
 - **~240 covered statements were already earned.** The old floor was recorded
   before PR #28 landed its vault regression tests and was never refreshed on
   merge, so that backlog is only now being measured.
-- **Issue #19 added 19 tests across 4 files**, covering `pending-save.ts`
+- **Issue #19 added 21 tests across 4 files**, covering `pending-save.ts`
   (25/25 statements), `drain-renderer.ts`, the `usePendingSave` lifecycle and
   the note-title persistence path.
 
-Every one of those 19 was verified by mutation: the covered code was broken on
+Every one of those 21 was verified by mutation: the covered code was broken on
 purpose and the test confirmed to fail. Coverage percentage alone does not
 prove a test asserts anything — one of them passed against a deliberately
-broken build until it was fixed.
+broken build until it was fixed, and a five-axis review still found a bug all
+of them missed, because they modelled a commit as instantaneous.
 
 - Floor: the numbers above. From here, coverage must not regress below this
   floor — re-run `pnpm test:coverage` and update this table when it improves.

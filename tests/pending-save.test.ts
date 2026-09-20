@@ -182,4 +182,41 @@ describe('pending-save', () => {
     expect(calls).toEqual([['a', 'typed after remount']])
     saver.dispose()
   })
+
+  it('10 · flush() waits for a commit the timer already started', async () => {
+    // A real commit is a round trip that encrypts and writes to SQLCipher, so
+    // there is a window where nothing is *pending* but a write is still in
+    // flight. Resolving then would ack the lock handshake early and let the
+    // main process close the vault underneath that write.
+    let released = false
+    let release!: () => void
+    const commit = (): Promise<void> =>
+      new Promise<void>((resolve) => {
+        release = (): void => {
+          released = true
+          resolve()
+        }
+      })
+
+    const saver = createPendingSave(commit, DELAY)
+    saver.schedule('a', 'typed')
+
+    // The debounce fires: pending is now empty, but the write has not landed.
+    await vi.advanceTimersByTimeAsync(DELAY)
+    expect(released).toBe(false)
+
+    let flushed = false
+    const flushing = saver.flush().then(() => {
+      flushed = true
+    })
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(flushed).toBe(false)
+
+    release()
+    await flushing
+    expect(flushed).toBe(true)
+
+    saver.dispose()
+  })
 })

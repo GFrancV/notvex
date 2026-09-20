@@ -26,6 +26,10 @@ const liveSavers = new Set<PendingSave>()
 export function createPendingSave(commit: Commit, delayMs: number): PendingSave {
   let timer: ReturnType<typeof setTimeout> | undefined
   let pending: { id: string; value: string } | null = null
+  // A commit already handed to the caller and not yet resolved. Tracked
+  // separately from `pending`, because a write in flight is no longer pending
+  // but is very much not finished.
+  let inFlight: Promise<void> | null = null
 
   // Reads `pending`, never any outside state: the value is persisted against the
   // id captured at schedule() time. Resolving it later would write note A's text
@@ -34,7 +38,10 @@ export function createPendingSave(commit: Commit, delayMs: number): PendingSave 
     const entry = pending
     if (!entry) return
     pending = null
-    await commit(entry.id, entry.value)
+    inFlight = commit(entry.id, entry.value).finally(() => {
+      inFlight = null
+    })
+    await inFlight
   }
 
   const saver: PendingSave = {
@@ -54,6 +61,9 @@ export function createPendingSave(commit: Commit, delayMs: number): PendingSave 
       clearTimeout(timer)
       timer = undefined
       await commitPending()
+      // Nothing was pending, but the timer may have started a write moments
+      // ago. Callers treat a resolved flush as "on disk", so wait for it.
+      await inFlight
     },
 
     dispose() {

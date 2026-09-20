@@ -105,4 +105,21 @@ describe('drainRenderer', () => {
     await second
     expect(settled).toBe(true)
   })
+
+  it('5 · survives an unreachable renderer instead of blocking the lock', async () => {
+    // webContents can be gone while the window itself still reports alive. If
+    // that throw escaped, lockVaultAndNotify would never reach closeVault() —
+    // the drain meant to protect data would be leaving the vault open.
+    const win = {
+      isDestroyed: () => false,
+      webContents: {
+        send: (): never => {
+          throw new Error('Render frame was disposed')
+        }
+      }
+    } as unknown as BrowserWindow
+
+    await expect(drainRenderer(win)).resolves.toBeUndefined()
+    expect(ipc.listenerCount('vault:flush-complete')).toBe(0)
+  })
 })
