@@ -33,9 +33,24 @@ enforcing later; don't add a second tool for it.
 ## Test file location
 
 Test files live under `tests/` at the project root, never colocated inside
-`src/`. `pnpm lint`/`pnpm format`/`typecheck` (via `tsconfig.node.json`) all
-cover `tests/**` explicitly — a test file outside that scope is silently
-unchecked by all three.
+`src/`. `pnpm lint`/`pnpm format`/`typecheck` all cover `tests/**` explicitly —
+a test file outside that scope is silently unchecked by all three.
+
+Two typecheck scopes, because React tests need `jsx` and DOM libs that the
+main-process config must not carry:
+
+| Location | tsconfig | Environment |
+|---|---|---|
+| `tests/*.test.ts` | `tsconfig.node.json` | node (default) |
+| `tests/renderer/*.test.ts` | `tsconfig.web.json` | jsdom, via a `// @vitest-environment jsdom` docblock |
+
+`tsconfig.node.json` excludes `tests/renderer`; `tsconfig.web.json` includes it.
+A React test placed outside `tests/renderer/` will fail to typecheck.
+
+React tests that depend on effects re-running must pass `reactStrictMode: true`
+to `render`/`renderHook`. Wrapping the tree in `<StrictMode>` by hand does
+**not** re-run effects under Testing Library, so such a test silently proves
+nothing — this was verified with a probe, not assumed.
 
 ## Coverage — measured only, not gated
 
@@ -43,18 +58,26 @@ First test file landed with issue #16's fix: `tests/vault.test.ts`
 (regression test for `packContainer()` ignoring the WAL — see git history).
 Measured via `pnpm test:coverage`:
 
-| Metric | Value | Previous floor |
+| Metric | Value | Floor before #19 |
 |---|---|---|
-| Statements | 15.77% (534/3385) | 8.06% (268/3325) |
-| Branches | 9.46% (155/1638) | 4.77% (78/1633) |
-| Functions | 11.88% (101/850) | 7.09% (58/818) |
-| Lines | 16.76% (514/3066) | 8.67% (262/3019) |
+| Statements | 19.52% (661/3385) | 8.06% (268/3325) |
+| Branches | 12.27% (201/1638) | 4.77% (78/1633) |
+| Functions | 15.29% (130/850) | 7.09% (58/818) |
+| Lines | 20.67% (634/3066) | 8.67% (262/3019) |
 
-The previous floor was recorded before PR #28 landed its vault regression
-tests, and was never refreshed on merge — so most of the jump above is that
-backlog being measured, not new work. Issue #19 contributed
-`tests/pending-save.test.ts` (9 tests, `src/renderer/src/lib/pending-save.ts`
-at 25/25 statements); the other ~240 covered statements were already earned.
+Read the jump carefully — it is two separate things:
+
+- **~240 covered statements were already earned.** The old floor was recorded
+  before PR #28 landed its vault regression tests and was never refreshed on
+  merge, so that backlog is only now being measured.
+- **Issue #19 added 19 tests across 4 files**, covering `pending-save.ts`
+  (25/25 statements), `drain-renderer.ts`, the `usePendingSave` lifecycle and
+  the note-title persistence path.
+
+Every one of those 19 was verified by mutation: the covered code was broken on
+purpose and the test confirmed to fail. Coverage percentage alone does not
+prove a test asserts anything — one of them passed against a deliberately
+broken build until it was fixed.
 
 - Floor: the numbers above. From here, coverage must not regress below this
   floor — re-run `pnpm test:coverage` and update this table when it improves.
