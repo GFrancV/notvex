@@ -45,6 +45,7 @@ import {
   getArgon2Params,
   hashKeyFile,
   initSodium,
+  isValidKdfTier,
   memzero
 } from './crypto'
 import { allocSecure, freeSecure } from './memlock'
@@ -330,7 +331,19 @@ export interface CreateVaultResult {
   mnemonic: string
 }
 
-export async function createVault(filePath: string, password: string): Promise<CreateVaultResult> {
+export interface CreateVaultOptions {
+  // Pins the Argon2id tier instead of measuring this machine. Exists for
+  // seeded test/demo fixtures, where a calibrated tier would make every
+  // unlock cost seconds and vary by whichever machine created the file.
+  // No production caller passes it — see CONSTRAINTS.md.
+  readonly kdfTier?: number
+}
+
+export async function createVault(
+  filePath: string,
+  password: string,
+  options?: CreateVaultOptions
+): Promise<CreateVaultResult> {
   await initSodium()
 
   if (!password || password.trim().length === 0) {
@@ -339,12 +352,15 @@ export async function createVault(filePath: string, password: string): Promise<C
   if (password.length < 8) {
     throw new Error('PASSWORD_TOO_SHORT')
   }
+  if (options?.kdfTier !== undefined && !isValidKdfTier(options.kdfTier)) {
+    throw new Error(`Unknown KDF tier: ${options.kdfTier}`)
+  }
 
   if (existsSync(filePath) && isValidNotvexFile(filePath)) {
     throw new Error('A vault already exists at this location.')
   }
 
-  const { tier } = calibrateArgon2id(1500)
+  const tier = options?.kdfTier ?? calibrateArgon2id(1500).tier
   const salt = Buffer.from(generateSalt())
   const kdfInput: KdfInputV1 = { version: 1, salt, kdfTier: tier }
   const { params: kdfParams } = getArgon2Params(kdfInput)

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createNote, dbAll } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
-import { decryptField } from '../src/main/vault/crypto'
+import { decryptField, isValidKdfTier } from '../src/main/vault/crypto'
 import {
   changePassword,
   closeVault,
@@ -636,6 +636,58 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 })
 
+describe('createVault kdfTier option', () => {
+  let vaultDir: string | undefined
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
+    vaultDir = undefined
+  })
+
+  it('pins the Argon2id tier written to the header when kdfTier is given', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'pinned.nvx')
+
+    // Tier 10 (32 MB / 2 passes) is the cheapest tier — a fixture opens in
+    // well under a second instead of the ~1.5s calibration targets.
+    await createVault(vaultPath, 'correct horse battery staple', { kdfTier: 10 })
+
+    expect(readContainer(readFileSync(vaultPath)).kdfInput.kdfTier).toBe(10)
+  }, 60_000)
+
+  it('still calibrates when no kdfTier is given', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'calibrated.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    // Which tier calibration lands on depends on the machine, so assert only
+    // that it wrote a real one — the default path is unchanged.
+    expect(isValidKdfTier(readContainer(readFileSync(vaultPath)).kdfInput.kdfTier)).toBe(true)
+  }, 60_000) // real calibration, same as the tests above
+
+  it.each([0, 11, 3.5])('rejects tier %s without writing a vault file', async (tier) => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'rejected.nvx')
+
+    await expect(
+      createVault(vaultPath, 'correct horse battery staple', { kdfTier: tier })
+    ).rejects.toThrow(/KDF tier/)
+
+    // Validation must happen before anything touches the disk.
+    expect(existsSync(vaultPath)).toBe(false)
+  })
+})
+
+// Keep this describe LAST in the file: its reentrancy test wedges the
+// withVaultLock queue permanently (by design — see the test's own comment),
+// so any describe after it hangs in the first afterEach that calls closeVault().
+//
 // Pure ordering test — no vault/crypto involved, deliberately fast and
 // deterministic. Proving a race is closed needs controlled timing, which
 // real Argon2id/SQLCipher calls can't reliably provide; the existing tests

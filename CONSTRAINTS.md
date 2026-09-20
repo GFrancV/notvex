@@ -23,6 +23,16 @@ continuing.
 | Secrets scan | *(pending, see Exceptions)* | 0 findings, `gitleaks detect --redact` | Vault key material / recovery phrases must never land in a commit. |
 | Dependency vulns | *(pending, see Exceptions)* | 0 high/critical, `osv-scanner scan .` | `@journeyapps/sqlcipher`, `libsodium-wrappers-sumo`, `koffi` are native-binding deps in the crypto path — a known CVE there is high-severity for this app specifically. |
 
+### `createVault()` KDF tier
+
+`createVault(path, password, { kdfTier })` pins the Argon2id tier instead of
+calibrating. It exists for seeded fixtures: calibration costs ~15s per vault
+and bakes whichever tier the seeding machine earned into the file's header,
+where it is never re-measured. **No production caller passes it** — the IPC
+handler (`vault:create`) and every user-facing path stay on calibration. A
+change that starts passing a tier from production code is weakening the KDF
+and needs its own justification here.
+
 ## Architecture
 
 Same `pnpm depcruise` run as above — one dependency-cruiser config, two
