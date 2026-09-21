@@ -723,3 +723,39 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
     expect(outcome).toBe('timeout')
   })
 })
+
+describe('devBuild propagation (issue #34)', () => {
+  let vaultDir: string | undefined
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
+    vaultDir = undefined
+  })
+
+  it('createVault() defaults to devBuild: false when the argument is omitted', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(false)
+  }, 60_000)
+
+  it('createVault(devBuild: true) writes the flag, and a later rewrite (changePassword) preserves it', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword, true)
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+
+    await changePassword(originalPassword, 'a different correct horse battery staple')
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 90_000)
+})

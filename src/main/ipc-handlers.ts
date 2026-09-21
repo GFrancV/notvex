@@ -269,7 +269,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:create', async (_e, filePath: string, password: string) => {
     try {
-      const result = await createVault(filePath, password)
+      const result = await createVault(filePath, password, !app.isPackaged)
       recordVaultUsed(filePath)
       touchActivity()
       return ok(result)
