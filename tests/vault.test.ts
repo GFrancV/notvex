@@ -723,3 +723,66 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
     expect(outcome).toBe('timeout')
   })
 })
+
+// Structural test, not a behavioral one: tests/vault.test.ts cannot invoke
+// ipc-handlers.ts's registered ipcMain.handle callbacks directly (no harness
+// mocks electron/electron-updater in this repo), so a test that only calls
+// getDb()/getMasterKey()/createNote() itself can never flip from red to green
+// as a result of editing ipc-handlers.ts — the test itself would be the one
+// deciding whether to wrap the call in withVaultLock, not the production
+// code. Reading the real source file and asserting each handler's block
+// contains a withVaultLock( call is the only way, without new IPC-mocking
+// infrastructure, to tie this test's pass/fail state to the actual file
+// issue #25's fix edits. See tasks/plan.md's "Nota de diseño" for the fuller
+// rationale and the alternatives considered.
+describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #25)', () => {
+  // Every notes:*/tags:*/note-tags:* IPC channel registered in ipc-handlers.ts
+  // as of this test's writing. Kept as an explicit list (not derived from the
+  // source file itself) so a channel silently renamed or removed fails this
+  // test with a clear "not found" message instead of quietly shrinking the
+  // set of channels checked.
+  const NOTE_AND_TAG_CHANNELS = [
+    'notes:create',
+    'notes:get',
+    'notes:list',
+    'notes:update',
+    'notes:trash',
+    'notes:restore',
+    'notes:delete',
+    'notes:empty-trash',
+    'notes:search',
+    'tags:create',
+    'tags:create-and-assign',
+    'tags:list',
+    'tags:update',
+    'tags:delete',
+    'note-tags:add',
+    'note-tags:remove',
+    'note-tags:list',
+    'note-tags:counts',
+    'note-tags:all'
+  ]
+
+  it('each notes:*/tags:*/note-tags:* handler wraps its body in withVaultLock(...)', () => {
+    const source = readFileSync(new URL('../src/main/ipc-handlers.ts', import.meta.url), 'utf-8')
+    const handleCallStarts = [...source.matchAll(/ipcMain\.handle\(/g)].map((m) => m.index)
+
+    for (const channel of NOTE_AND_TAG_CHANNELS) {
+      const channelIdx = source.indexOf(`'${channel}'`)
+      expect(channelIdx, `channel '${channel}' not found in ipc-handlers.ts`).toBeGreaterThan(-1)
+
+      // The block for this channel runs from its own ipcMain.handle( call up
+      // to the next one (or EOF for the last channel in the file) — no
+      // paren-balancing needed, every handler's own ipcMain.handle( starts
+      // strictly before its channel-name string literal.
+      const blockStart = handleCallStarts.filter((i) => i <= channelIdx).pop()
+      const blockEnd = handleCallStarts.find((i) => i > channelIdx) ?? source.length
+      const block = source.slice(blockStart, blockEnd)
+
+      expect(
+        block.includes('withVaultLock('),
+        `'${channel}' handler must read getDb()/getMasterKey() inside withVaultLock() — see issue #25`
+      ).toBe(true)
+    }
+  })
+})
