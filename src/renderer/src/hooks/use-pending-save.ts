@@ -28,8 +28,9 @@ export function usePendingSave(commit: Commit, delayMs: number): PendingSave {
   useEffect(() => {
     return () => {
       // flush() captures the pending value synchronously, so disposing right
-      // after cannot drop anything still unsaved.
-      void saver.flush()
+      // after cannot drop anything still unsaved. Caught, not surfaced: the
+      // component is already unmounting, there's no UI left to show a toast.
+      void saver.flush().catch(() => undefined)
       saver.dispose()
     }
   }, [saver])

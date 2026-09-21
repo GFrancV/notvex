@@ -58,12 +58,16 @@ export function createPendingSave(commit: Commit, delayMs: number): PendingSave 
     },
 
     async flush() {
-      clearTimeout(timer)
-      timer = undefined
-      startCommit()
-      // Covers both the write just started and one the timer started moments
-      // ago: callers treat a resolved flush as "on disk".
-      await inFlight
+      // Looped, not a single pass: schedule() can land while `inFlight` is
+      // still being awaited (the caller kept typing during the drain
+      // window), which leaves a fresh `pending` behind that a one-shot flush
+      // would return from without ever committing.
+      while (pending || inFlight) {
+        clearTimeout(timer)
+        timer = undefined
+        startCommit()
+        await inFlight
+      }
     },
 
     dispose() {

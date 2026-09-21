@@ -200,8 +200,8 @@ export function NoteEditor(): ReactNode {
     // Drain, never discard: this cleanup also runs when the note changes, and
     // anything still inside the debounce window would otherwise be lost (#19).
     return () => {
-      void contentSaver.flush()
-      void titleSaver.flush()
+      void contentSaver.flush().catch(() => undefined)
+      void titleSaver.flush().catch(() => undefined)
       window.removeEventListener('keydown', onKey, true)
     }
   }, [activeNoteId, setActiveNoteId, contentSaver, titleSaver])
@@ -229,7 +229,7 @@ export function NoteEditor(): ReactNode {
   // Blur is the fast path, no longer the only one: losing focus is an event
   // that may never happen before a note switch, a lock or a quit.
   const handleTitleBlur = (): void => {
-    void titleSaver.flush()
+    void titleSaver.flush().catch(() => undefined)
   }
 
   const handlePin = async (): Promise<void> => {

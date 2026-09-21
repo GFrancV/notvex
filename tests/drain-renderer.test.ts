@@ -14,17 +14,23 @@ vi.mock('electron', async () => {
 /** The mocked ipcMain is a real EventEmitter, so acks are just emitted events. */
 const ipc = ipcMain as unknown as EventEmitter
 
-function fakeWindow(destroyed = false): { win: BrowserWindow; sent: string[] } {
-  const sent: string[] = []
+function fakeWindow(destroyed = false): { win: BrowserWindow; sent: unknown[][] } {
+  const sent: unknown[][] = []
   const win = {
     isDestroyed: () => destroyed,
     webContents: {
-      send: (channel: string): void => {
-        sent.push(channel)
+      send: (channel: string, ...args: unknown[]): void => {
+        sent.push([channel, ...args])
       }
     }
   } as unknown as BrowserWindow
   return { win, sent }
+}
+
+/** Every drain sends its own request id as the second `will-lock` arg. */
+function ackLastRequest(sent: unknown[][]): void {
+  const requestId = sent[sent.length - 1][1]
+  ipc.emit('vault:flush-complete', {}, requestId)
 }
 
 describe('drainRenderer', () => {
@@ -47,7 +53,7 @@ describe('drainRenderer', () => {
       settled = true
     })
 
-    expect(sent).toEqual(['vault:will-lock'])
+    expect(sent).toEqual([['vault:will-lock', expect.any(Number)]])
 
     await vi.advanceTimersByTimeAsync(FLUSH_ACK_TIMEOUT_MS - 1)
     expect(settled).toBe(false)
@@ -58,14 +64,14 @@ describe('drainRenderer', () => {
   })
 
   it('2 · resolves as soon as the renderer acks, without waiting out the timeout', async () => {
-    const { win } = fakeWindow()
+    const { win, sent } = fakeWindow()
 
     let settled = false
     const drained = drainRenderer(win).then(() => {
       settled = true
     })
 
-    ipc.emit('vault:flush-complete')
+    ackLastRequest(sent)
     await drained
 
     // Resolved without any timer having been advanced.
@@ -82,22 +88,25 @@ describe('drainRenderer', () => {
   })
 
   it('4 · drops its listener, so a stale ack cannot resolve the next lock', async () => {
-    const { win } = fakeWindow()
+    const { win, sent } = fakeWindow()
 
     const first = drainRenderer(win)
-    ipc.emit('vault:flush-complete')
+    ackLastRequest(sent)
     await first
 
+    const staleRequestId = sent[sent.length - 1][1]
     expect(ipc.listenerCount('vault:flush-complete')).toBe(0)
     // A late ack from the previous cycle arrives with no drain in flight.
-    ipc.emit('vault:flush-complete')
+    ipc.emit('vault:flush-complete', {}, staleRequestId)
 
     let settled = false
     const second = drainRenderer(win).then(() => {
       settled = true
     })
 
-    // The second drain must wait for its own ack, not inherit the stale one.
+    // The second drain must wait for its own ack, not inherit the stale one
+    // — the request ids are also distinct, so the late emit above couldn't
+    // have resolved it even while it was still listening.
     await vi.advanceTimersByTimeAsync(FLUSH_ACK_TIMEOUT_MS - 1)
     expect(settled).toBe(false)
 
@@ -106,7 +115,37 @@ describe('drainRenderer', () => {
     expect(settled).toBe(true)
   })
 
-  it('5 · survives an unreachable renderer instead of blocking the lock', async () => {
+  it('5 · two overlapping drains do not resolve each other off the same ack', async () => {
+    // The scenario the request id exists for: suspend and lock-screen firing
+    // back to back register two listeners on the same channel at once.
+    const { win, sent } = fakeWindow()
+
+    let firstSettled = false
+    let secondSettled = false
+    const first = drainRenderer(win).then(() => {
+      firstSettled = true
+    })
+    const second = drainRenderer(win).then(() => {
+      secondSettled = true
+    })
+
+    expect(sent).toHaveLength(2)
+    const [firstId, secondId] = [sent[0][1], sent[1][1]]
+    expect(firstId).not.toBe(secondId)
+
+    // Only the first drain's ack arrives — Node's EventEmitter would invoke
+    // both listeners on this single emit if they weren't id-filtered.
+    ipc.emit('vault:flush-complete', {}, firstId)
+    await first
+    expect(firstSettled).toBe(true)
+    expect(secondSettled).toBe(false)
+
+    ipc.emit('vault:flush-complete', {}, secondId)
+    await second
+    expect(secondSettled).toBe(true)
+  })
+
+  it('6 · survives an unreachable renderer instead of blocking the lock', async () => {
     // webContents can be gone while the window itself still reports alive. If
     // that throw escaped, lockVaultAndNotify would never reach closeVault() —
     // the drain meant to protect data would be leaving the vault open.

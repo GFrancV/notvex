@@ -161,13 +161,14 @@ const api: NotvexAPI = {
     getCurrentVersion: () => ipcRenderer.invoke('updater:get-current-version')
   },
   onWillLock: (callback) => {
-    const listener = (): void => {
+    const listener = (_e: unknown, requestId?: number): void => {
       // Always ack, even on failure: a rejected flush must not hold the lock
       // hostage until the main process times out. The catch is what keeps a
-      // failed flush from surfacing as an unhandled rejection.
+      // failed flush from surfacing as an unhandled rejection. The id is
+      // echoed back so this ack can't resolve a different, concurrent drain.
       void callback()
         .catch(() => undefined)
-        .finally(() => ipcRenderer.send('vault:flush-complete'))
+        .finally(() => ipcRenderer.send('vault:flush-complete', requestId))
     }
     ipcRenderer.on('vault:will-lock', listener)
     return (): void => {

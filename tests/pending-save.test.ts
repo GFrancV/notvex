@@ -219,4 +219,33 @@ describe('pending-save', () => {
 
     saver.dispose()
   })
+
+  it('11 · flush() loops to catch a value scheduled while its own commit was still in flight', async () => {
+    // Simulates the user typing during the ~200ms will-lock handshake: a
+    // one-shot flush() would already be past checking `pending` again and
+    // would resolve without ever picking this up, losing the edit.
+    const calls: Array<[string, string]> = []
+    const commit = (id: string, value: string): Promise<void> => {
+      calls.push([id, value])
+      return Promise.resolve()
+    }
+
+    const saver = createPendingSave(commit, DELAY)
+    saver.schedule('a', 'first')
+
+    // flush() dispatches the first commit synchronously, then awaits it.
+    const flushing = saver.flush()
+
+    // Typed before that commit's promise has even settled.
+    saver.schedule('a', 'second')
+
+    await flushing
+
+    expect(calls).toEqual([
+      ['a', 'first'],
+      ['a', 'second']
+    ])
+
+    saver.dispose()
+  })
 })
