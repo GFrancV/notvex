@@ -7,7 +7,7 @@ import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createNote, dbAll } from '../src/main/db/queries'
+import { createNote, dbAll, getNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
 import { decryptField } from '../src/main/vault/crypto'
 import {
@@ -785,4 +785,92 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
       ).toBe(true)
     }
   })
+})
+
+// Characterization test, not a red→green gate on Task 3's fix (see the
+// structural test above and tasks/plan.md's "Nota de diseño" for why):
+// tests/vault.test.ts cannot exercise ipc-handlers.ts's registered handlers,
+// so this proves the underlying vulnerability with real data instead — the
+// exact mechanism issue #25 describes, reproduced without depending on real
+// Argon2id timing (see the note on vault.test.ts:264-277 for why a raw
+// setTimeout race wouldn't be reliable here either).
+describe('note write races a credential rotation (issue #25 — characterization)', () => {
+  let vaultDir: string | undefined
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
+    vaultDir = undefined
+  })
+
+  it("a note written via getDb()/getMasterKey() (today's unwrapped notes:create pattern) after reencryptNotes() has already committed, but before masterKey is reassigned, becomes undecryptable once changePassword() completes", async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const oldPassword = 'correct horse battery staple'
+    const newPassword = 'a different correct horse battery staple'
+
+    await createVault(vaultPath, oldPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+
+    let markWindowReached!: () => void
+    const windowReached = new Promise<void>((resolve) => {
+      markWindowReached = resolve
+    })
+    let releaseWindow!: () => void
+    const windowGate = new Promise<void>((resolve) => {
+      releaseWindow = resolve
+    })
+
+    // By the time doChangePassword() (vault.ts:657) reaches
+    // `PRAGMA wal_checkpoint(FULL)` (vault.ts:717), PRAGMA rekey has
+    // already re-keyed the live SQLCipher connection AND reencryptNotes()
+    // (vault.ts:925) has already re-encrypted every *pre-existing* note and
+    // committed — but masterKey (vault.ts:744) isn't reassigned until
+    // several steps later. Holding the real statement here, before letting
+    // it run, deterministically lands a racing write inside that exact
+    // window: late enough that reencryptNotes()'s SELECT can't sweep it up
+    // and re-encrypt it too, early enough that masterKey is still stale.
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      if (typeof sql === 'string' && sql === 'PRAGMA wal_checkpoint(FULL)') {
+        markWindowReached()
+        void windowGate.then(() => {
+          originalRun(sql, ...(rest as Parameters<typeof originalRun>))
+        })
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>))
+    })
+
+    try {
+      const rotation = changePassword(oldPassword, newPassword)
+      await windowReached
+
+      // Reproduces today's ipc-handlers.ts notes:create handler exactly
+      // (ipc-handlers.ts:700-708): reads getDb()/getMasterKey() directly,
+      // with no withVaultLock wrapper around either call — issue #25's bug.
+      const racingNote = await createNote(
+        getDb(),
+        { title: 'Racing note', content: 'Written mid-rotation' },
+        getMasterKey()
+      )
+
+      releaseWindow()
+      await rotation
+
+      // The rotation succeeded and masterKey is now the NEW key — but the
+      // racing note's fields were encrypted with the OLD key, and
+      // reencryptNotes() never saw it (it was inserted after that
+      // function's SELECT already ran and committed). Decrypting it with
+      // the key the rest of the vault now assumes fails.
+      await expect(getNote(getDb(), racingNote.id, getMasterKey())).rejects.toThrow()
+    } finally {
+      runSpy.mockRestore()
+    }
+  }, 90_000)
 })
