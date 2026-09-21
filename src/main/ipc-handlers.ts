@@ -94,10 +94,20 @@ function touchActivity(): void {
   lastActivityAt = Date.now()
 }
 
+// Single place that closes the vault after giving the renderer a chance to
+// flush pending autosaves — every caller that can close the vault (manual
+// lock, vault switch, opening a different .nvx, quitting, auto-lock) routes
+// through this instead of calling closeVault() directly, so none of them can
+// silently regress back to discarding a pending edit (#19).
+export async function closeVaultDrained(win: BrowserWindow | null): Promise<void> {
+  if (!isVaultOpen()) return
+  if (win) await drainRenderer(win)
+  await closeVault()
+}
+
 export async function lockVaultAndNotify(win: BrowserWindow): Promise<void> {
   if (!isVaultOpen()) return
-  await drainRenderer(win)
-  await closeVault()
+  await closeVaultDrained(win)
   win.webContents.send('vault:auto-locked')
 }
 
@@ -486,7 +496,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:close', async () => {
     try {
-      await closeVault()
+      await closeVaultDrained(win)
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -495,14 +505,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:switch', async (_e, filePath: string) => {
     try {
-      // Validate before closeVault() so a bad target never locks the current vault
+      // Validate before closeVaultDrained() so a bad target never locks the current vault
       if (!existsSync(filePath)) {
         return fail('Vault not found. It may have been moved or deleted.')
       }
       if (!isValidNotvexFile(filePath)) {
         return fail('This file is not a valid Notvex vault')
       }
-      await closeVault()
+      await closeVaultDrained(win)
       promoteVaultToTop(filePath)
       return ok(null)
     } catch (e) {
