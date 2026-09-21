@@ -210,6 +210,24 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
   }, 60_000)
 
+  it('closeVault() is idempotent — a second call once nothing is open resolves without throwing', async () => {
+    // closeVaultDrained() (#19) added several call sites that can now race a
+    // caller who already closed the vault — e.g. the auto-lock timer firing
+    // right as the user manually locks. doCloseVault() guards every step
+    // (`if (db)`, `if (masterKey)`, ...), so a second call must be a safe
+    // no-op, never a throw or a hang.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    await closeVault()
+    expect(isVaultOpen()).toBe(false)
+
+    await expect(closeVault()).resolves.toBeUndefined()
+    expect(isVaultOpen()).toBe(false)
+  }, 60_000)
+
   it("doesn't disrupt the session when packContainer() fails to write (vault directory removed)", async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
