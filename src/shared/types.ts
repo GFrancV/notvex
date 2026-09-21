@@ -177,6 +177,9 @@ export interface NotvexAPI {
         toVersion: number
       }) => void
     ): () => void
+    confirmDevBuildWarning(): Promise<IpcResult<null>>
+    cancelDevBuildWarning(): Promise<IpcResult<null>>
+    onDevBuildWarningRequired(callback: (data: { vaultPath: string }) => void): () => void
   }
   notes: {
     create(input: CreateNoteInput): Promise<IpcResult<NoteListItem>>
