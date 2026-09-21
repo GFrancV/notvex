@@ -80,7 +80,6 @@ export function createPendingSave(commit: Commit, delayMs: number): PendingSave 
     }
   }
 
-  liveSavers.add(saver)
   return saver
 }
 
