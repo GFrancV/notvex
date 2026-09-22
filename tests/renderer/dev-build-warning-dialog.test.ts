@@ -27,16 +27,22 @@ vi.mock('@/lib/ipc', () => ({
 
 const { DevBuildWarningDialog } = await import('@/components/dialogs/DevBuildWarningDialog')
 
+const TEST_VAULT_PATH = '/vaults/real-notes.nvx'
+const DIALOG_TITLE = /Opening a real vault in a development build/i
+
 // Captures the callback the component registers, so tests can fire it
-// directly instead of going through a real IPC round-trip.
-function renderAndTrigger(vaultPath: string): void {
+// directly instead of going through a real IPC round-trip. Renders and
+// triggers the warning in one step since every test needs the dialog open
+// before it can act.
+async function renderOpenDialog(): Promise<void> {
   let trigger: RequiredCallback | undefined
   ipc.onDevBuildWarningRequired.mockImplementation((cb) => {
     trigger = cb
     return () => {}
   })
   render(createElement(DevBuildWarningDialog))
-  trigger?.({ vaultPath })
+  trigger?.({ vaultPath: TEST_VAULT_PATH })
+  await screen.findByText(DIALOG_TITLE)
 }
 
 describe('DevBuildWarningDialog (issue #34)', () => {
@@ -45,16 +51,14 @@ describe('DevBuildWarningDialog (issue #34)', () => {
   })
 
   it('shows the vault path once vault:dev-build-warning-required fires', async () => {
-    renderAndTrigger('/vaults/real-notes.nvx')
+    await renderOpenDialog()
 
-    await screen.findByText(/Opening a real vault in a development build/i)
-    expect(screen.getByText('/vaults/real-notes.nvx')).not.toBeNull()
+    expect(screen.getByText(TEST_VAULT_PATH)).not.toBeNull()
   })
 
   it('calls confirmDevBuildWarning(), not cancelDevBuildWarning(), when "Open anyway" is clicked', async () => {
     ipc.confirmDevBuildWarning.mockResolvedValue({ success: true, data: null })
-    renderAndTrigger('/vaults/real-notes.nvx')
-    await screen.findByText(/Opening a real vault in a development build/i)
+    await renderOpenDialog()
 
     fireEvent.click(screen.getByRole('button', { name: /open anyway/i }))
 
@@ -64,8 +68,7 @@ describe('DevBuildWarningDialog (issue #34)', () => {
 
   it('calls cancelDevBuildWarning(), not confirmDevBuildWarning(), when "Cancel" is clicked', async () => {
     ipc.cancelDevBuildWarning.mockResolvedValue({ success: true, data: null })
-    renderAndTrigger('/vaults/real-notes.nvx')
-    await screen.findByText(/Opening a real vault in a development build/i)
+    await renderOpenDialog()
 
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
 
