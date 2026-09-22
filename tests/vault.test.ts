@@ -709,10 +709,24 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
       const blockEnd = handleCallStarts.find((i) => i > channelIdx) ?? source.length
       const block = source.slice(blockStart, blockEnd)
 
+      const lockIdx = block.indexOf('withVaultLock(')
       expect(
-        block.includes('withVaultLock('),
-        `'${channel}' handler must read getDb()/getMasterKey() inside withVaultLock() — see issue #25`
-      ).toBe(true)
+        lockIdx,
+        `'${channel}' handler must call withVaultLock(...) — see issue #25`
+      ).toBeGreaterThan(-1)
+
+      // Not just "withVaultLock( appears somewhere in the block" — every
+      // getDb()/getMasterKey() call in the block must come AFTER
+      // withVaultLock(, i.e. inside the closure passed to it. Catches a
+      // handler that calls withVaultLock() decoratively while still
+      // reading live state outside it, which the plain substring check
+      // above would miss.
+      for (const match of block.matchAll(/\b(?:getDb|getMasterKey)\(/g)) {
+        expect(
+          match.index,
+          `'${channel}' handler must read getDb()/getMasterKey() inside withVaultLock() — see issue #25`
+        ).toBeGreaterThan(lockIdx)
+      }
     }
   })
 })
@@ -813,6 +827,60 @@ describe('note write races a credential rotation (issue #25 — characterization
       runSpy.mockRestore()
     }
   }, 90_000)
+})
+
+// Covers the new default behavior this fix introduces for the common case
+// (no rotation involved): before issue #25's fix, two concurrent note/tag
+// IPC operations ran fully in parallel; now they queue through the same
+// withVaultLock FIFO the rotation functions already used. The characterization
+// test above only proves the rotation-race window is closed — this proves the
+// far more common case (two ordinary writes racing each other) still works
+// correctly under the new serialization, using the exact pattern
+// ipc-handlers.ts's fixed handlers use (withVaultLock(() => op(getDb(), ...,
+// getMasterKey()))), not the abstract stub functions the issue #16 ordering
+// tests below use. Placed before that describe block for the same
+// lock-poisoning reason as the two describes above.
+describe('note/tag operations serialize with each other (issue #25 — concurrency)', () => {
+  let vaultDir: string | undefined
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
+    vaultDir = undefined
+  })
+
+  it('two concurrent note writes routed through withVaultLock run one at a time, not interleaved, and both land correctly', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    const order: string[] = []
+
+    // Reproduces ipc-handlers.ts's fixed notes:create handler exactly
+    // (ipc-handlers.ts:700-705).
+    const writeNote = (title: string): Promise<{ id: string }> =>
+      withVaultLock(async () => {
+        order.push(`${title}-start`)
+        const note = await createNote(getDb(), { title, content: 'Body' }, getMasterKey())
+        order.push(`${title}-end`)
+        return note
+      })
+
+    const [first, second] = await Promise.all([writeNote('First'), writeNote('Second')])
+
+    // FIFO, not interleaved: the second call's closure can't start until the
+    // first one's has fully settled.
+    expect(order).toEqual(['First-start', 'First-end', 'Second-start', 'Second-end'])
+
+    const firstPersisted = await getNote(getDb(), first.id, getMasterKey())
+    const secondPersisted = await getNote(getDb(), second.id, getMasterKey())
+    expect(firstPersisted?.title).toBe('First')
+    expect(secondPersisted?.title).toBe('Second')
+  }, 60_000)
 })
 
 // Pure ordering test — no vault/crypto involved, deliberately fast and
