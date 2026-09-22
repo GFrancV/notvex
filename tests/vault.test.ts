@@ -7,7 +7,7 @@ import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createNote, dbAll } from '../src/main/db/queries'
+import { createNote, dbAll, getNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
 import { decryptField } from '../src/main/vault/crypto'
 import {
@@ -652,6 +652,235 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       changePassword(secondPassword, 'yet another correct horse battery staple')
     ).resolves.toMatchObject({ mnemonic: expect.any(String) })
   }, 90_000)
+})
+
+// Structural test, not a behavioral one: tests/vault.test.ts cannot invoke
+// ipc-handlers.ts's registered ipcMain.handle callbacks directly (no harness
+// mocks electron/electron-updater in this repo), so a test that only calls
+// getDb()/getMasterKey()/createNote() itself can never flip from red to green
+// as a result of editing ipc-handlers.ts — the test itself would be the one
+// deciding whether to wrap the call in withVaultLock, not the production
+// code. Reading the real source file and asserting each handler's block
+// contains a withVaultLock( call is the only way, without new IPC-mocking
+// infrastructure, to tie this test's pass/fail state to the actual file
+// issue #25's fix edits. See tasks/plan.md's "Nota de diseño" for the fuller
+// rationale and the alternatives considered.
+describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #25)', () => {
+  // Every notes:*/tags:*/note-tags:* IPC channel registered in ipc-handlers.ts
+  // as of this test's writing. Kept as an explicit list (not derived from the
+  // source file itself) so a channel silently renamed or removed fails this
+  // test with a clear "not found" message instead of quietly shrinking the
+  // set of channels checked.
+  const NOTE_AND_TAG_CHANNELS = [
+    'notes:create',
+    'notes:get',
+    'notes:list',
+    'notes:update',
+    'notes:trash',
+    'notes:restore',
+    'notes:delete',
+    'notes:empty-trash',
+    'notes:search',
+    'tags:create',
+    'tags:create-and-assign',
+    'tags:list',
+    'tags:update',
+    'tags:delete',
+    'note-tags:add',
+    'note-tags:remove',
+    'note-tags:list',
+    'note-tags:counts',
+    'note-tags:all'
+  ]
+
+  it('each notes:*/tags:*/note-tags:* handler wraps its body in withVaultLock(...)', () => {
+    const source = readFileSync(new URL('../src/main/ipc-handlers.ts', import.meta.url), 'utf-8')
+    const handleCallStarts = [...source.matchAll(/ipcMain\.handle\(/g)].map((m) => m.index)
+
+    for (const channel of NOTE_AND_TAG_CHANNELS) {
+      const channelIdx = source.indexOf(`'${channel}'`)
+      expect(channelIdx, `channel '${channel}' not found in ipc-handlers.ts`).toBeGreaterThan(-1)
+
+      // The block for this channel runs from its own ipcMain.handle( call up
+      // to the next one (or EOF for the last channel in the file) — no
+      // paren-balancing needed, every handler's own ipcMain.handle( starts
+      // strictly before its channel-name string literal.
+      const blockStart = handleCallStarts.filter((i) => i <= channelIdx).pop()
+      const blockEnd = handleCallStarts.find((i) => i > channelIdx) ?? source.length
+      const block = source.slice(blockStart, blockEnd)
+
+      const lockIdx = block.indexOf('withVaultLock(')
+      expect(
+        lockIdx,
+        `'${channel}' handler must call withVaultLock(...) — see issue #25`
+      ).toBeGreaterThan(-1)
+
+      // Not just "withVaultLock( appears somewhere in the block" — every
+      // getDb()/getMasterKey() call in the block must come AFTER
+      // withVaultLock(, i.e. inside the closure passed to it. Catches a
+      // handler that calls withVaultLock() decoratively while still
+      // reading live state outside it, which the plain substring check
+      // above would miss.
+      for (const match of block.matchAll(/\b(?:getDb|getMasterKey)\(/g)) {
+        expect(
+          match.index,
+          `'${channel}' handler must read getDb()/getMasterKey() inside withVaultLock() — see issue #25`
+        ).toBeGreaterThan(lockIdx)
+      }
+    }
+  })
+})
+
+// Characterization test, not a red→green gate on Task 3's fix (see the
+// structural test above and tasks/plan.md's "Nota de diseño" for why):
+// tests/vault.test.ts cannot exercise ipc-handlers.ts's registered handlers,
+// so this proves the underlying vulnerability with real data instead — the
+// exact mechanism issue #25 describes, reproduced without depending on real
+// Argon2id timing (see the note on vault.test.ts:264-277 for why a raw
+// setTimeout race wouldn't be reliable here either).
+//
+// Deliberately placed BEFORE the "withVaultLock (issue #16 follow-up)" block
+// below: that block's "deadlocks permanently on a reentrant call" test
+// intentionally leaves the module-level vaultOpLock chained onto a promise
+// that never settles (that's the whole point of the test) and never resets
+// it. Vitest shares one module instance across every it()/describe() in this
+// file, so any withVaultLock()-routed call placed after that test — like
+// changePassword() below — would hang forever waiting on a lock that can
+// never hand off its turn. Running before it sidesteps the poisoning
+// entirely without touching that pre-existing test or vault.ts itself.
+describe('note write races a credential rotation (issue #25 — characterization)', () => {
+  let vaultDir: string | undefined
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
+    vaultDir = undefined
+  })
+
+  it('the racing note becomes undecryptable once changePassword() completes', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const oldPassword = 'correct horse battery staple'
+    const newPassword = 'a different correct horse battery staple'
+
+    await createVault(vaultPath, oldPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+
+    let markWindowReached!: () => void
+    const windowReached = new Promise<void>((resolve) => {
+      markWindowReached = resolve
+    })
+    let releaseWindow!: () => void
+    const windowGate = new Promise<void>((resolve) => {
+      releaseWindow = resolve
+    })
+
+    // By the time doChangePassword() (vault.ts:657) reaches
+    // `PRAGMA wal_checkpoint(FULL)` (vault.ts:717), PRAGMA rekey has
+    // already re-keyed the live SQLCipher connection AND reencryptNotes()
+    // (vault.ts:925) has already re-encrypted every *pre-existing* note and
+    // committed — but masterKey (vault.ts:744) isn't reassigned until
+    // several steps later. Holding the real statement here, before letting
+    // it run, deterministically lands a racing write inside that exact
+    // window: late enough that reencryptNotes()'s SELECT can't sweep it up
+    // and re-encrypt it too, early enough that masterKey is still stale.
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      if (typeof sql === 'string' && sql === 'PRAGMA wal_checkpoint(FULL)') {
+        markWindowReached()
+        void windowGate.then(() => {
+          originalRun(sql, ...(rest as Parameters<typeof originalRun>))
+        })
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>))
+    })
+
+    try {
+      const rotation = changePassword(oldPassword, newPassword)
+      await windowReached
+
+      // Reproduces today's ipc-handlers.ts notes:create handler exactly
+      // (ipc-handlers.ts:700-708): reads getDb()/getMasterKey() directly,
+      // with no withVaultLock wrapper around either call — issue #25's bug.
+      const racingNote = await createNote(
+        getDb(),
+        { title: 'Racing note', content: 'Written mid-rotation' },
+        getMasterKey()
+      )
+
+      releaseWindow()
+      await rotation
+
+      // The rotation succeeded and masterKey is now the NEW key — but the
+      // racing note's fields were encrypted with the OLD key, and
+      // reencryptNotes() never saw it (it was inserted after that
+      // function's SELECT already ran and committed). Decrypting it with
+      // the key the rest of the vault now assumes fails.
+      await expect(getNote(getDb(), racingNote.id, getMasterKey())).rejects.toThrow()
+    } finally {
+      runSpy.mockRestore()
+    }
+  }, 90_000)
+})
+
+// Covers the new default behavior this fix introduces for the common case
+// (no rotation involved): before issue #25's fix, two concurrent note/tag
+// IPC operations ran fully in parallel; now they queue through the same
+// withVaultLock FIFO the rotation functions already used. The characterization
+// test above only proves the rotation-race window is closed — this proves the
+// far more common case (two ordinary writes racing each other) still works
+// correctly under the new serialization, using the exact pattern
+// ipc-handlers.ts's fixed handlers use (withVaultLock(() => op(getDb(), ...,
+// getMasterKey()))), not the abstract stub functions the issue #16 ordering
+// tests below use. Placed before that describe block for the same
+// lock-poisoning reason as the two describes above.
+describe('note/tag operations serialize with each other (issue #25 — concurrency)', () => {
+  let vaultDir: string | undefined
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
+    vaultDir = undefined
+  })
+
+  it('two concurrent note writes routed through withVaultLock run one at a time, not interleaved, and both land correctly', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    const order: string[] = []
+
+    // Reproduces ipc-handlers.ts's fixed notes:create handler exactly
+    // (ipc-handlers.ts:700-705).
+    const writeNote = (title: string): Promise<{ id: string }> =>
+      withVaultLock(async () => {
+        order.push(`${title}-start`)
+        const note = await createNote(getDb(), { title, content: 'Body' }, getMasterKey())
+        order.push(`${title}-end`)
+        return note
+      })
+
+    const [first, second] = await Promise.all([writeNote('First'), writeNote('Second')])
+
+    // FIFO, not interleaved: the second call's closure can't start until the
+    // first one's has fully settled.
+    expect(order).toEqual(['First-start', 'First-end', 'Second-start', 'Second-end'])
+
+    const firstPersisted = await getNote(getDb(), first.id, getMasterKey())
+    const secondPersisted = await getNote(getDb(), second.id, getMasterKey())
+    expect(firstPersisted?.title).toBe('First')
+    expect(secondPersisted?.title).toBe('Second')
+  }, 60_000)
 })
 
 // Pure ordering test — no vault/crypto involved, deliberately fast and
