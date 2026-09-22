@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createNote, dbAll, getNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
-import { decryptField } from '../src/main/vault/crypto'
+import { decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
 import {
   changePassword,
   closeVault,
@@ -25,6 +25,16 @@ import {
   syncContainer,
   withVaultLock
 } from '../src/main/vault/vault'
+
+// Partial-mocks crypto.ts so `memzero`/`deriveKey` become observable spies
+// while still running their real behavior (via `importOriginal`) — used by
+// the issue #24 tests below to capture the exact `newRawKey` buffer
+// instance a credential-rotation function derives, and prove that specific
+// instance is wiped, not just that some zeroing call happened somewhere.
+vi.mock('../src/main/vault/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
+  return { ...actual, memzero: vi.fn(actual.memzero), deriveKey: vi.fn(actual.deriveKey) }
+})
 
 interface RawNoteRow {
   id: string
@@ -554,6 +564,93 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       expect(persisted.get(id)).toBe(title)
     }
   }, 60_000)
+
+  it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
+    // Failure point the issue's literal suggested diff did NOT cover: the
+    // PRAGMA rekey call sits before the existing try/catch that the diff
+    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
+    // this failure point must zero it too.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
+        callback(new Error('simulated rekey failure'))
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    // authenticateVaultKey() (step 1, verifying the CURRENT password) also
+    // calls deriveKey() and memzero()'s its own candidate buffer — capturing
+    // by reference (not just counting calls) is what tells newRawKey's
+    // buffer apart from that unrelated one.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        changePassword(originalPassword, 'a different correct horse battery staple')
+      ).rejects.toThrow('simulated rekey failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
+    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
+    expect(newRawKeyRef.length).toBeGreaterThan(0)
+    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+  }, 90_000)
+
+  it('changePassword(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
+    // Regression coverage for the path the issue's suggested diff already
+    // covered (the existing try/catch), now proven rather than assumed.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
+        callback(new Error('simulated transaction failure'))
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        changePassword(originalPassword, 'a different correct horse battery staple')
+      ).rejects.toThrow('simulated transaction failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
+    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
+    expect(newRawKeyRef.length).toBeGreaterThan(0)
+    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+  }, 90_000)
 
   it('configureKeyFile(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
