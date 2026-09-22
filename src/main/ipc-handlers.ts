@@ -45,7 +45,7 @@ import {
   getVaultBackupDir,
   hasAnyBackups
 } from './vault/backups'
-import { isValidNotvexFile, readContainer } from './vault/container'
+import { isValidNotvexFile, readContainer, shouldWarnOpeningInDevBuild } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -221,8 +221,7 @@ let devBuildWarningResolver: ((confirmed: boolean) => void) | null = null
 
 // Sends 'vault:dev-build-warning-required' to the renderer and waits for the
 // user's response. Shared by vault:open and vault:open-with-recovery, gated
-// on !app.isPackaged && !header.devBuild — a real vault (no devBuild field,
-// or written by a packaged build) being opened by a development build.
+// on shouldWarnOpeningInDevBuild() — see its docstring in container.ts.
 async function confirmDevBuildWarning(win: BrowserWindow, filePath: string): Promise<boolean> {
   if (devBuildWarningResolver !== null) {
     throw new Error('A dev-build warning dialog is already open. Complete or cancel it first.')
@@ -327,7 +326,7 @@ export function registerIpcHandlers(
           }
           // A real vault (no devBuild field) opened by a development build can be
           // corrupted by an in-progress bug or migration, with no server backup.
-          if (!app.isPackaged && !header.devBuild) {
+          if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
             const confirmed = await confirmDevBuildWarning(win, filePath)
             if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
           }
@@ -460,7 +459,7 @@ export function registerIpcHandlers(
               if (!confirmed) return fail('MIGRATION_CANCELLED')
               await migrateHeaderIfNeeded(filePath, header.versionMin)
             }
-            if (!app.isPackaged && !header.devBuild) {
+            if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
               const confirmed = await confirmDevBuildWarning(win, filePath)
               if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
             }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { initSodium } from '../src/main/vault/crypto'
-import { readContainer, verifyHeaderHmac, writeContainer } from '../src/main/vault/container'
+import {
+  readContainer,
+  shouldWarnOpeningInDevBuild,
+  verifyHeaderHmac,
+  writeContainer
+} from '../src/main/vault/container'
 
 async function baseParams(devBuild?: boolean): Promise<Parameters<typeof writeContainer>[0]> {
   await initSodium()
@@ -54,5 +59,23 @@ describe('container devBuild field (issue #34)', () => {
         params.masterKey
       )
     ).toBe(false)
+  })
+})
+
+describe('shouldWarnOpeningInDevBuild (issue #34)', () => {
+  it('warns: a development build opening a vault with no devBuild field (production, or pre-existing)', () => {
+    expect(shouldWarnOpeningInDevBuild(false, { devBuild: false })).toBe(true)
+  })
+
+  it("doesn't warn: a development build opening its own devBuild vault", () => {
+    expect(shouldWarnOpeningInDevBuild(false, { devBuild: true })).toBe(false)
+  })
+
+  it("doesn't warn: a packaged build opening a production vault (the normal case)", () => {
+    expect(shouldWarnOpeningInDevBuild(true, { devBuild: false })).toBe(false)
+  })
+
+  it("doesn't warn: a packaged build opening a devBuild vault (out of scope — see SPEC.md)", () => {
+    expect(shouldWarnOpeningInDevBuild(true, { devBuild: true })).toBe(false)
   })
 })

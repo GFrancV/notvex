@@ -174,6 +174,18 @@ export function verifyHeaderHmac(
   return valid
 }
 
+// A real vault (no devBuild field — production, or predating this field) opened
+// by a development build can be corrupted by an in-progress bug or migration,
+// with no server backup. The reverse (packaged build opening a devBuild vault)
+// is out of scope: VERSION_TOO_NEW already guards schema incompatibility there,
+// and devBuild vaults are inherently disposable. See SPEC.md.
+export function shouldWarnOpeningInDevBuild(
+  isPackaged: boolean,
+  header: Pick<ContainerMetadata, 'devBuild'>
+): boolean {
+  return !isPackaged && !header.devBuild
+}
+
 export function isValidNotvexFile(filePath: string): boolean {
   try {
     if (!existsSync(filePath)) return false
