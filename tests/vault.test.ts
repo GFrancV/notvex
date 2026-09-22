@@ -654,76 +654,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 })
 
-// Pure ordering test — no vault/crypto involved, deliberately fast and
-// deterministic. Proving a race is closed needs controlled timing, which
-// real Argon2id/SQLCipher calls can't reliably provide; the existing tests
-// above already prove packContainer()/rotateVaultCredentials() etc. are
-// individually correct.
-describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
-  it('runs queued calls strictly after the one already in flight settles', async () => {
-    const order: string[] = []
-
-    // `first` finishes after a real (if short) delay; `second` finishes
-    // immediately once it runs. If withVaultLock let them run concurrently,
-    // `second` would push before `first` despite being queued after it.
-    const first = withVaultLock(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      order.push('first')
-    })
-    const second = withVaultLock(async () => {
-      order.push('second')
-    })
-
-    await first
-    await second
-
-    expect(order).toEqual(['first', 'second'])
-  })
-
-  it('still runs a queued call after the one ahead of it rejects', async () => {
-    const order: string[] = []
-
-    const first = withVaultLock(async () => {
-      order.push('first')
-      throw new Error('boom')
-    })
-    const second = withVaultLock(async () => {
-      order.push('second')
-    })
-
-    await expect(first).rejects.toThrow('boom')
-    await second
-
-    expect(order).toEqual(['first', 'second'])
-  })
-
-  it('deadlocks permanently on a reentrant call — this is why closeVault()s catch-block fallbacks call doCloseVault() directly, never closeVault()', async () => {
-    // withVaultLock is a plain FIFO queue, not a reentrant mutex: calling
-    // it again from inside a function it's already running deadlocks that
-    // call AND wedges the queue for every future caller (see #16 follow-up
-    // — security-auditor found this via an identical isolated repro when
-    // changePassword()'s double-rollback-failure catch block called the
-    // locked closeVault() from inside doChangePassword(), itself already
-    // running under withVaultLock). This test locks in that the primitive
-    // itself is inherently non-reentrant, as a permanent guardrail against
-    // ever "fixing" withVaultLock into something that silently tolerates
-    // reentrancy instead of raising the alarm that a caller is misusing it.
-    const reentrant = withVaultLock(async () => {
-      await withVaultLock(async () => {})
-    })
-
-    const outcome = await Promise.race([
-      reentrant.then(
-        () => 'resolved' as const,
-        () => 'rejected' as const
-      ),
-      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500))
-    ])
-
-    expect(outcome).toBe('timeout')
-  })
-})
-
 // Structural test, not a behavioral one: tests/vault.test.ts cannot invoke
 // ipc-handlers.ts's registered ipcMain.handle callbacks directly (no harness
 // mocks electron/electron-updater in this repo), so a test that only calls
@@ -794,6 +724,16 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
 // exact mechanism issue #25 describes, reproduced without depending on real
 // Argon2id timing (see the note on vault.test.ts:264-277 for why a raw
 // setTimeout race wouldn't be reliable here either).
+//
+// Deliberately placed BEFORE the "withVaultLock (issue #16 follow-up)" block
+// below: that block's "deadlocks permanently on a reentrant call" test
+// intentionally leaves the module-level vaultOpLock chained onto a promise
+// that never settles (that's the whole point of the test) and never resets
+// it. Vitest shares one module instance across every it()/describe() in this
+// file, so any withVaultLock()-routed call placed after that test — like
+// changePassword() below — would hang forever waiting on a lock that can
+// never hand off its turn. Running before it sidesteps the poisoning
+// entirely without touching that pre-existing test or vault.ts itself.
 describe('note write races a credential rotation (issue #25 — characterization)', () => {
   let vaultDir: string | undefined
 
@@ -873,4 +813,74 @@ describe('note write races a credential rotation (issue #25 — characterization
       runSpy.mockRestore()
     }
   }, 90_000)
+})
+
+// Pure ordering test — no vault/crypto involved, deliberately fast and
+// deterministic. Proving a race is closed needs controlled timing, which
+// real Argon2id/SQLCipher calls can't reliably provide; the existing tests
+// above already prove packContainer()/rotateVaultCredentials() etc. are
+// individually correct.
+describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
+  it('runs queued calls strictly after the one already in flight settles', async () => {
+    const order: string[] = []
+
+    // `first` finishes after a real (if short) delay; `second` finishes
+    // immediately once it runs. If withVaultLock let them run concurrently,
+    // `second` would push before `first` despite being queued after it.
+    const first = withVaultLock(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      order.push('first')
+    })
+    const second = withVaultLock(async () => {
+      order.push('second')
+    })
+
+    await first
+    await second
+
+    expect(order).toEqual(['first', 'second'])
+  })
+
+  it('still runs a queued call after the one ahead of it rejects', async () => {
+    const order: string[] = []
+
+    const first = withVaultLock(async () => {
+      order.push('first')
+      throw new Error('boom')
+    })
+    const second = withVaultLock(async () => {
+      order.push('second')
+    })
+
+    await expect(first).rejects.toThrow('boom')
+    await second
+
+    expect(order).toEqual(['first', 'second'])
+  })
+
+  it('deadlocks permanently on a reentrant call — this is why closeVault()s catch-block fallbacks call doCloseVault() directly, never closeVault()', async () => {
+    // withVaultLock is a plain FIFO queue, not a reentrant mutex: calling
+    // it again from inside a function it's already running deadlocks that
+    // call AND wedges the queue for every future caller (see #16 follow-up
+    // — security-auditor found this via an identical isolated repro when
+    // changePassword()'s double-rollback-failure catch block called the
+    // locked closeVault() from inside doChangePassword(), itself already
+    // running under withVaultLock). This test locks in that the primitive
+    // itself is inherently non-reentrant, as a permanent guardrail against
+    // ever "fixing" withVaultLock into something that silently tolerates
+    // reentrancy instead of raising the alarm that a caller is misusing it.
+    const reentrant = withVaultLock(async () => {
+      await withVaultLock(async () => {})
+    })
+
+    const outcome = await Promise.race([
+      reentrant.then(
+        () => 'resolved' as const,
+        () => 'rejected' as const
+      ),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500))
+    ])
+
+    expect(outcome).toBe('timeout')
+  })
 })
