@@ -758,4 +758,43 @@ describe('devBuild propagation (issue #34)', () => {
 
     expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
   }, 90_000)
+
+  // The 3 cases below exist because rotateVaultCredentials/configureKeyFile/
+  // removeKeyFile each duplicate changePassword's writeContainer() call
+  // (see vault.ts) rather than sharing it — a future edit to any one of
+  // them that drops its `devBuild:` argument would otherwise go unnoticed.
+
+  it('rotateVaultCredentials() preserves an existing devBuild: true flag', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple', true)
+    await rotateVaultCredentials('a different correct horse battery staple')
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 90_000)
+
+  it('configureKeyFile() preserves an existing devBuild: true flag', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const password = 'correct horse battery staple'
+
+    await createVault(vaultPath, password, true)
+    await configureKeyFile(password, randomBytes(32))
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 90_000)
+
+  it('removeKeyFile() preserves an existing devBuild: true flag', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const password = 'correct horse battery staple'
+    const keyFileContents = randomBytes(32)
+
+    await createVault(vaultPath, password, true)
+    await configureKeyFile(password, keyFileContents)
+    await removeKeyFile(password, keyFileContents)
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 120_000)
 })

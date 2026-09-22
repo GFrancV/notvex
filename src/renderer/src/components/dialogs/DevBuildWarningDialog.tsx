@@ -65,7 +65,7 @@ export function DevBuildWarningDialog(): ReactNode {
               corrupt the vault or make its data irreversibly inaccessible.
             </DialogDescription>
 
-            <div className="text-destructive-foreground bg-destructive/15 flex items-center gap-2 rounded-md px-3 py-2 text-sm">
+            <div className="text-destructive bg-destructive/15 flex items-center gap-2 rounded-md px-3 py-2 text-sm">
               <TriangleAlertIcon className="size-4 shrink-0" />
               Only continue if you know what you&apos;re doing.
             </div>

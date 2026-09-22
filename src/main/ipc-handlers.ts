@@ -313,6 +313,14 @@ export function registerIpcHandlers(
         let migrationOccurred = false
         try {
           const header = readContainer(fileBytes)
+          // A real vault (no devBuild field) opened by a development build can be
+          // corrupted by an in-progress bug or migration, with no server backup —
+          // checked before any migration runs, not after, so it actually guards
+          // the thing it exists to guard.
+          if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
+            const confirmed = await confirmDevBuildWarning(win, filePath)
+            if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
+          }
           // Minor version: show migration dialog if needed (no-op for v1.0)
           if (header.versionMin < CURRENT_VERSION_MIN) {
             const confirmed = await confirmMigrationAndBackup(win, filePath, {
@@ -323,12 +331,6 @@ export function registerIpcHandlers(
             if (!confirmed) return fail('MIGRATION_CANCELLED')
             await migrateHeaderIfNeeded(filePath, header.versionMin)
             migrationOccurred = true
-          }
-          // A real vault (no devBuild field) opened by a development build can be
-          // corrupted by an in-progress bug or migration, with no server backup.
-          if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
-            const confirmed = await confirmDevBuildWarning(win, filePath)
-            if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
           }
         } catch (e) {
           migrationBackupTimestamp = null
@@ -450,6 +452,10 @@ export function registerIpcHandlers(
 
           try {
             const header = readContainer(fileBytes)
+            if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
+              const confirmed = await confirmDevBuildWarning(win, filePath)
+              if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
+            }
             if (header.versionMin < CURRENT_VERSION_MIN) {
               const confirmed = await confirmMigrationAndBackup(win, filePath, {
                 reason: 'header',
@@ -458,10 +464,6 @@ export function registerIpcHandlers(
               })
               if (!confirmed) return fail('MIGRATION_CANCELLED')
               await migrateHeaderIfNeeded(filePath, header.versionMin)
-            }
-            if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
-              const confirmed = await confirmDevBuildWarning(win, filePath)
-              if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
             }
           } catch (e) {
             migrationBackupTimestamp = null
