@@ -807,7 +807,7 @@ describe('note write races a credential rotation (issue #25 — characterization
     vaultDir = undefined
   })
 
-  it("a note written via getDb()/getMasterKey() (today's unwrapped notes:create pattern) after reencryptNotes() has already committed, but before masterKey is reassigned, becomes undecryptable once changePassword() completes", async () => {
+  it('the racing note becomes undecryptable once changePassword() completes', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const oldPassword = 'correct horse battery staple'
