@@ -773,6 +773,94 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
   }, 60_000)
 
+  it('configureKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
+    // Failure point the issue's literal suggested diff did NOT cover: the
+    // PRAGMA rekey call sits before the existing try/catch that the diff
+    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
+    // this failure point must zero it too.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
+        callback(new Error('simulated rekey failure'))
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    // authenticateVaultKey() (verifying the CURRENT password) also calls
+    // deriveKey() — capturing by reference (not just counting calls) is
+    // what tells newRawKey's buffer apart from that unrelated one.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    const keyFileContents = randomBytes(32)
+    try {
+      await expect(configureKeyFile(originalPassword, keyFileContents)).rejects.toThrow(
+        'simulated rekey failure'
+      )
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
+    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
+    expect(newRawKeyRef.length).toBeGreaterThan(0)
+    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+  }, 90_000)
+
+  it('configureKeyFile(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
+    // Regression coverage for the path the issue's suggested diff already
+    // covered (the existing try/catch), now proven rather than assumed.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
+        callback(new Error('simulated transaction failure'))
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    const keyFileContents = randomBytes(32)
+    try {
+      await expect(configureKeyFile(originalPassword, keyFileContents)).rejects.toThrow(
+        'simulated transaction failure'
+      )
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
+    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
+    expect(newRawKeyRef.length).toBeGreaterThan(0)
+    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+  }, 90_000)
+
   it('removeKeyFile(): keeps the backup and the vault still reopens with the original password and key file when the rollback rekey also fails (issue #17)', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')

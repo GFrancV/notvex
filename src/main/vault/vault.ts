@@ -1027,52 +1027,59 @@ async function doConfigureKeyFile(
   const oldKeyHex = masterKey.toString('hex')
 
   const newHex = Buffer.from(newRawKey).toString('hex')
-  await new Promise<void>((resolve, reject) => {
-    db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) => (err ? reject(err) : resolve()))
-  })
 
   try {
-    await dbRun(db, 'BEGIN TRANSACTION')
-    try {
-      await dbRun(db, 'UPDATE vault_meta SET has_key_file = 1 WHERE id = 1')
-      await reencryptNotes(masterKey, newRawKey)
-      await dbRun(db, 'COMMIT')
-    } catch (txErr) {
-      await dbRun(db, 'ROLLBACK').catch(() => {})
-      throw txErr
-    }
-
-    await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
-
-    const mnemonic = generateMnemonic()
-    const mnemonicKey = mnemonicToMasterKey(mnemonic)
-    const wrapKey = deriveRecoveryWrapKey(mnemonicKey, keyFileContents)
-    memzero(mnemonicKey)
-    const { ciphertext: recCt, nonce: recNonce } = encryptBytes(newRawKey, wrapKey)
-    const newRecoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
-    memzero(wrapKey)
-
-    const dbBytes = readFileSync(tempDbPath)
-    const containerBytes = writeContainer({
-      masterKey: Buffer.from(newRawKey),
-      salt: newSalt,
-      kdfTier: currentMetadata.kdfInput.kdfTier,
-      recoveryBlob: newRecoveryBlob,
-      dbBytes,
-      existingVersionMin: currentMetadata.versionMin,
-      devBuild: currentMetadata.devBuild
+    await new Promise<void>((resolve, reject) => {
+      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+        err ? reject(err) : resolve()
+      )
     })
-    currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
-    const newSecureKey = storeKey(newRawKey)
-    freeSecure(masterKey)
-    masterKey = newSecureKey
-    currentHasKeyFile = true
+    try {
+      await dbRun(db, 'BEGIN TRANSACTION')
+      try {
+        await dbRun(db, 'UPDATE vault_meta SET has_key_file = 1 WHERE id = 1')
+        await reencryptNotes(masterKey, newRawKey)
+        await dbRun(db, 'COMMIT')
+      } catch (txErr) {
+        await dbRun(db, 'ROLLBACK').catch(() => {})
+        throw txErr
+      }
 
-    return { mnemonic }
-  } catch (err) {
-    await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
-    throw err
+      await dbRun(db, 'PRAGMA wal_checkpoint(FULL)')
+
+      const mnemonic = generateMnemonic()
+      const mnemonicKey = mnemonicToMasterKey(mnemonic)
+      const wrapKey = deriveRecoveryWrapKey(mnemonicKey, keyFileContents)
+      memzero(mnemonicKey)
+      const { ciphertext: recCt, nonce: recNonce } = encryptBytes(newRawKey, wrapKey)
+      const newRecoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
+      memzero(wrapKey)
+
+      const dbBytes = readFileSync(tempDbPath)
+      const containerBytes = writeContainer({
+        masterKey: Buffer.from(newRawKey),
+        salt: newSalt,
+        kdfTier: currentMetadata.kdfInput.kdfTier,
+        recoveryBlob: newRecoveryBlob,
+        dbBytes,
+        existingVersionMin: currentMetadata.versionMin,
+        devBuild: currentMetadata.devBuild
+      })
+      currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
+
+      const newSecureKey = storeKey(newRawKey)
+      freeSecure(masterKey)
+      masterKey = newSecureKey
+      currentHasKeyFile = true
+
+      return { mnemonic }
+    } catch (err) {
+      await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
+      throw err
+    }
+  } finally {
+    memzero(newRawKey) // no-op if storeKey() already zeroed it on the success path
   }
 }
 
