@@ -501,6 +501,91 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
   }, 60_000)
 
+  it('rotateVaultCredentials(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
+    // Failure point the issue's literal suggested diff did NOT cover: the
+    // PRAGMA rekey call sits before the existing try/catch that the diff
+    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
+    // this failure point must zero it too.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
+        callback(new Error('simulated rekey failure'))
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    // Unlike changePassword()/configureKeyFile()/removeKeyFile(),
+    // rotateVaultCredentials() has no authenticateVaultKey() step, so
+    // deriveKey() is called exactly once here — for newRawKey itself.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        rotateVaultCredentials('a different correct horse battery staple')
+      ).rejects.toThrow('simulated rekey failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expect(deriveKeySpy).toHaveBeenCalledTimes(1)
+    const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
+    expect(newRawKeyRef.length).toBeGreaterThan(0)
+    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+  }, 90_000)
+
+  it('rotateVaultCredentials(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
+    // Regression coverage for the path the issue's suggested diff already
+    // covered (the existing try/catch), now proven rather than assumed.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const liveDb = getDb()
+    const originalRun = liveDb.run.bind(liveDb)
+    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+      const callback = rest[rest.length - 1] as (err: Error | null) => void
+      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
+        callback(new Error('simulated transaction failure'))
+        return liveDb
+      }
+      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+    })
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        rotateVaultCredentials('a different correct horse battery staple')
+      ).rejects.toThrow('simulated transaction failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expect(deriveKeySpy).toHaveBeenCalledTimes(1)
+    const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
+    expect(newRawKeyRef.length).toBeGreaterThan(0)
+    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+  }, 90_000)
+
   it('openVault() leaves a leftover .bak in place while still cleaning up a leftover .tmp (issue #17)', async () => {
     // Simulates a fresh app start finding the leftovers of a previous,
     // interrupted double-failure rollback (see the test above). Before the
