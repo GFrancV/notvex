@@ -14,7 +14,8 @@ const FieldId = {
   ArgonSalt: 0x01,
   KdfTier: 0x02,
   RecoveryBlob: 0x03,
-  HeaderHmac: 0x04
+  HeaderHmac: 0x04,
+  DevBuild: 0x05
 } as const
 
 export interface ContainerMetadata {
@@ -25,6 +26,11 @@ export interface ContainerMetadata {
   storedHmac: Buffer
   hmacCoveredBytes: Buffer
   dbOffset: number
+  // True only if the vault was created (or last had its header rewritten) by a
+  // development build. Absent on disk — and therefore false here — for every
+  // vault written before this field existed, which keeps old vaults reading as
+  // "production" without any migration.
+  devBuild: boolean
 }
 
 function tlvField(id: number, data: Buffer): Buffer {
@@ -43,6 +49,7 @@ export function writeContainer(params: {
   dbBytes: Buffer
   requiredMinVersion?: number
   existingVersionMin?: number
+  devBuild?: boolean
 }): Buffer {
   const effectiveMin = Math.max(
     params.requiredMinVersion ?? 0,
@@ -57,8 +64,21 @@ export function writeContainer(params: {
   const saltField = tlvField(FieldId.ArgonSalt, params.salt)
   const tierField = tlvField(FieldId.KdfTier, Buffer.from([params.kdfTier]))
   const recoveryField = tlvField(FieldId.RecoveryBlob, params.recoveryBlob)
+  // Omitted (not written as a zero byte) when false, so old vaults and vaults
+  // created by production builds stay byte-for-byte what they'd have been
+  // without this field.
+  const devBuildField = params.devBuild
+    ? tlvField(FieldId.DevBuild, Buffer.from([0x01]))
+    : Buffer.alloc(0)
 
-  const headerWithoutHmac = Buffer.concat([MAGIC_NVX, version, saltField, tierField, recoveryField])
+  const headerWithoutHmac = Buffer.concat([
+    MAGIC_NVX,
+    version,
+    saltField,
+    tierField,
+    recoveryField,
+    devBuildField
+  ])
   const hmac = computeHeaderHmac(headerWithoutHmac, params.masterKey)
   const hmacField = tlvField(FieldId.HeaderHmac, Buffer.from(hmac))
   sodium.memzero(hmac)
@@ -117,7 +137,8 @@ function parseHeaderV1(fileBytes: Buffer, versionMin: number): ContainerMetadata
     recoveryBlob: recoveryBuf,
     storedHmac: hmacBuf,
     hmacCoveredBytes,
-    dbOffset: offset
+    dbOffset: offset,
+    devBuild: fields[FieldId.DevBuild] !== undefined
   }
 }
 
@@ -151,6 +172,18 @@ export function verifyHeaderHmac(
   const valid = timingSafeEqual(expected, storedHmac)
   sodium.memzero(expected)
   return valid
+}
+
+// A real vault (no devBuild field — production, or predating this field) opened
+// by a development build can be corrupted by an in-progress bug or migration,
+// with no server backup. The reverse (packaged build opening a devBuild vault)
+// is out of scope: VERSION_TOO_NEW already guards schema incompatibility there,
+// and devBuild vaults are inherently disposable. See SPEC.md.
+export function shouldWarnOpeningInDevBuild(
+  isPackaged: boolean,
+  header: Pick<ContainerMetadata, 'devBuild'>
+): boolean {
+  return !isPackaged && !header.devBuild
 }
 
 export function isValidNotvexFile(filePath: string): boolean {

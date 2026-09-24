@@ -244,7 +244,8 @@ async function doPackContainer(): Promise<void> {
     kdfTier: currentMetadata.kdfInput.kdfTier,
     recoveryBlob: currentMetadata.recoveryBlob,
     dbBytes,
-    existingVersionMin: currentMetadata.versionMin
+    existingVersionMin: currentMetadata.versionMin,
+    devBuild: currentMetadata.devBuild
   })
   atomicWrite(currentVaultPath, bytes)
 }
@@ -330,7 +331,11 @@ export interface CreateVaultResult {
   mnemonic: string
 }
 
-export async function createVault(filePath: string, password: string): Promise<CreateVaultResult> {
+export async function createVault(
+  filePath: string,
+  password: string,
+  devBuild = false
+): Promise<CreateVaultResult> {
   await initSodium()
 
   if (!password || password.trim().length === 0) {
@@ -379,7 +384,8 @@ export async function createVault(filePath: string, password: string): Promise<C
     salt,
     kdfTier: tier,
     recoveryBlob,
-    dbBytes
+    dbBytes,
+    devBuild
   })
   atomicWrite(filePath, containerBytes)
 
@@ -735,7 +741,8 @@ async function doChangePassword(
       kdfTier: currentMetadata.kdfInput.kdfTier,
       recoveryBlob: newRecoveryBlob,
       dbBytes,
-      existingVersionMin: currentMetadata.versionMin
+      existingVersionMin: currentMetadata.versionMin,
+      devBuild: currentMetadata.devBuild
     })
     currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
@@ -817,7 +824,8 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
       kdfTier: currentMetadata.kdfInput.kdfTier,
       recoveryBlob: newRecoveryBlob,
       dbBytes,
-      existingVersionMin: currentMetadata.versionMin
+      existingVersionMin: currentMetadata.versionMin,
+      devBuild: currentMetadata.devBuild
     })
     currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
@@ -1038,7 +1046,8 @@ async function doConfigureKeyFile(
       kdfTier: currentMetadata.kdfInput.kdfTier,
       recoveryBlob: newRecoveryBlob,
       dbBytes,
-      existingVersionMin: currentMetadata.versionMin
+      existingVersionMin: currentMetadata.versionMin,
+      devBuild: currentMetadata.devBuild
     })
     currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
@@ -1138,7 +1147,8 @@ async function doRemoveKeyFile(
       kdfTier: currentMetadata.kdfInput.kdfTier,
       recoveryBlob: newRecoveryBlob,
       dbBytes,
-      existingVersionMin: currentMetadata.versionMin
+      existingVersionMin: currentMetadata.versionMin,
+      devBuild: currentMetadata.devBuild
     })
     currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
