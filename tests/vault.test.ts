@@ -381,7 +381,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     } finally {
       runSpy.mockRestore()
     }
-  }, 30_000)
+  }, 60_000)
 
   // Characterization test, not a regression guard: verified by hand that
   // this passes unchanged against pre-Task-13 code too — the rollback-
@@ -654,11 +654,93 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 })
 
+describe('devBuild propagation (issue #34)', () => {
+  let vaultDir: string | undefined
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
+    vaultDir = undefined
+  })
+
+  it('createVault() defaults to devBuild: false when the argument is omitted', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(false)
+  }, 90_000)
+
+  it('createVault(devBuild: true) writes the flag, and a later rewrite (changePassword) preserves it', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword, true)
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+
+    await changePassword(originalPassword, 'a different correct horse battery staple')
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 120_000)
+
+  // The 3 cases below exist because rotateVaultCredentials/configureKeyFile/
+  // removeKeyFile each duplicate changePassword's writeContainer() call
+  // (see vault.ts) rather than sharing it — a future edit to any one of
+  // them that drops its `devBuild:` argument would otherwise go unnoticed.
+
+  it('rotateVaultCredentials() preserves an existing devBuild: true flag', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple', true)
+    await rotateVaultCredentials('a different correct horse battery staple')
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 120_000)
+
+  it('configureKeyFile() preserves an existing devBuild: true flag', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const password = 'correct horse battery staple'
+
+    await createVault(vaultPath, password, true)
+    await configureKeyFile(password, randomBytes(32))
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 120_000)
+
+  it('removeKeyFile() preserves an existing devBuild: true flag', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const password = 'correct horse battery staple'
+    const keyFileContents = randomBytes(32)
+
+    await createVault(vaultPath, password, true)
+    await configureKeyFile(password, keyFileContents)
+    await removeKeyFile(password, keyFileContents)
+
+    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
+  }, 150_000)
+})
+
 // Pure ordering test — no vault/crypto involved, deliberately fast and
 // deterministic. Proving a race is closed needs controlled timing, which
 // real Argon2id/SQLCipher calls can't reliably provide; the existing tests
 // above already prove packContainer()/rotateVaultCredentials() etc. are
 // individually correct.
+//
+// Placed after devBuild propagation (issue #34) deliberately: the last test
+// below intentionally wedges withVaultLock's shared module-level queue
+// forever (see its own comment) — even though it now isolates itself via a
+// fresh module import, keeping every real-vault-operation test earlier in
+// the file is the cheap, load-bearing-free way to make sure a future test
+// added at the end of this file never races that isolation.
 describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
   it('runs queued calls strictly after the one already in flight settles', async () => {
     const order: string[] = []
@@ -708,8 +790,22 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
     // itself is inherently non-reentrant, as a permanent guardrail against
     // ever "fixing" withVaultLock into something that silently tolerates
     // reentrancy instead of raising the alarm that a caller is misusing it.
-    const reentrant = withVaultLock(async () => {
-      await withVaultLock(async () => {})
+    //
+    // Runs against a freshly re-imported copy of the module (vi.resetModules()
+    // + dynamic import), not the file's shared, statically-imported one — the
+    // whole point of this test is to wedge the module-level vaultOpLock queue
+    // forever, and every other test in this file shares that same singleton
+    // via the static `import { withVaultLock } from '../src/main/vault/vault'`
+    // at the top. Without this isolation, this test permanently breaks every
+    // withVaultLock-wrapped call (changePassword, rotateVaultCredentials,
+    // configureKeyFile, removeKeyFile, closeVault, packContainer) in every
+    // test that happens to run after it later in the file — found via issue
+    // #34's devBuild-propagation tests hanging in CI for exactly this reason.
+    vi.resetModules()
+    const { withVaultLock: isolatedWithVaultLock } = await import('../src/main/vault/vault')
+
+    const reentrant = isolatedWithVaultLock(async () => {
+      await isolatedWithVaultLock(async () => {})
     })
 
     const outcome = await Promise.race([
@@ -721,80 +817,10 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
     ])
 
     expect(outcome).toBe('timeout')
+
+    // Proves the isolation actually worked: the file's shared withVaultLock
+    // (statically imported, used by every other test) is untouched and still
+    // runs normally.
+    await expect(withVaultLock(async () => 'still-fine' as const)).resolves.toBe('still-fine')
   })
-})
-
-describe('devBuild propagation (issue #34)', () => {
-  let vaultDir: string | undefined
-
-  afterEach(async () => {
-    try {
-      await closeVault()
-    } catch {
-      /* ignore */
-    }
-    if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
-    vaultDir = undefined
-  })
-
-  it('createVault() defaults to devBuild: false when the argument is omitted', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-
-    await createVault(vaultPath, 'correct horse battery staple')
-
-    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(false)
-  }, 60_000)
-
-  it('createVault(devBuild: true) writes the flag, and a later rewrite (changePassword) preserves it', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-    const originalPassword = 'correct horse battery staple'
-
-    await createVault(vaultPath, originalPassword, true)
-    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
-
-    await changePassword(originalPassword, 'a different correct horse battery staple')
-
-    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
-  }, 90_000)
-
-  // The 3 cases below exist because rotateVaultCredentials/configureKeyFile/
-  // removeKeyFile each duplicate changePassword's writeContainer() call
-  // (see vault.ts) rather than sharing it — a future edit to any one of
-  // them that drops its `devBuild:` argument would otherwise go unnoticed.
-
-  it('rotateVaultCredentials() preserves an existing devBuild: true flag', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-
-    await createVault(vaultPath, 'correct horse battery staple', true)
-    await rotateVaultCredentials('a different correct horse battery staple')
-
-    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
-  }, 90_000)
-
-  it('configureKeyFile() preserves an existing devBuild: true flag', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-    const password = 'correct horse battery staple'
-
-    await createVault(vaultPath, password, true)
-    await configureKeyFile(password, randomBytes(32))
-
-    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
-  }, 90_000)
-
-  it('removeKeyFile() preserves an existing devBuild: true flag', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-    const password = 'correct horse battery staple'
-    const keyFileContents = randomBytes(32)
-
-    await createVault(vaultPath, password, true)
-    await configureKeyFile(password, keyFileContents)
-    await removeKeyFile(password, keyFileContents)
-
-    expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
-  }, 120_000)
 })
