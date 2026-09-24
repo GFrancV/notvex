@@ -170,6 +170,16 @@ function forceNextDbRunToFail(
 // and that memzero() was actually called with that exact instance (not
 // just that some memzero call happened, which authenticateVaultKey()'s
 // own unrelated verification buffer would also satisfy).
+//
+// Known coupling (flagged by /agent-skills:ship's fan-out, not yet worth
+// the extra complexity to remove): newRawKey is identified purely by call
+// ordinal, not by which arguments produced it. If a future change reorders
+// or adds a deriveKey() call ahead of newRawKey's in one of these 4
+// functions, `expectedDeriveCalls` would silently point at the wrong
+// buffer — and since authenticateVaultKey()'s buffer is *also* always
+// memzero()'d, the assertion would keep passing without actually testing
+// newRawKey anymore. Re-check this indexing by hand if vault.ts's
+// deriveKey() call sites in these 4 functions ever change.
 function expectNewRawKeyZeroed(
   deriveKeySpy: Mock<typeof deriveKey>,
   memzeroSpy: Mock<typeof memzero>,
@@ -492,7 +502,12 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: same 2-real-Argon2id-derivation shape (createVault
+    // + rotateVaultCredentials) as its double-failure sibling below, which
+    // was already bumped to 90_000 for the same reason — this one was missed
+    // and timed out on this machine too (flagged by /agent-skills:ship's
+    // code-reviewer during the final pre-PR pass).
+  }, 90_000)
 
   it('rotateVaultCredentials(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
     // Before the issue #17 fix, this exact path deleted the backup
@@ -520,11 +535,21 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // matching comment in the rollback-succeeds test above.
     await syncContainer()
 
+    // Issue #24: the double-failure path (rollback's own rekey also fails,
+    // falling back to doCloseVault(true) + a rethrow) is still nested inside
+    // the outer try/finally — this proves newRawKey is zeroed there too, not
+    // just on the single-failure paths the dedicated issue #24 tests cover.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       rotateVaultCredentials('a different correct horse battery staple')
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -537,7 +562,13 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: 60s was already tight for the 2 real Argon2id
+    // derivations this test does (createVault + rotateVaultCredentials);
+    // observed timing out on this machine after the issue #24 assertion
+    // above was added, even though that assertion itself adds no I/O —
+    // matches the 90_000 budget the equivalent-shaped issue #24 tests
+    // already use in this file.
+  }, 90_000)
 
   it('rotateVaultCredentials(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
@@ -652,11 +683,21 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
     await syncContainer()
 
+    // Issue #24: proves newRawKey is zeroed on this double-failure path
+    // too, not just on the single-failure paths the dedicated issue #24
+    // tests cover. Call 1 = authenticateVaultKey()'s verification derive;
+    // call 2 = newRawKey.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       changePassword(originalPassword, 'a different correct horse battery staple')
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -666,7 +707,13 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: 60s was already tight for the 3 real Argon2id
+    // derivations this test does (createVault + authenticateVaultKey +
+    // newRawKey inside changePassword); observed timing out on this
+    // machine after the issue #24 assertion above was added, even though
+    // that assertion itself adds no I/O — matches the 90_000 budget the
+    // equivalent-shaped issue #24 tests already use in this file.
+  }, 90_000)
 
   it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
@@ -755,11 +802,22 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // The vault has no key file yet, so the restored backup — and thus the
     // reopen below — needs neither this key file nor any key file at all.
     const keyFileContents = randomBytes(32)
+
+    // Issue #24: proves newRawKey is zeroed on this double-failure path
+    // too, not just on the single-failure paths the dedicated issue #24
+    // tests cover. Call 1 = authenticateVaultKey()'s verification derive;
+    // call 2 = newRawKey.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       configureKeyFile(originalPassword, keyFileContents)
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -769,7 +827,13 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: 60s was already tight for the 3 real Argon2id
+    // derivations this test does (createVault + authenticateVaultKey +
+    // newRawKey inside configureKeyFile); observed timing out on this
+    // machine after the issue #24 assertion above was added, even though
+    // that assertion itself adds no I/O — matches the 90_000 budget the
+    // equivalent-shaped issue #24 tests already use in this file.
+  }, 90_000)
 
   it('configureKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
@@ -861,11 +925,23 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     const keyFileContents = randomBytes(32)
     await configureKeyFile(originalPassword, keyFileContents)
 
+    // Issue #24: proves newRawKey is zeroed on this double-failure path
+    // too, not just on the single-failure paths the dedicated issue #24
+    // tests cover. mockClear() runs after the configureKeyFile() setup
+    // call above (which makes its own unrelated deriveKey()/memzero()
+    // calls) so only removeKeyFile()'s own calls are counted below. Call
+    // 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       removeKeyFile(originalPassword, keyFileContents)
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
 
     // The restored backup still has the key file configureKeyFile() just
     // set up — removeKeyFile() never got far enough to actually remove it.
