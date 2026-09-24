@@ -5,7 +5,7 @@ import { join } from 'path'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 import { createNote, dbAll, getNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
@@ -142,6 +142,44 @@ function expectRestoredWithBackupKept(rejection: Error, backupPath: string): voi
   expect(isVaultOpen()).toBe(false)
   // Rollback also failed — the backup must survive as the recovery copy.
   expect(existsSync(backupPath)).toBe(true)
+}
+
+// Shared by the issue #24 newRawKey-zeroing tests below: forces the next
+// liveDb.run() call matching `matchSql` to fail with `errorMessage`, every
+// other call passing through to the real implementation. Caller is
+// responsible for `runSpy.mockRestore()` once its action under test settles.
+function forceNextDbRunToFail(
+  matchSql: (sql: string) => boolean,
+  errorMessage: string
+): ReturnType<typeof vi.spyOn> {
+  const liveDb = getDb()
+  const originalRun = liveDb.run.bind(liveDb)
+  return vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+    const callback = rest[rest.length - 1] as (err: Error | null) => void
+    if (typeof sql === 'string' && matchSql(sql)) {
+      callback(new Error(errorMessage))
+      return liveDb
+    }
+    return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+  })
+}
+
+// Shared by the issue #24 newRawKey-zeroing tests below: asserts that the
+// `expectedDeriveCalls`-th deriveKey() call in this test (1-indexed) — the
+// one that produced newRawKey — returned a buffer that is now all zero,
+// and that memzero() was actually called with that exact instance (not
+// just that some memzero call happened, which authenticateVaultKey()'s
+// own unrelated verification buffer would also satisfy).
+function expectNewRawKeyZeroed(
+  deriveKeySpy: Mock<typeof deriveKey>,
+  memzeroSpy: Mock<typeof memzero>,
+  expectedDeriveCalls: number
+): void {
+  expect(deriveKeySpy).toHaveBeenCalledTimes(expectedDeriveCalls)
+  const newRawKeyRef = deriveKeySpy.mock.results[expectedDeriveCalls - 1].value as Uint8Array
+  expect(newRawKeyRef.length).toBeGreaterThan(0)
+  expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+  expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
 }
 
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
@@ -512,16 +550,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await createVault(vaultPath, originalPassword)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
-        callback(new Error('simulated rekey failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
 
     // Unlike changePassword()/configureKeyFile()/removeKeyFile(),
     // rotateVaultCredentials() has no authenticateVaultKey() step, so
@@ -539,11 +571,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       runSpy.mockRestore()
     }
 
-    expect(deriveKeySpy).toHaveBeenCalledTimes(1)
-    const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
   }, 90_000)
 
   it('rotateVaultCredentials(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
@@ -555,16 +583,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await createVault(vaultPath, originalPassword)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-        callback(new Error('simulated transaction failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
 
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
@@ -579,11 +601,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       runSpy.mockRestore()
     }
 
-    expect(deriveKeySpy).toHaveBeenCalledTimes(1)
-    const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
   }, 90_000)
 
   it('openVault() leaves a leftover .bak in place while still cleaning up a leftover .tmp (issue #17)', async () => {
@@ -661,16 +679,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await createVault(vaultPath, originalPassword)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
-        callback(new Error('simulated rekey failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
 
     // authenticateVaultKey() (step 1, verifying the CURRENT password) also
     // calls deriveKey() and memzero()'s its own candidate buffer — capturing
@@ -690,11 +702,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
 
     // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
-    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
-    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
   it('changePassword(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
@@ -706,16 +714,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await createVault(vaultPath, originalPassword)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-        callback(new Error('simulated transaction failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
 
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
@@ -730,11 +732,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       runSpy.mockRestore()
     }
 
-    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
-    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
   it('configureKeyFile(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
@@ -784,16 +782,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await createVault(vaultPath, originalPassword)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
-        callback(new Error('simulated rekey failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
 
     // authenticateVaultKey() (verifying the CURRENT password) also calls
     // deriveKey() — capturing by reference (not just counting calls) is
@@ -813,11 +805,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
 
     // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
-    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
-    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
   it('configureKeyFile(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
@@ -829,16 +817,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await createVault(vaultPath, originalPassword)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-        callback(new Error('simulated transaction failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
 
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
@@ -854,11 +836,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       runSpy.mockRestore()
     }
 
-    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
-    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
   it('removeKeyFile(): keeps the backup and the vault still reopens with the original password and key file when the rollback rekey also fails (issue #17)', async () => {
@@ -916,16 +894,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     const keyFileContents = randomBytes(32)
     await configureKeyFile(originalPassword, keyFileContents)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
-        callback(new Error('simulated rekey failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
 
     // authenticateVaultKey() (verifying the CURRENT password + key file)
     // also calls deriveKey() — capturing by reference (not just counting
@@ -944,11 +916,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
 
     // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
-    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
-    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
   it('removeKeyFile(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
@@ -963,16 +931,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     const keyFileContents = randomBytes(32)
     await configureKeyFile(originalPassword, keyFileContents)
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-        callback(new Error('simulated transaction failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
 
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
@@ -987,11 +949,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       runSpy.mockRestore()
     }
 
-    expect(deriveKeySpy).toHaveBeenCalledTimes(2)
-    const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-    expect(newRawKeyRef.length).toBeGreaterThan(0)
-    expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
-    expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
   it('changePassword(): a second rotation in the same open session accepts the password the first rotation just set', async () => {
