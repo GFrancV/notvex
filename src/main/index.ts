@@ -9,7 +9,6 @@ import {
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'
-import { isVaultOpen } from './vault/vault'
 import { createWindow } from './window'
 
 // ─── Dev/prod isolation ─────────────────────────────────────────────────────────
@@ -28,6 +27,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let mainWindow: BrowserWindow | null = null
+let isQuitting = false
+let readyToQuit = false
 
 void app.whenReady().then(async (): Promise<void> => {
   cleanupOrphanedTempDbs()
@@ -41,27 +42,43 @@ void app.whenReady().then(async (): Promise<void> => {
   })
 })
 
-app.on('window-all-closed', async (): Promise<void> => {
-  stopAutoLockTimer()
-  // The window that just closed already drained via its own 'close' handler
-  // (window.ts) — this is a no-op safety net, not the primary drain path.
-  await closeVaultDrained(null)
-  if (process.platform !== 'darwin') app.quit()
+app.on('window-all-closed', (): void => {
+  if (process.platform === 'darwin') {
+    // Closing the last window doesn't quit the app on macOS (dock
+    // convention), so the vault still needs to lock here. This call can
+    // also fire mid-shutdown (e.g. during autoUpdater.quitAndInstall(),
+    // which closes windows before before-quit) — safe either way because
+    // closeVault() is serialized (withVaultLock) and idempotent, not
+    // because no quit could be in progress.
+    stopAutoLockTimer()
+    // The window that just closed already drained via its own 'close'
+    // handler (window.ts) — this is a safety net, not the primary drain path.
+    void closeVaultDrained(null)
+    return
+  }
+  app.quit() // before-quit does the real shutdown
 })
 
 // On macOS, Cmd+Q / app.quit() fires before-quit *before* any window's
 // 'close' event, so this is the primary drain path for that gesture — the
 // window-level intercept in window.ts only ever sees an already-closed
 // vault by the time it runs (#19).
-let quitting = false
 app.on('before-quit', (event): void => {
-  if (quitting || !isVaultOpen()) return
-  quitting = true
-  event.preventDefault()
-  stopAutoLockTimer()
-  void closeVaultDrained(mainWindow)
-    .catch(() => undefined)
-    .finally(() => app.quit())
+  if (readyToQuit) return // our own re-entrant app.quit(): let it through
+  event.preventDefault() // synchronous, before any await
+  if (isQuitting) return // a duplicate quit signal while one is already in flight
+  isQuitting = true
+  void (async (): Promise<void> => {
+    try {
+      stopAutoLockTimer()
+      await closeVaultDrained(mainWindow)
+    } catch (e) {
+      console.error('[quit] closeVault failed:', e)
+    } finally {
+      readyToQuit = true
+      app.quit() // re-enters before-quit, which now lets it through
+    }
+  })()
 })
 
 app.on('second-instance', (_event, argv): void => {
