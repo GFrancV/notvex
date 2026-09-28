@@ -63,7 +63,8 @@ import {
   packContainer,
   removeKeyFile,
   rotateVaultCredentials,
-  syncContainer
+  syncContainer,
+  withVaultLock
 } from './vault/vault'
 
 // ─── IPC envelope helper ─────────────────────────────────────────────────────
@@ -750,7 +751,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await createNote(getDb(), input, getMasterKey()))
+      return ok(await withVaultLock(() => createNote(getDb(), input, getMasterKey())))
     } catch (e) {
       return fail(e)
     }
@@ -760,7 +761,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await getNote(getDb(), id, getMasterKey()))
+      return ok(await withVaultLock(() => getNote(getDb(), id, getMasterKey())))
     } catch (e) {
       return fail(e)
     }
@@ -770,7 +771,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await listNotes(getDb(), getMasterKey(), filter))
+      return ok(await withVaultLock(() => listNotes(getDb(), getMasterKey(), filter)))
     } catch (e) {
       return fail(e)
     }
@@ -780,7 +781,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await updateNote(getDb(), id, patch, getMasterKey())
+      await withVaultLock(() => updateNote(getDb(), id, patch, getMasterKey()))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -791,7 +792,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await trashNote(getDb(), id)
+      await withVaultLock(() => trashNote(getDb(), id))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -802,7 +803,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await restoreNote(getDb(), id)
+      await withVaultLock(() => restoreNote(getDb(), id))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -813,7 +814,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await deleteNote(getDb(), id)
+      await withVaultLock(() => deleteNote(getDb(), id))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -824,7 +825,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await emptyTrash(getDb())
+      await withVaultLock(() => emptyTrash(getDb()))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -835,7 +836,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await searchNotesByTitle(getDb(), query, getMasterKey()))
+      return ok(await withVaultLock(() => searchNotesByTitle(getDb(), query, getMasterKey())))
     } catch (e) {
       return fail(e)
     }
@@ -847,7 +848,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await createTag(getDb(), input))
+      return ok(await withVaultLock(() => createTag(getDb(), input)))
     } catch (e) {
       return fail(e)
     }
@@ -859,7 +860,7 @@ export function registerIpcHandlers(
       try {
         requireVault()
         touchActivity()
-        return ok(await createTagAndAssign(getDb(), input))
+        return ok(await withVaultLock(() => createTagAndAssign(getDb(), input)))
       } catch (e) {
         return fail(e)
       }
@@ -870,7 +871,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await listTags(getDb()))
+      return ok(await withVaultLock(() => listTags(getDb())))
     } catch (e) {
       return fail(e)
     }
@@ -880,7 +881,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await updateTag(getDb(), id, patch)
+      await withVaultLock(() => updateTag(getDb(), id, patch))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -891,7 +892,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await deleteTag(getDb(), id)
+      await withVaultLock(() => deleteTag(getDb(), id))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -904,7 +905,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await addTagToNote(getDb(), noteId, tagId)
+      await withVaultLock(() => addTagToNote(getDb(), noteId, tagId))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -915,7 +916,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      await removeTagFromNote(getDb(), noteId, tagId)
+      await withVaultLock(() => removeTagFromNote(getDb(), noteId, tagId))
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -926,7 +927,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await getNoteTags(getDb(), noteId))
+      return ok(await withVaultLock(() => getNoteTags(getDb(), noteId)))
     } catch (e) {
       return fail(e)
     }
@@ -936,7 +937,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await getNoteCountPerTag(getDb()))
+      return ok(await withVaultLock(() => getNoteCountPerTag(getDb())))
     } catch (e) {
       return fail(e)
     }
@@ -946,7 +947,7 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      return ok(await getAllNoteTags(getDb()))
+      return ok(await withVaultLock(() => getAllNoteTags(getDb())))
     } catch (e) {
       return fail(e)
     }

@@ -1,5 +1,5 @@
 import { resolve } from 'path'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 export default defineConfig({
   resolve: {
@@ -11,6 +11,10 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Vitest's defaults don't exclude .claude/ — a checked-out worktree
+    // under .claude/worktrees/**/tests/*.test.ts would otherwise be
+    // discovered and run as a second, independent copy of the whole suite.
+    exclude: [...configDefaults.exclude, '.claude/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
