@@ -45,7 +45,7 @@ import {
   getVaultBackupDir,
   hasAnyBackups
 } from './vault/backups'
-import { isValidNotvexFile, readContainer } from './vault/container'
+import { isValidNotvexFile, readContainer, shouldWarnOpeningInDevBuild } from './vault/container'
 import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -215,6 +215,23 @@ async function confirmMigrationAndBackup(
   return migResult.confirmed
 }
 
+// ─── Dev-build vault warning ──────────────────────────────────────────────────
+
+let devBuildWarningResolver: ((confirmed: boolean) => void) | null = null
+
+// Sends 'vault:dev-build-warning-required' to the renderer and waits for the
+// user's response. Shared by vault:open and vault:open-with-recovery, gated
+// on shouldWarnOpeningInDevBuild() — see its docstring in container.ts.
+async function confirmDevBuildWarning(win: BrowserWindow, filePath: string): Promise<boolean> {
+  if (devBuildWarningResolver !== null) {
+    throw new Error('A dev-build warning dialog is already open. Complete or cancel it first.')
+  }
+  win.webContents.send('vault:dev-build-warning-required', { vaultPath: filePath })
+  return new Promise<boolean>((resolve) => {
+    devBuildWarningResolver = resolve
+  })
+}
+
 // Maps the internal error sentinels thrown by readContainer/runMigrations to
 // user-facing messages. 'MIGRATION_CANCELLED' is the same sentinel unlock.tsx
 // already special-cases to silently return to the idle unlock form.
@@ -269,7 +286,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:create', async (_e, filePath: string, password: string) => {
     try {
-      const result = await createVault(filePath, password)
+      const result = await createVault(filePath, password, !app.isPackaged)
       recordVaultUsed(filePath)
       touchActivity()
       return ok(result)
@@ -296,6 +313,14 @@ export function registerIpcHandlers(
         let migrationOccurred = false
         try {
           const header = readContainer(fileBytes)
+          // A real vault (no devBuild field) opened by a development build can be
+          // corrupted by an in-progress bug or migration, with no server backup —
+          // checked before any migration runs, not after, so it actually guards
+          // the thing it exists to guard.
+          if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
+            const confirmed = await confirmDevBuildWarning(win, filePath)
+            if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
+          }
           // Minor version: show migration dialog if needed (no-op for v1.0)
           if (header.versionMin < CURRENT_VERSION_MIN) {
             const confirmed = await confirmMigrationAndBackup(win, filePath, {
@@ -376,6 +401,26 @@ export function registerIpcHandlers(
     }
   })
 
+  ipcMain.handle('vault:dev-build-warning-confirmed', () => {
+    try {
+      devBuildWarningResolver?.(true)
+      devBuildWarningResolver = null
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  ipcMain.handle('vault:dev-build-warning-cancelled', () => {
+    try {
+      devBuildWarningResolver?.(false)
+      devBuildWarningResolver = null
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
   ipcMain.handle('vault:unlock-throttle-status', () => {
     try {
       const now = Date.now()
@@ -407,6 +452,10 @@ export function registerIpcHandlers(
 
           try {
             const header = readContainer(fileBytes)
+            if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
+              const confirmed = await confirmDevBuildWarning(win, filePath)
+              if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
+            }
             if (header.versionMin < CURRENT_VERSION_MIN) {
               const confirmed = await confirmMigrationAndBackup(win, filePath, {
                 reason: 'header',

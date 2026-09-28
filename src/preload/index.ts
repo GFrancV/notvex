@@ -79,6 +79,15 @@ const api: NotvexAPI = {
         ipcRenderer.off('vault:migration-required', listener)
       }
     },
+    confirmDevBuildWarning: () => ipcRenderer.invoke('vault:dev-build-warning-confirmed'),
+    cancelDevBuildWarning: () => ipcRenderer.invoke('vault:dev-build-warning-cancelled'),
+    onDevBuildWarningRequired: (callback) => {
+      const listener = (_e: unknown, data: { vaultPath: string }): void => callback(data)
+      ipcRenderer.on('vault:dev-build-warning-required', listener)
+      return (): void => {
+        ipcRenderer.off('vault:dev-build-warning-required', listener)
+      }
+    },
     openBackupsFolder: () => ipcRenderer.invoke('vault:open-backups-folder')
   },
   notes: {
