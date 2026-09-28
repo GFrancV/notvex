@@ -2,9 +2,10 @@ import { existsSync } from 'fs'
 
 import type { BrowserWindow } from 'electron'
 
+import { closeVaultDrained } from './ipc-handlers'
 import { samePath } from './prefs'
 import { isValidNotvexFile } from './vault/container'
-import { closeVault, getVaultPath, isVaultOpen } from './vault/vault'
+import { getVaultPath, isVaultOpen } from './vault/vault'
 
 let pendingOpenFilePath: string | null = null
 
@@ -50,9 +51,10 @@ export async function resolveOpenFilePath(
     return
   }
 
-  // Scenario D: a different vault is open → close it first
+  // Scenario D: a different vault is open → close it first, draining any
+  // pending autosave in the window we're about to repurpose (#19)
   if (isVaultOpen()) {
-    await closeVault()
+    await closeVaultDrained(win)
   }
 
   // promoteVaultToTop intentionally omitted: recordVaultUsed is called after

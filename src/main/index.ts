@@ -6,10 +6,9 @@ import {
   setValidatedPending,
   takePendingOpenFilePath
 } from './file-opener'
-import { stopAutoLockTimer } from './ipc-handlers'
+import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'
-import { closeVault } from './vault/vault'
 import { createWindow } from './window'
 
 // ─── Dev/prod isolation ─────────────────────────────────────────────────────────
@@ -52,12 +51,18 @@ app.on('window-all-closed', (): void => {
     // closeVault() is serialized (withVaultLock) and idempotent, not
     // because no quit could be in progress.
     stopAutoLockTimer()
-    void closeVault()
+    // The window that just closed already drained via its own 'close'
+    // handler (window.ts) — this is a safety net, not the primary drain path.
+    void closeVaultDrained(null)
     return
   }
   app.quit() // before-quit does the real shutdown
 })
 
+// On macOS, Cmd+Q / app.quit() fires before-quit *before* any window's
+// 'close' event, so this is the primary drain path for that gesture — the
+// window-level intercept in window.ts only ever sees an already-closed
+// vault by the time it runs (#19).
 app.on('before-quit', (event): void => {
   if (readyToQuit) return // our own re-entrant app.quit(): let it through
   event.preventDefault() // synchronous, before any await
@@ -66,7 +71,7 @@ app.on('before-quit', (event): void => {
   void (async (): Promise<void> => {
     try {
       stopAutoLockTimer()
-      await closeVault()
+      await closeVaultDrained(mainWindow)
     } catch (e) {
       console.error('[quit] closeVault failed:', e)
     } finally {

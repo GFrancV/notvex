@@ -2,6 +2,7 @@ import { type ReactNode, useEffect } from 'react'
 
 import { useShallow } from 'zustand/react/shallow'
 
+import { DevBuildWarningDialog } from '@/components/dialogs/DevBuildWarningDialog'
 import { MigrationRequiredDialog } from '@/components/dialogs/MigrationRequiredDialog'
 import { UpdateAvailableDialog } from '@/components/dialogs/UpdateAvailableDialog'
 import { Toaster } from '@/components/ui/sonner'
@@ -89,6 +90,7 @@ export default function App(): ReactNode {
       <Toaster position="bottom-right" />
       <UpdateAvailableDialog />
       <MigrationRequiredDialog />
+      <DevBuildWarningDialog />
     </>
   )
 }

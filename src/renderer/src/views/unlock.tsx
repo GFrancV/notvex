@@ -136,9 +136,10 @@ export function Unlock(): ReactNode {
     )
     setLoading(false)
     if (!res.success) {
-      // User declined the vault-format update prompt — not a credential failure,
-      // so return to an idle unlock form instead of showing an error.
-      if (res.error === 'MIGRATION_CANCELLED') return
+      // User declined the vault-format update prompt, or the dev-build
+      // warning — neither is a credential failure, so return to an idle
+      // unlock form instead of showing an error.
+      if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
       await refreshThrottleStatus()
       return
@@ -163,9 +164,10 @@ export function Unlock(): ReactNode {
     )
     setLoading(false)
     if (!res.success) {
-      // User declined the vault-format update prompt — not a credential failure,
-      // so return to an idle unlock form instead of showing an error.
-      if (res.error === 'MIGRATION_CANCELLED') return
+      // User declined the vault-format update prompt, or the dev-build
+      // warning — neither is a credential failure, so return to an idle
+      // unlock form instead of showing an error.
+      if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
       return
     }

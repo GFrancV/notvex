@@ -1,7 +1,7 @@
 import { app, BrowserWindow, powerMonitor, shell } from 'electron'
 import { join } from 'path'
 
-import { lockVaultAndNotify, registerIpcHandlers } from './ipc-handlers'
+import { closeVaultDrained, lockVaultAndNotify, registerIpcHandlers } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
 import { isVaultOpen } from './vault/vault'
@@ -81,6 +81,28 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     if (getPref('lockOnMinimize') && isVaultOpen()) {
       void lockVaultAndNotify(win)
     }
+  })
+
+  // Covers a bare win.close() (e.g. the window's own close button) — drain
+  // it first instead of relying on window-all-closed, which fires after
+  // webContents is already gone and can no longer be sent anything (#19).
+  // The app-quit path (Cmd+Q / app.quit()) drains via before-quit instead
+  // (see index.ts), since that fires before this window's close event does;
+  // by the time it gets here the vault is already closed and this is a
+  // harmless no-op.
+  let closing = false
+  win.on('close', (event) => {
+    if (closing || !isVaultOpen()) return
+    closing = true
+    event.preventDefault()
+    void closeVaultDrained(win)
+      .catch(() => undefined)
+      .finally(() => {
+        // Reset before re-closing: a failed drain must not leave this
+        // window permanently unable to close.
+        closing = false
+        win.close()
+      })
   })
 
   return win

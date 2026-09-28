@@ -28,9 +28,16 @@ vi.mock('../src/main/vault/vault', () => ({
   isVaultOpen: vi.fn(() => false)
 }))
 
-vi.mock('../src/main/ipc-handlers', () => ({
-  stopAutoLockTimer: vi.fn()
-}))
+// closeVaultDrained() forwards to the mocked closeVault() so the assertions
+// below keep counting real close attempts; draining itself is covered by
+// tests/drain-renderer.test.ts.
+vi.mock('../src/main/ipc-handlers', async () => {
+  const { closeVault } = await import('../src/main/vault/vault')
+  return {
+    stopAutoLockTimer: vi.fn(),
+    closeVaultDrained: vi.fn(() => closeVault())
+  }
+})
 
 vi.mock('../src/main/window', () => ({
   createWindow: vi.fn()

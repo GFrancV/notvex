@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/sidebar'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
+import { flushAllPending } from '@/lib/pending-save'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 
@@ -20,6 +21,11 @@ export function Main(): ReactNode {
   useEffect(() => {
     void refreshAll()
   }, [refreshAll])
+
+  // Persist pending autosaves before the main process closes the vault
+  useEffect(() => {
+    return notvex.onWillLock(() => flushAllPending())
+  }, [])
 
   // Listen for auto-lock events from main process
   useEffect(() => {

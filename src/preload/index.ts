@@ -79,6 +79,15 @@ const api: NotvexAPI = {
         ipcRenderer.off('vault:migration-required', listener)
       }
     },
+    confirmDevBuildWarning: () => ipcRenderer.invoke('vault:dev-build-warning-confirmed'),
+    cancelDevBuildWarning: () => ipcRenderer.invoke('vault:dev-build-warning-cancelled'),
+    onDevBuildWarningRequired: (callback) => {
+      const listener = (_e: unknown, data: { vaultPath: string }): void => callback(data)
+      ipcRenderer.on('vault:dev-build-warning-required', listener)
+      return (): void => {
+        ipcRenderer.off('vault:dev-build-warning-required', listener)
+      }
+    },
     openBackupsFolder: () => ipcRenderer.invoke('vault:open-backups-folder')
   },
   notes: {
@@ -159,6 +168,21 @@ const api: NotvexAPI = {
     download: () => ipcRenderer.invoke('updater:download'),
     installNow: () => ipcRenderer.invoke('updater:install-now'),
     getCurrentVersion: () => ipcRenderer.invoke('updater:get-current-version')
+  },
+  onWillLock: (callback) => {
+    const listener = (_e: unknown, requestId?: number): void => {
+      // Always ack, even on failure: a rejected flush must not hold the lock
+      // hostage until the main process times out. The catch is what keeps a
+      // failed flush from surfacing as an unhandled rejection. The id is
+      // echoed back so this ack can't resolve a different, concurrent drain.
+      void callback()
+        .catch(() => undefined)
+        .finally(() => ipcRenderer.send('vault:flush-complete', requestId))
+    }
+    ipcRenderer.on('vault:will-lock', listener)
+    return (): void => {
+      ipcRenderer.off('vault:will-lock', listener)
+    }
   },
   onAutoLocked: (callback) => {
     const listener = (): void => callback()
