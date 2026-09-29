@@ -5,11 +5,11 @@ import { join } from 'path'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 import { createNote, dbAll, getNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
-import { decryptField } from '../src/main/vault/crypto'
+import { decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
 import {
   changePassword,
   closeVault,
@@ -25,6 +25,16 @@ import {
   syncContainer,
   withVaultLock
 } from '../src/main/vault/vault'
+
+// Partial-mocks crypto.ts so `memzero`/`deriveKey` become observable spies
+// while still running their real behavior (via `importOriginal`) — used by
+// the issue #24 tests below to capture the exact `newRawKey` buffer
+// instance a credential-rotation function derives, and prove that specific
+// instance is wiped, not just that some zeroing call happened somewhere.
+vi.mock('../src/main/vault/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
+  return { ...actual, memzero: vi.fn(actual.memzero), deriveKey: vi.fn(actual.deriveKey) }
+})
 
 interface RawNoteRow {
   id: string
@@ -132,6 +142,54 @@ function expectRestoredWithBackupKept(rejection: Error, backupPath: string): voi
   expect(isVaultOpen()).toBe(false)
   // Rollback also failed — the backup must survive as the recovery copy.
   expect(existsSync(backupPath)).toBe(true)
+}
+
+// Shared by the issue #24 newRawKey-zeroing tests below: forces the next
+// liveDb.run() call matching `matchSql` to fail with `errorMessage`, every
+// other call passing through to the real implementation. Caller is
+// responsible for `runSpy.mockRestore()` once its action under test settles.
+function forceNextDbRunToFail(
+  matchSql: (sql: string) => boolean,
+  errorMessage: string
+): ReturnType<typeof vi.spyOn> {
+  const liveDb = getDb()
+  const originalRun = liveDb.run.bind(liveDb)
+  return vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
+    const callback = rest[rest.length - 1] as (err: Error | null) => void
+    if (typeof sql === 'string' && matchSql(sql)) {
+      callback(new Error(errorMessage))
+      return liveDb
+    }
+    return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
+  })
+}
+
+// Shared by the issue #24 newRawKey-zeroing tests below: asserts that the
+// `expectedDeriveCalls`-th deriveKey() call in this test (1-indexed) — the
+// one that produced newRawKey — returned a buffer that is now all zero,
+// and that memzero() was actually called with that exact instance (not
+// just that some memzero call happened, which authenticateVaultKey()'s
+// own unrelated verification buffer would also satisfy).
+//
+// Known coupling (flagged by /agent-skills:ship's fan-out, not yet worth
+// the extra complexity to remove): newRawKey is identified purely by call
+// ordinal, not by which arguments produced it. If a future change reorders
+// or adds a deriveKey() call ahead of newRawKey's in one of these 4
+// functions, `expectedDeriveCalls` would silently point at the wrong
+// buffer — and since authenticateVaultKey()'s buffer is *also* always
+// memzero()'d, the assertion would keep passing without actually testing
+// newRawKey anymore. Re-check this indexing by hand if vault.ts's
+// deriveKey() call sites in these 4 functions ever change.
+function expectNewRawKeyZeroed(
+  deriveKeySpy: Mock<typeof deriveKey>,
+  memzeroSpy: Mock<typeof memzero>,
+  expectedDeriveCalls: number
+): void {
+  expect(deriveKeySpy).toHaveBeenCalledTimes(expectedDeriveCalls)
+  const newRawKeyRef = deriveKeySpy.mock.results[expectedDeriveCalls - 1].value as Uint8Array
+  expect(newRawKeyRef.length).toBeGreaterThan(0)
+  expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+  expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
 }
 
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
@@ -444,7 +502,12 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: same 2-real-Argon2id-derivation shape (createVault
+    // + rotateVaultCredentials) as its double-failure sibling below, which
+    // was already bumped to 90_000 for the same reason — this one was missed
+    // and timed out on this machine too (flagged by /agent-skills:ship's
+    // code-reviewer during the final pre-PR pass).
+  }, 90_000)
 
   it('rotateVaultCredentials(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
     // Before the issue #17 fix, this exact path deleted the backup
@@ -472,11 +535,21 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // matching comment in the rollback-succeeds test above.
     await syncContainer()
 
+    // Issue #24: the double-failure path (rollback's own rekey also fails,
+    // falling back to doCloseVault(true) + a rethrow) is still nested inside
+    // the outer try/finally — this proves newRawKey is zeroed there too, not
+    // just on the single-failure paths the dedicated issue #24 tests cover.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       rotateVaultCredentials('a different correct horse battery staple')
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -489,7 +562,78 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: 60s was already tight for the 2 real Argon2id
+    // derivations this test does (createVault + rotateVaultCredentials);
+    // observed timing out on this machine after the issue #24 assertion
+    // above was added, even though that assertion itself adds no I/O —
+    // matches the 90_000 budget the equivalent-shaped issue #24 tests
+    // already use in this file.
+  }, 90_000)
+
+  it('rotateVaultCredentials(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
+    // Failure point the issue's literal suggested diff did NOT cover: the
+    // PRAGMA rekey call sits before the existing try/catch that the diff
+    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
+    // this failure point must zero it too.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
+
+    // Unlike changePassword()/configureKeyFile()/removeKeyFile(),
+    // rotateVaultCredentials() has no authenticateVaultKey() step, so
+    // deriveKey() is called exactly once here — for newRawKey itself.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        rotateVaultCredentials('a different correct horse battery staple')
+      ).rejects.toThrow('simulated rekey failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
+  }, 90_000)
+
+  it('rotateVaultCredentials(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
+    // Regression coverage for the path the issue's suggested diff already
+    // covered (the existing try/catch), now proven rather than assumed.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        rotateVaultCredentials('a different correct horse battery staple')
+      ).rejects.toThrow('simulated transaction failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
+  }, 90_000)
 
   it('openVault() leaves a leftover .bak in place while still cleaning up a leftover .tmp (issue #17)', async () => {
     // Simulates a fresh app start finding the leftovers of a previous,
@@ -539,11 +683,21 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
     await syncContainer()
 
+    // Issue #24: proves newRawKey is zeroed on this double-failure path
+    // too, not just on the single-failure paths the dedicated issue #24
+    // tests cover. Call 1 = authenticateVaultKey()'s verification derive;
+    // call 2 = newRawKey.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       changePassword(originalPassword, 'a different correct horse battery staple')
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -553,7 +707,80 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: 60s was already tight for the 3 real Argon2id
+    // derivations this test does (createVault + authenticateVaultKey +
+    // newRawKey inside changePassword); observed timing out on this
+    // machine after the issue #24 assertion above was added, even though
+    // that assertion itself adds no I/O — matches the 90_000 budget the
+    // equivalent-shaped issue #24 tests already use in this file.
+  }, 90_000)
+
+  it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
+    // Failure point the issue's literal suggested diff did NOT cover: the
+    // PRAGMA rekey call sits before the existing try/catch that the diff
+    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
+    // this failure point must zero it too.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
+
+    // authenticateVaultKey() (step 1, verifying the CURRENT password) also
+    // calls deriveKey() and memzero()'s its own candidate buffer — capturing
+    // by reference (not just counting calls) is what tells newRawKey's
+    // buffer apart from that unrelated one.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        changePassword(originalPassword, 'a different correct horse battery staple')
+      ).rejects.toThrow('simulated rekey failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
+  }, 90_000)
+
+  it('changePassword(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
+    // Regression coverage for the path the issue's suggested diff already
+    // covered (the existing try/catch), now proven rather than assumed.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(
+        changePassword(originalPassword, 'a different correct horse battery staple')
+      ).rejects.toThrow('simulated transaction failure')
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
+  }, 90_000)
 
   it('configureKeyFile(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -575,11 +802,22 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // The vault has no key file yet, so the restored backup — and thus the
     // reopen below — needs neither this key file nor any key file at all.
     const keyFileContents = randomBytes(32)
+
+    // Issue #24: proves newRawKey is zeroed on this double-failure path
+    // too, not just on the single-failure paths the dedicated issue #24
+    // tests cover. Call 1 = authenticateVaultKey()'s verification derive;
+    // call 2 = newRawKey.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       configureKeyFile(originalPassword, keyFileContents)
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
 
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
@@ -589,7 +827,81 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000)
+    // Bumped from 60_000: 60s was already tight for the 3 real Argon2id
+    // derivations this test does (createVault + authenticateVaultKey +
+    // newRawKey inside configureKeyFile); observed timing out on this
+    // machine after the issue #24 assertion above was added, even though
+    // that assertion itself adds no I/O — matches the 90_000 budget the
+    // equivalent-shaped issue #24 tests already use in this file.
+  }, 90_000)
+
+  it('configureKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
+    // Failure point the issue's literal suggested diff did NOT cover: the
+    // PRAGMA rekey call sits before the existing try/catch that the diff
+    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
+    // this failure point must zero it too.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
+
+    // authenticateVaultKey() (verifying the CURRENT password) also calls
+    // deriveKey() — capturing by reference (not just counting calls) is
+    // what tells newRawKey's buffer apart from that unrelated one.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    const keyFileContents = randomBytes(32)
+    try {
+      await expect(configureKeyFile(originalPassword, keyFileContents)).rejects.toThrow(
+        'simulated rekey failure'
+      )
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
+  }, 90_000)
+
+  it('configureKeyFile(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
+    // Regression coverage for the path the issue's suggested diff already
+    // covered (the existing try/catch), now proven rather than assumed.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    const keyFileContents = randomBytes(32)
+    try {
+      await expect(configureKeyFile(originalPassword, keyFileContents)).rejects.toThrow(
+        'simulated transaction failure'
+      )
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
+  }, 90_000)
 
   it('removeKeyFile(): keeps the backup and the vault still reopens with the original password and key file when the rollback rekey also fails (issue #17)', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -613,11 +925,23 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     const keyFileContents = randomBytes(32)
     await configureKeyFile(originalPassword, keyFileContents)
 
+    // Issue #24: proves newRawKey is zeroed on this double-failure path
+    // too, not just on the single-failure paths the dedicated issue #24
+    // tests cover. mockClear() runs after the configureKeyFile() setup
+    // call above (which makes its own unrelated deriveKey()/memzero()
+    // calls) so only removeKeyFile()'s own calls are counted below. Call
+    // 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
     const rejection = await triggerDoubleRollbackFailure(() =>
       removeKeyFile(originalPassword, keyFileContents)
     )
 
     expectRestoredWithBackupKept(rejection, backupPath)
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
 
     // The restored backup still has the key file configureKeyFile() just
     // set up — removeKeyFile() never got far enough to actually remove it.
@@ -629,6 +953,79 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
+  }, 90_000)
+
+  it('removeKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
+    // Failure point the issue's literal suggested diff did NOT cover: the
+    // PRAGMA rekey call sits before the existing try/catch that the diff
+    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
+    // this failure point must zero it too.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    // removeKeyFile() requires a key file to already be configured.
+    const keyFileContents = randomBytes(32)
+    await configureKeyFile(originalPassword, keyFileContents)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql.startsWith('PRAGMA rekey'),
+      'simulated rekey failure'
+    )
+
+    // authenticateVaultKey() (verifying the CURRENT password + key file)
+    // also calls deriveKey() — capturing by reference (not just counting
+    // calls) is what tells newRawKey's buffer apart from that unrelated one.
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(removeKeyFile(originalPassword, keyFileContents)).rejects.toThrow(
+        'simulated rekey failure'
+      )
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
+  }, 90_000)
+
+  it('removeKeyFile(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
+    // Regression coverage for the path the issue's suggested diff already
+    // covered (the existing try/catch), now proven rather than assumed.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const keyFileContents = randomBytes(32)
+    await configureKeyFile(originalPassword, keyFileContents)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+
+    try {
+      await expect(removeKeyFile(originalPassword, keyFileContents)).rejects.toThrow(
+        'simulated transaction failure'
+      )
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
   it('changePassword(): a second rotation in the same open session accepts the password the first rotation just set', async () => {
