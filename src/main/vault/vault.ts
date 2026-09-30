@@ -1034,7 +1034,9 @@ async function doConfigureKeyFile(
   const newRawKey = deriveKey(password, newSalt, newKdfParams, kfHash)
   const oldKeyHex = masterKey.toString('hex')
 
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -1065,8 +1067,9 @@ async function doConfigureKeyFile(
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
+      const containerMasterKey = Buffer.from(newRawKey)
       const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
+        masterKey: containerMasterKey,
         salt: newSalt,
         kdfTier: currentMetadata.kdfInput.kdfTier,
         recoveryBlob: newRecoveryBlob,
@@ -1074,6 +1077,7 @@ async function doConfigureKeyFile(
         existingVersionMin: currentMetadata.versionMin,
         devBuild: currentMetadata.devBuild
       })
+      memzero(containerMasterKey)
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       const newSecureKey = storeKey(newRawKey)
@@ -1142,7 +1146,9 @@ async function doRemoveKeyFile(
   const newRawKey = deriveKey(password, newSalt, newKdfParams)
   const oldKeyHex = masterKey.toString('hex')
 
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -1173,8 +1179,9 @@ async function doRemoveKeyFile(
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
+      const containerMasterKey = Buffer.from(newRawKey)
       const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
+        masterKey: containerMasterKey,
         salt: newSalt,
         kdfTier: currentMetadata.kdfInput.kdfTier,
         recoveryBlob: newRecoveryBlob,
@@ -1182,6 +1189,7 @@ async function doRemoveKeyFile(
         existingVersionMin: currentMetadata.versionMin,
         devBuild: currentMetadata.devBuild
       })
+      memzero(containerMasterKey)
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       const newSecureKey = storeKey(newRawKey)

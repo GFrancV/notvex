@@ -981,6 +981,33 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
+  it('configureKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+    // Unlike #24's newRawKey itself, these two copies are made and
+    // discarded on every SUCCESSFUL rotation, not just on failure.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    deriveKeySpy.mockClear()
+    const bufferFromSpy = vi.spyOn(Buffer, 'from')
+
+    const keyFileContents = randomBytes(32)
+    try {
+      await expect(configureKeyFile(originalPassword, keyFileContents)).resolves.toMatchObject({
+        mnemonic: expect.any(String)
+      })
+
+      // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+      const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+    } finally {
+      bufferFromSpy.mockRestore()
+    }
+  }, 90_000)
+
   it('removeKeyFile(): keeps the backup and the vault still reopens with the original password and key file when the rollback rekey also fails (issue #17)', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
@@ -1104,6 +1131,35 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
 
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
+  }, 90_000)
+
+  it('removeKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+    // Unlike #24's newRawKey itself, these two copies are made and
+    // discarded on every SUCCESSFUL rotation, not just on failure.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const keyFileContents = randomBytes(32)
+    await configureKeyFile(originalPassword, keyFileContents)
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    deriveKeySpy.mockClear()
+    const bufferFromSpy = vi.spyOn(Buffer, 'from')
+
+    try {
+      await expect(removeKeyFile(originalPassword, keyFileContents)).resolves.toMatchObject({
+        mnemonic: expect.any(String)
+      })
+
+      // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+      const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+    } finally {
+      bufferFromSpy.mockRestore()
+    }
   }, 90_000)
 
   it('changePassword(): a second rotation in the same open session accepts the password the first rotation just set', async () => {
