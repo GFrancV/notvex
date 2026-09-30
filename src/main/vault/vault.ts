@@ -703,7 +703,9 @@ async function doChangePassword(
   // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
   // Unavoidable limitation of the SQLCipher Node.js binding.
   const oldKeyHex = masterKey.toString('hex')
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     // Step 3 — re-key SQLCipher in-place
@@ -738,15 +740,21 @@ async function doChangePassword(
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
-      const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
-        salt: newSalt,
-        kdfTier: currentMetadata.kdfInput.kdfTier,
-        recoveryBlob: newRecoveryBlob,
-        dbBytes,
-        existingVersionMin: currentMetadata.versionMin,
-        devBuild: currentMetadata.devBuild
-      })
+      const containerMasterKey = Buffer.from(newRawKey)
+      let containerBytes: Buffer
+      try {
+        containerBytes = writeContainer({
+          masterKey: containerMasterKey,
+          salt: newSalt,
+          kdfTier: currentMetadata.kdfInput.kdfTier,
+          recoveryBlob: newRecoveryBlob,
+          dbBytes,
+          existingVersionMin: currentMetadata.versionMin,
+          devBuild: currentMetadata.devBuild
+        })
+      } finally {
+        memzero(containerMasterKey)
+      }
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       const newSecureKey = storeKey(newRawKey) // zeros newRawKey
@@ -790,7 +798,9 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
   const newRawKey = deriveKey(newPassword, newSalt, newKdfParams, kfHash)
 
   const oldKeyHex = masterKey.toString('hex')
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -828,15 +838,21 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
-      const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
-        salt: newSalt,
-        kdfTier: currentMetadata.kdfInput.kdfTier,
-        recoveryBlob: newRecoveryBlob,
-        dbBytes,
-        existingVersionMin: currentMetadata.versionMin,
-        devBuild: currentMetadata.devBuild
-      })
+      const containerMasterKey = Buffer.from(newRawKey)
+      let containerBytes: Buffer
+      try {
+        containerBytes = writeContainer({
+          masterKey: containerMasterKey,
+          salt: newSalt,
+          kdfTier: currentMetadata.kdfInput.kdfTier,
+          recoveryBlob: newRecoveryBlob,
+          dbBytes,
+          existingVersionMin: currentMetadata.versionMin,
+          devBuild: currentMetadata.devBuild
+        })
+      } finally {
+        memzero(containerMasterKey)
+      }
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       if (pendingKeyFileContents) {
@@ -1026,7 +1042,9 @@ async function doConfigureKeyFile(
   const newRawKey = deriveKey(password, newSalt, newKdfParams, kfHash)
   const oldKeyHex = masterKey.toString('hex')
 
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -1057,15 +1075,21 @@ async function doConfigureKeyFile(
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
-      const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
-        salt: newSalt,
-        kdfTier: currentMetadata.kdfInput.kdfTier,
-        recoveryBlob: newRecoveryBlob,
-        dbBytes,
-        existingVersionMin: currentMetadata.versionMin,
-        devBuild: currentMetadata.devBuild
-      })
+      const containerMasterKey = Buffer.from(newRawKey)
+      let containerBytes: Buffer
+      try {
+        containerBytes = writeContainer({
+          masterKey: containerMasterKey,
+          salt: newSalt,
+          kdfTier: currentMetadata.kdfInput.kdfTier,
+          recoveryBlob: newRecoveryBlob,
+          dbBytes,
+          existingVersionMin: currentMetadata.versionMin,
+          devBuild: currentMetadata.devBuild
+        })
+      } finally {
+        memzero(containerMasterKey)
+      }
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       const newSecureKey = storeKey(newRawKey)
@@ -1134,7 +1158,9 @@ async function doRemoveKeyFile(
   const newRawKey = deriveKey(password, newSalt, newKdfParams)
   const oldKeyHex = masterKey.toString('hex')
 
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -1165,15 +1191,21 @@ async function doRemoveKeyFile(
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
-      const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
-        salt: newSalt,
-        kdfTier: currentMetadata.kdfInput.kdfTier,
-        recoveryBlob: newRecoveryBlob,
-        dbBytes,
-        existingVersionMin: currentMetadata.versionMin,
-        devBuild: currentMetadata.devBuild
-      })
+      const containerMasterKey = Buffer.from(newRawKey)
+      let containerBytes: Buffer
+      try {
+        containerBytes = writeContainer({
+          masterKey: containerMasterKey,
+          salt: newSalt,
+          kdfTier: currentMetadata.kdfInput.kdfTier,
+          recoveryBlob: newRecoveryBlob,
+          dbBytes,
+          existingVersionMin: currentMetadata.versionMin,
+          devBuild: currentMetadata.devBuild
+        })
+      } finally {
+        memzero(containerMasterKey)
+      }
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       const newSecureKey = storeKey(newRawKey)
