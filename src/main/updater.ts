@@ -1,7 +1,21 @@
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
+// autoUpdater is app-wide but createWindow() calls this once per window, and
+// macOS `activate` creates more than one. Listeners are registered once and
+// send to the latest window, skipping it while it's destroyed (#36).
+let currentWin: BrowserWindow | null = null
+let listenersRegistered = false
+
+function send(channel: string, ...args: unknown[]): void {
+  if (currentWin && !currentWin.isDestroyed()) currentWin.webContents.send(channel, ...args)
+}
+
 export function initAutoUpdater(mainWindow: BrowserWindow): void {
+  currentWin = mainWindow
+  if (listenersRegistered) return
+  listenersRegistered = true
+
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
 
@@ -10,18 +24,18 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   }
 
   autoUpdater.on('update-available', (info) => {
-    mainWindow.webContents.send('updater:update-available', {
+    send('updater:update-available', {
       version: info.version,
       releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : null
     })
   })
 
   autoUpdater.on('update-not-available', () => {
-    mainWindow.webContents.send('updater:update-not-available')
+    send('updater:update-not-available')
   })
 
   autoUpdater.on('download-progress', (progress) => {
-    mainWindow.webContents.send('updater:download-progress', {
+    send('updater:download-progress', {
       percent: Math.round(progress.percent),
       bytesPerSecond: progress.bytesPerSecond,
       transferred: progress.transferred,
@@ -30,12 +44,12 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   })
 
   autoUpdater.on('update-downloaded', () => {
-    mainWindow.webContents.send('updater:update-downloaded')
+    send('updater:update-downloaded')
   })
 
   autoUpdater.on('error', (err) => {
     console.error('[updater] error:', err)
-    mainWindow.webContents.send('updater:error', {
+    send('updater:error', {
       message: 'Update check failed. Please try again later.'
     })
   })
