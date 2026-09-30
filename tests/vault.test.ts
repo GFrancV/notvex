@@ -202,13 +202,10 @@ function expectNewRawKeyCopiesZeroed(
   bufferFromSpy: ReturnType<typeof vi.spyOn>,
   newRawKeyRef: Uint8Array
 ): void {
-  const copies = bufferFromSpy.mock.calls
-    .map((args: unknown[], i: number): { firstArg: unknown; result: Buffer } => ({
-      firstArg: args[0],
-      result: bufferFromSpy.mock.results[i].value as Buffer
-    }))
-    .filter((entry: { firstArg: unknown; result: Buffer }) => entry.firstArg === newRawKeyRef)
-    .map((entry: { firstArg: unknown; result: Buffer }) => entry.result)
+  const copies: Buffer[] = []
+  bufferFromSpy.mock.calls.forEach((args: unknown[], i: number) => {
+    if (args[0] === newRawKeyRef) copies.push(bufferFromSpy.mock.results[i].value as Buffer)
+  })
 
   expect(copies).toHaveLength(2)
   for (const copy of copies) {
