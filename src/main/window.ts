@@ -110,9 +110,16 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
       })
   })
 
-  // A destroyed window can never answer a pending migration / dev-build
-  // prompt, so settle it here or the next unlock stays wedged (#36).
-  win.on('closed', cancelPendingConfirmations)
+  win.on('closed', () => {
+    // A destroyed window can never answer a pending migration / dev-build
+    // prompt, so settle it here or the next unlock stays wedged (#36).
+    cancelPendingConfirmations()
+    // powerMonitor outlives this window (macOS `activate` builds another),
+    // so its listeners must not keep pointing at a dead one (#36).
+    powerMonitor.off('suspend', lockOnSuspend)
+    powerMonitor.off('lock-screen', lockOnSuspend)
+    powerMonitor.off('user-did-resign-active', lockOnSuspend)
+  })
 
   return win
 }
