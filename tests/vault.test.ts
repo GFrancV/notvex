@@ -192,6 +192,31 @@ function expectNewRawKeyZeroed(
   expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
 }
 
+// Shared by the issue #38 tests below: identifies the two Buffer.from(newRawKey)
+// copies (the newHex-derivation buffer and the writeContainer masterKey
+// argument) among every Buffer.from() call made during the test, by
+// reference equality to `newRawKeyRef` — the same discriminator technique
+// expectNewRawKeyZeroed() uses for memzero(). Asserts there are exactly 2
+// such copies and both are now all-zero bytes.
+function expectNewRawKeyCopiesZeroed(
+  bufferFromSpy: ReturnType<typeof vi.spyOn>,
+  newRawKeyRef: Uint8Array
+): void {
+  const copies = bufferFromSpy.mock.calls
+    .map((args: unknown[], i: number): { firstArg: unknown; result: Buffer } => ({
+      firstArg: args[0],
+      result: bufferFromSpy.mock.results[i].value as Buffer
+    }))
+    .filter((entry: { firstArg: unknown; result: Buffer }) => entry.firstArg === newRawKeyRef)
+    .map((entry: { firstArg: unknown; result: Buffer }) => entry.result)
+
+  expect(copies).toHaveLength(2)
+  for (const copy of copies) {
+    expect(copy.length).toBeGreaterThan(0)
+    expect(Array.from(copy).every((byte) => byte === 0)).toBe(true)
+  }
+}
+
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   let vaultDir: string | undefined
 
@@ -635,6 +660,33 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
   }, 90_000)
 
+  it('rotateVaultCredentials(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+    // Unlike #24's newRawKey itself, these two copies are made and
+    // discarded on every SUCCESSFUL rotation, not just on failure.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    deriveKeySpy.mockClear()
+    const bufferFromSpy = vi.spyOn(Buffer, 'from')
+
+    try {
+      await expect(
+        rotateVaultCredentials('a different correct horse battery staple')
+      ).resolves.toMatchObject({ mnemonic: expect.any(String) })
+
+      // rotateVaultCredentials() has no authenticateVaultKey() step, so the
+      // only deriveKey() call is the one that produces newRawKey.
+      const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+    } finally {
+      bufferFromSpy.mockRestore()
+    }
+  }, 90_000)
+
   it('openVault() leaves a leftover .bak in place while still cleaning up a leftover .tmp (issue #17)', async () => {
     // Simulates a fresh app start finding the leftovers of a previous,
     // interrupted double-failure rollback (see the test above). Before the
@@ -780,6 +832,32 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
 
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
+  }, 90_000)
+
+  it('changePassword(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+    // Unlike #24's newRawKey itself, these two copies are made and
+    // discarded on every SUCCESSFUL rotation, not just on failure.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const originalPassword = 'correct horse battery staple'
+
+    await createVault(vaultPath, originalPassword)
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    deriveKeySpy.mockClear()
+    const bufferFromSpy = vi.spyOn(Buffer, 'from')
+
+    try {
+      await expect(
+        changePassword(originalPassword, 'a different correct horse battery staple')
+      ).resolves.toMatchObject({ mnemonic: expect.any(String) })
+
+      // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
+      const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+    } finally {
+      bufferFromSpy.mockRestore()
+    }
   }, 90_000)
 
   it('configureKeyFile(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {

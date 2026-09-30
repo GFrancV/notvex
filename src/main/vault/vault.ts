@@ -703,7 +703,9 @@ async function doChangePassword(
   // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
   // Unavoidable limitation of the SQLCipher Node.js binding.
   const oldKeyHex = masterKey.toString('hex')
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     // Step 3 — re-key SQLCipher in-place
@@ -738,8 +740,9 @@ async function doChangePassword(
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
+      const containerMasterKey = Buffer.from(newRawKey)
       const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
+        masterKey: containerMasterKey,
         salt: newSalt,
         kdfTier: currentMetadata.kdfInput.kdfTier,
         recoveryBlob: newRecoveryBlob,
@@ -747,6 +750,7 @@ async function doChangePassword(
         existingVersionMin: currentMetadata.versionMin,
         devBuild: currentMetadata.devBuild
       })
+      memzero(containerMasterKey)
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       const newSecureKey = storeKey(newRawKey) // zeros newRawKey
@@ -790,7 +794,9 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
   const newRawKey = deriveKey(newPassword, newSalt, newKdfParams, kfHash)
 
   const oldKeyHex = masterKey.toString('hex')
-  const newHex = Buffer.from(newRawKey).toString('hex')
+  const newHexBuf = Buffer.from(newRawKey)
+  const newHex = newHexBuf.toString('hex')
+  memzero(newHexBuf)
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -828,8 +834,9 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
       memzero(wrapKey)
 
       const dbBytes = readFileSync(tempDbPath)
+      const containerMasterKey = Buffer.from(newRawKey)
       const containerBytes = writeContainer({
-        masterKey: Buffer.from(newRawKey),
+        masterKey: containerMasterKey,
         salt: newSalt,
         kdfTier: currentMetadata.kdfInput.kdfTier,
         recoveryBlob: newRecoveryBlob,
@@ -837,6 +844,7 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
         existingVersionMin: currentMetadata.versionMin,
         devBuild: currentMetadata.devBuild
       })
+      memzero(containerMasterKey)
       currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
 
       if (pendingKeyFileContents) {
