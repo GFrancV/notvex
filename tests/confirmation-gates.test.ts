@@ -15,7 +15,11 @@ vi.mock('electron', () => ({
   dialog: {},
   shell: {},
   ipcMain: {
+    // Same contract as Electron's: a second handler for a channel throws.
     handle: (channel: string, fn: Handler): void => {
+      if (handlers.has(channel)) {
+        throw new Error(`Attempted to register a second handler for '${channel}'`)
+      }
       handlers.set(channel, fn)
     }
   }
@@ -50,6 +54,7 @@ vi.mock('../src/main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 // Mirrors runMigrations: a declined schema gate surfaces as SCHEMA_MIGRATION_CANCELLED.
 vi.mock('../src/main/vault/vault', () => ({
   isVaultOpen: vi.fn(() => false),
+  closeVault: vi.fn(async () => undefined),
   syncContainer: vi.fn(),
   openVault: vi.fn(
     async (
@@ -69,15 +74,22 @@ vi.mock('../src/main/vault/vault', () => ({
 
 vi.mock('../src/main/db/queries', () => ({}))
 vi.mock('../src/main/clipboard-guard', () => ({}))
-vi.mock('../src/main/drain-renderer', () => ({}))
+vi.mock('../src/main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
-function fakeWindow(): { win: BrowserWindow; sent: string[] } {
+// Like a real BrowserWindow, sending to a destroyed one throws.
+function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void } {
   const sent: string[] = []
+  let destroyed = false
   const win = {
-    isDestroyed: () => false,
-    webContents: { send: (channel: string) => sent.push(channel) }
+    isDestroyed: () => destroyed,
+    webContents: {
+      send: (channel: string) => {
+        if (destroyed) throw new Error('Object has been destroyed')
+        sent.push(channel)
+      }
+    }
   } as unknown as BrowserWindow
-  return { win, sent }
+  return { win, sent, destroy: () => (destroyed = true) }
 }
 
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -176,5 +188,79 @@ describe('confirmation gates: cancelPendingConfirmations (issue #36)', () => {
 
   it('is a no-op when nothing is pending', () => {
     expect(() => ipc.cancelPendingConfirmations()).not.toThrow()
+  })
+})
+
+// On macOS, closing the last window keeps the app alive and `activate` builds a
+// new one, so createWindow() — and registerIpcHandlers() with it — runs again.
+describe('registerIpcHandlers across windows (macOS activate, issue #36)', () => {
+  let ipc: typeof import('../src/main/ipc-handlers')
+  let container: typeof import('../src/main/vault/container')
+  let vault: typeof import('../src/main/vault/vault')
+  let prefs: typeof import('../src/main/prefs')
+
+  beforeEach(async () => {
+    handlers.clear()
+    vi.resetModules()
+    container = await import('../src/main/vault/container')
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(false)
+    vault = await import('../src/main/vault/vault')
+    vi.mocked(vault.isVaultOpen).mockReturnValue(false)
+    vi.mocked(vault.closeVault).mockClear()
+    prefs = await import('../src/main/prefs')
+    vi.mocked(prefs.getPref).mockReturnValue(0)
+    ipc = await import('../src/main/ipc-handlers')
+  })
+
+  afterEach(() => {
+    ipc.stopAutoLockTimer()
+    vi.useRealTimers()
+  })
+
+  it('does not register any channel twice when a second window is created', () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+
+    expect(() => ipc.registerIpcHandlers(fakeWindow().win, () => null)).not.toThrow()
+  })
+
+  it('sends a confirmation gate to the newest window, not the closed one', async () => {
+    const first = fakeWindow()
+    ipc.registerIpcHandlers(first.win, () => null)
+    first.destroy()
+    const second = fakeWindow()
+    ipc.registerIpcHandlers(second.win, () => null)
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+
+    const pending = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    expect(second.sent).toContain('vault:dev-build-warning-required')
+    ipc.cancelPendingConfirmations()
+    await expect(pending).resolves.toMatchObject({ error: 'DEV_BUILD_WARNING_CANCELLED' })
+  })
+
+  it('cancels a gate straight away when no live window can answer it', async () => {
+    const only = fakeWindow()
+    ipc.registerIpcHandlers(only.win, () => null)
+    only.destroy()
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+
+    await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+      success: false,
+      error: 'DEV_BUILD_WARNING_CANCELLED'
+    })
+  })
+
+  it('auto-lock still closes the vault while no window is alive', async () => {
+    vi.useFakeTimers()
+    const only = fakeWindow()
+    ipc.registerIpcHandlers(only.win, () => null)
+    only.destroy()
+    vi.mocked(vault.isVaultOpen).mockReturnValue(true)
+    vi.mocked(prefs.getPref).mockReturnValue(1)
+
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(vault.closeVault).toHaveBeenCalled()
   })
 })
