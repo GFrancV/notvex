@@ -1,0 +1,180 @@
+import type { BrowserWindow } from 'electron'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// The confirmation gates in ipc-handlers.ts park a vault:open call on a
+// module-level resolver until the renderer answers. If the window is destroyed
+// first, nothing answers — these tests cover the cancel path that unwedges them
+// (issue #36). Only what vault:open touches before/at the gates is mocked.
+
+type Handler = (event: unknown, ...args: unknown[]) => unknown
+
+const handlers = new Map<string, Handler>()
+
+vi.mock('electron', () => ({
+  app: { isPackaged: false },
+  dialog: {},
+  shell: {},
+  ipcMain: {
+    handle: (channel: string, fn: Handler): void => {
+      handlers.set(channel, fn)
+    }
+  }
+}))
+
+vi.mock('electron-updater', () => ({ autoUpdater: {} }))
+
+vi.mock('fs', () => ({
+  readFileSync: vi.fn(() => Buffer.alloc(0)),
+  existsSync: vi.fn(() => false),
+  copyFileSync: vi.fn(),
+  writeFileSync: vi.fn()
+}))
+
+vi.mock('../src/main/prefs', () => ({
+  getPref: vi.fn(() => 0),
+  recordVaultUsed: vi.fn()
+}))
+
+vi.mock('../src/main/vault/backups', () => ({
+  createVaultBackup: vi.fn(),
+  ensureVaultBackupDir: vi.fn()
+}))
+
+vi.mock('../src/main/vault/container', () => ({
+  readContainer: vi.fn(() => ({ versionMin: 0, devBuild: false })),
+  shouldWarnOpeningInDevBuild: vi.fn(() => false)
+}))
+
+vi.mock('../src/main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
+
+// Mirrors runMigrations: a declined schema gate surfaces as SCHEMA_MIGRATION_CANCELLED.
+vi.mock('../src/main/vault/vault', () => ({
+  isVaultOpen: vi.fn(() => false),
+  syncContainer: vi.fn(),
+  openVault: vi.fn(
+    async (
+      _path: string,
+      _password: string,
+      _kf: unknown,
+      _bytes: unknown,
+      gate?: (req: { fromVersion: number; toVersion: number }) => Promise<boolean>
+    ) => {
+      if (gate && !(await gate({ fromVersion: 1, toVersion: 2 }))) {
+        throw new Error('SCHEMA_MIGRATION_CANCELLED')
+      }
+      return 1
+    }
+  )
+}))
+
+vi.mock('../src/main/db/queries', () => ({}))
+vi.mock('../src/main/clipboard-guard', () => ({}))
+vi.mock('../src/main/drain-renderer', () => ({}))
+
+function fakeWindow(): { win: BrowserWindow; sent: string[] } {
+  const sent: string[] = []
+  const win = {
+    isDestroyed: () => false,
+    webContents: { send: (channel: string) => sent.push(channel) }
+  } as unknown as BrowserWindow
+  return { win, sent }
+}
+
+function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+  const fn = handlers.get(channel)
+  if (!fn) throw new Error(`no handler for ${channel}`)
+  return Promise.resolve(fn({}, ...args))
+}
+
+// Lets the handler run up to the point where it parks on a gate.
+async function flush(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve()
+}
+
+describe('confirmation gates: cancelPendingConfirmations (issue #36)', () => {
+  let ipc: typeof import('../src/main/ipc-handlers')
+  let container: typeof import('../src/main/vault/container')
+  let sent: string[]
+
+  beforeEach(async () => {
+    handlers.clear()
+    vi.resetModules()
+    container = await import('../src/main/vault/container')
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(false)
+    ipc = await import('../src/main/ipc-handlers')
+    const fake = fakeWindow()
+    sent = fake.sent
+    ipc.registerIpcHandlers(fake.win, () => null)
+  })
+
+  afterEach(() => {
+    ipc.stopAutoLockTimer()
+  })
+
+  it('settles a vault:open parked on the dev-build warning as cancelled', async () => {
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+    const pending = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+    expect(sent).toContain('vault:dev-build-warning-required')
+
+    ipc.cancelPendingConfirmations()
+
+    await expect(pending).resolves.toEqual({
+      success: false,
+      error: 'DEV_BUILD_WARNING_CANCELLED'
+    })
+  })
+
+  it('settles a vault:open parked on the schema-migration gate as cancelled', async () => {
+    const pending = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+    expect(sent).toContain('vault:migration-required')
+
+    ipc.cancelPendingConfirmations()
+
+    await expect(pending).resolves.toEqual({ success: false, error: 'MIGRATION_CANCELLED' })
+  })
+
+  it('leaves the next vault:open free to proceed after a cancel', async () => {
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+    const first = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+    ipc.cancelPendingConfirmations()
+    await first
+
+    const second = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+    ipc.cancelPendingConfirmations()
+
+    // Reaching the gate again (instead of 'Unlock already in progress' or
+    // 'dialog is already open') proves isUnlocking and the resolver were reset.
+    await expect(second).resolves.toEqual({
+      success: false,
+      error: 'DEV_BUILD_WARNING_CANCELLED'
+    })
+  })
+
+  it('keeps the renderer-driven -cancelled handlers working', async () => {
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+    const devPending = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+    await expect(invoke('vault:dev-build-warning-cancelled')).resolves.toEqual({
+      success: true,
+      data: null
+    })
+    await expect(devPending).resolves.toMatchObject({ error: 'DEV_BUILD_WARNING_CANCELLED' })
+
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(false)
+    const migPending = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+    await expect(invoke('vault:migration-cancelled')).resolves.toEqual({
+      success: true,
+      data: null
+    })
+    await expect(migPending).resolves.toMatchObject({ error: 'MIGRATION_CANCELLED' })
+  })
+
+  it('is a no-op when nothing is pending', () => {
+    expect(() => ipc.cancelPendingConfirmations()).not.toThrow()
+  })
+})

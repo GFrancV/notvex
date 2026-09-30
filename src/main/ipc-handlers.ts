@@ -233,6 +233,20 @@ async function confirmDevBuildWarning(win: BrowserWindow, filePath: string): Pro
   })
 }
 
+// Settles whichever confirmation gate is pending as "cancelled". Resolving
+// rather than just nulling the resolver lets the parked vault:open /
+// vault:open-with-recovery unwind through its own cleanup (the finally that
+// resets isUnlocking, openVault's temp-file catch) instead of hanging forever.
+// Called by the renderer's -cancelled handlers and by the window's 'closed'
+// event, since a destroyed window can never answer (#36). The gates run in
+// sequence, so at most one is ever pending.
+export function cancelPendingConfirmations(): void {
+  migrationResolver?.({ confirmed: false, createBackup: false })
+  migrationResolver = null
+  devBuildWarningResolver?.(false)
+  devBuildWarningResolver = null
+}
+
 // Maps the internal error sentinels thrown by readContainer/runMigrations to
 // user-facing messages. 'MIGRATION_CANCELLED' is the same sentinel unlock.tsx
 // already special-cases to silently return to the idle unlock form.
@@ -394,8 +408,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:migration-cancelled', () => {
     try {
-      migrationResolver?.({ confirmed: false, createBackup: false })
-      migrationResolver = null
+      cancelPendingConfirmations()
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -414,8 +427,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:dev-build-warning-cancelled', () => {
     try {
-      devBuildWarningResolver?.(false)
-      devBuildWarningResolver = null
+      cancelPendingConfirmations()
       return ok(null)
     } catch (e) {
       return fail(e)
