@@ -46,6 +46,15 @@ vi.mock('../src/main/vault/memlock', async (importOriginal) => {
   return { allocSecure: vi.fn(actual.allocSecure), freeSecure: vi.fn(actual.freeSecure) }
 })
 
+// Same pass-through partial mock for container.ts. Inside a credential
+// rotation the only readContainer() call is commitRotatedContainer()'s
+// pre-atomicWrite parse, so mockImplementationOnce() on it fails the
+// commit itself without touching the disk (issue #23).
+vi.mock('../src/main/vault/container', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/vault/container')>()
+  return { ...actual, readContainer: vi.fn(actual.readContainer) }
+})
+
 interface RawNoteRow {
   id: string
   title: Buffer
@@ -1365,14 +1374,51 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       const backupPath = vaultPath + '.bak'
       const { rotate, reopenWithNew } = await prepare(vaultPath)
 
+      // The live masterKey buffer itself, not a copy — the rotation's
+      // fallback must still wipe it even though freeSecure() threw.
+      const oldKey = getMasterKey()
       vi.mocked(freeSecure).mockImplementationOnce(() => {
         throw new Error('simulated freeSecure failure')
       })
       await expect(rotate()).resolves.toMatchObject({ mnemonic: expect.any(String) })
 
+      expect(Array.from(oldKey).every((byte) => byte === 0)).toBe(true)
       expect(existsSync(backupPath)).toBe(false)
       await closeVault()
       expect(await reopenWithNew()).not.toBeNull()
+    },
+    90_000
+  )
+
+  // Issue #23: storeKey(newRawKey) now runs before the commit, so when the
+  // commit itself fails the just-allocated secure key must be freed (and
+  // thus wiped) before the normal rollback runs.
+  it.each(ROTATION_CASES)(
+    '$name(): frees the new secure key and rolls back when the commit itself fails (issue #23)',
+    async ({ prepare }) => {
+      vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+      const vaultPath = join(vaultDir, 'test.nvx')
+      const backupPath = vaultPath + '.bak'
+      const { rotate, reopenWithOriginal } = await prepare(vaultPath)
+
+      const allocSpy = vi.mocked(allocSecure)
+      const freeSpy = vi.mocked(freeSecure)
+      allocSpy.mockClear()
+      freeSpy.mockClear()
+      vi.mocked(readContainer).mockImplementationOnce(() => {
+        throw new Error('simulated commit failure')
+      })
+      await expect(rotate()).rejects.toThrow('simulated commit failure')
+
+      // Only allocation inside a rotation: storeKey(newRawKey).
+      expect(allocSpy).toHaveBeenCalledTimes(1)
+      const newSecureKey = allocSpy.mock.results[0].value as Buffer
+      expect(freeSpy.mock.calls.some(([buf]) => buf === newSecureKey)).toBe(true)
+      expect(Array.from(newSecureKey).every((byte) => byte === 0)).toBe(true)
+
+      expect(existsSync(backupPath)).toBe(false)
+      await closeVault()
+      expect(await reopenWithOriginal()).not.toBeNull()
     },
     90_000
   )
