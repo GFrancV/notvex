@@ -88,3 +88,47 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
     for (const event of POWER_EVENTS) expect(powerMonitor.listenerCount(event)).toBe(1)
   })
 })
+
+// A reload or renderer crash leaves the BrowserWindow alive, so 'closed' never
+// fires, yet the prompt was sent to a renderer that no longer exists (#51).
+describe('createWindow: renderer reload / crash (issue #51)', () => {
+  let createWindow: typeof import('../src/main/window').createWindow
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    ;({ createWindow } = await import('../src/main/window'))
+  })
+
+  const navigation = (isMainFrame: boolean, isSameDocument: boolean): object => ({
+    isMainFrame,
+    isSameDocument
+  })
+
+  it('settles any pending confirmation prompt when the renderer crashes', async () => {
+    const { cancelPendingConfirmations } = await import('../src/main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.webContents.emit('render-process-gone')
+
+    expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles any pending confirmation prompt on a main-frame reload', async () => {
+    const { cancelPendingConfirmations } = await import('../src/main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.webContents.emit('did-start-navigation', navigation(true, false))
+
+    expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores same-document and subframe navigations', async () => {
+    const { cancelPendingConfirmations } = await import('../src/main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.webContents.emit('did-start-navigation', navigation(true, true))
+    win.webContents.emit('did-start-navigation', navigation(false, false))
+
+    expect(cancelPendingConfirmations).not.toHaveBeenCalled()
+  })
+})

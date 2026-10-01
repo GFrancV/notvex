@@ -110,6 +110,16 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
       })
   })
 
+  // A reloaded or crashed renderer can never answer a prompt sent to the old
+  // one, so settle it like a closed window would or unlock stays wedged (#51).
+  const onRendererGone = (): void => {
+    cancelPendingConfirmations()
+  }
+  win.webContents.on('render-process-gone', onRendererGone)
+  win.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) onRendererGone()
+  })
+
   win.on('closed', () => {
     // A destroyed window can never answer a pending migration / dev-build
     // prompt, so settle it here or the next unlock stays wedged (#36).
