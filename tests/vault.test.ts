@@ -312,6 +312,13 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   let vaultDir: string | undefined
 
   afterEach(async () => {
+    // Drop any mockImplementationOnce() an issue #23 test armed but never
+    // consumed (e.g. it failed earlier), so it can't leak into closeVault()
+    // below or the next test. Vitest 4's mockReset() restores the
+    // pass-through implementation given to vi.fn().
+    vi.mocked(allocSecure).mockReset()
+    vi.mocked(freeSecure).mockReset()
+    vi.mocked(readContainer).mockReset()
     try {
       await closeVault()
     } catch {

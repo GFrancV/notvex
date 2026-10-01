@@ -636,8 +636,9 @@ async function rollbackCredentialRotation(
 // written to vaultPath yet. Deletes the backup afterward: it's the last
 // fallible step of a successful rotation, so it's genuinely redundant once
 // this returns — callers must not run anything after it that can throw
-// into their rollback catch (issue #23). Re-derives metadata from containerBytes itself, not a manual
-// field patch — that previously left hmacCoveredBytes/storedHmac pointing
+// into their rollback catch (issue #23). Re-derives metadata from
+// containerBytes itself, not a manual field patch — that previously left
+// hmacCoveredBytes/storedHmac pointing
 // at the pre-rotation header, so a second rotation in the same open
 // session (e.g. configureKeyFile() right after changePassword())
 // authenticated the correct new credentials against a stale HMAC and
@@ -771,7 +772,11 @@ async function doChangePassword(
       try {
         currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
       } catch (commitErr) {
-        freeSecure(newSecureKey)
+        try {
+          freeSecure(newSecureKey)
+        } catch {
+          newSecureKey.fill(0)
+        }
         throw commitErr
       }
 
@@ -890,7 +895,11 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
       try {
         currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
       } catch (commitErr) {
-        freeSecure(newSecureKey)
+        try {
+          freeSecure(newSecureKey)
+        } catch {
+          newSecureKey.fill(0)
+        }
         throw commitErr
       }
 
@@ -1149,7 +1158,11 @@ async function doConfigureKeyFile(
       try {
         currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
       } catch (commitErr) {
-        freeSecure(newSecureKey)
+        try {
+          freeSecure(newSecureKey)
+        } catch {
+          newSecureKey.fill(0)
+        }
         throw commitErr
       }
 
@@ -1286,7 +1299,11 @@ async function doRemoveKeyFile(
       try {
         currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
       } catch (commitErr) {
-        freeSecure(newSecureKey)
+        try {
+          freeSecure(newSecureKey)
+        } catch {
+          newSecureKey.fill(0)
+        }
         throw commitErr
       }
 
