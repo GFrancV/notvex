@@ -108,7 +108,7 @@ export async function closeVaultDrained(win: BrowserWindow | null): Promise<void
 
 export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {
   if (!isVaultOpen()) return
-  await closeVaultDrained(liveWin())
+  await closeVaultDrained(win)
   if (win && !win.isDestroyed()) win.webContents.send('vault:auto-locked')
 }
 

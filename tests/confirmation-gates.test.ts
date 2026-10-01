@@ -251,6 +251,19 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     })
   })
 
+  it('lockVaultAndNotify drains and notifies the window it was given', async () => {
+    const registered = fakeWindow()
+    ipc.registerIpcHandlers(registered.win, () => null)
+    const given = fakeWindow()
+    vi.mocked(vault.isVaultOpen).mockReturnValue(true)
+    const { drainRenderer } = await import('../src/main/drain-renderer')
+
+    await ipc.lockVaultAndNotify(given.win)
+
+    expect(drainRenderer).toHaveBeenLastCalledWith(given.win)
+    expect(given.sent).toEqual(['vault:auto-locked'])
+  })
+
   it('auto-lock still closes the vault while no window is alive', async () => {
     vi.useFakeTimers()
     const only = fakeWindow()
