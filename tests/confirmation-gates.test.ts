@@ -55,6 +55,7 @@ vi.mock('../src/main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('../src/main/vault/vault', () => ({
   isVaultOpen: vi.fn(() => false),
   closeVault: vi.fn(async () => undefined),
+  openVaultWithRecovery: vi.fn(async () => 1),
   syncContainer: vi.fn(),
   openVault: vi.fn(
     async (
@@ -160,6 +161,26 @@ describe('confirmation gates: cancelPendingConfirmations (issue #36)', () => {
 
     // Reaching the gate again (instead of 'Unlock already in progress' or
     // 'dialog is already open') proves isUnlocking and the resolver were reset.
+    await expect(second).resolves.toEqual({
+      success: false,
+      error: 'DEV_BUILD_WARNING_CANCELLED'
+    })
+  })
+
+  it('settles and unwedges vault:open-with-recovery the same way', async () => {
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+    const first = invoke('vault:open-with-recovery', '/v.nvx', 'words')
+    await flush()
+    ipc.cancelPendingConfirmations()
+    await expect(first).resolves.toEqual({
+      success: false,
+      error: 'DEV_BUILD_WARNING_CANCELLED'
+    })
+
+    // Its own finally must have reset isUnlocking too.
+    const second = invoke('vault:open-with-recovery', '/v.nvx', 'words')
+    await flush()
+    ipc.cancelPendingConfirmations()
     await expect(second).resolves.toEqual({
       success: false,
       error: 'DEV_BUILD_WARNING_CANCELLED'
