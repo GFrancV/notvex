@@ -581,8 +581,8 @@ export async function openVaultWithRecovery(
 // Precondition: nothing has been written to vaultPath yet. Each caller
 // guarantees it by keeping commitRotatedContainer() as the last fallible
 // step inside its rollback try — the PRAGMA rekey to the new key sits
-// inside that try (issue #39), storeKey(newRawKey) runs before the commit,
-// and everything after the commit is infallible (issue #23).
+// inside that try (issue #39), and commitRotatedContainer() can't throw
+// once it has written anything (issue #23).
 async function rollbackCredentialRotation(
   vaultPath: string,
   backupPath: string,
@@ -630,32 +630,55 @@ async function rollbackCredentialRotation(
   }
 }
 
-// Parses the just-written container bytes before atomicWrite so a
-// hypothetical parse failure is caught while still before the point of no
-// return — rollbackCredentialRotation() above assumes nothing has been
-// written to vaultPath yet. Deletes the backup afterward: it's the last
-// fallible step of a successful rotation, so it's genuinely redundant once
-// this returns — callers must not run anything after it that can throw
-// into their rollback catch (issue #23). Re-derives metadata from
-// containerBytes itself, not a manual field patch — that previously left
-// hmacCoveredBytes/storedHmac pointing
-// at the pre-rotation header, so a second rotation in the same open
-// session (e.g. configureKeyFile() right after changePassword())
-// authenticated the correct new credentials against a stale HMAC and
-// rejected them.
+// Frees a secure buffer, falling back to a plain wipe if releasing the
+// memory lock throws — for the spots where a failure must not propagate.
+function freeSecureOrWipe(buf: Buffer): void {
+  try {
+    freeSecure(buf)
+  } catch {
+    buf.fill(0)
+  }
+}
+
+// The point of no return of all 4 credential-rotation functions, shared so
+// they can't diverge here (issue #23). Must be the last fallible step inside
+// each caller's rollback try: everything that can fail — parsing the new
+// container, allocating the new secure key, writing it to vaultPath — runs
+// before anything is written, so a failure still meets
+// rollbackCredentialRotation()'s precondition. Once atomicWrite succeeds
+// nothing below can throw: rolling back then would put the live connection
+// on the old key over a new-keyed file on disk.
+//
+// Re-derives metadata from containerBytes itself, not a manual field patch
+// — that previously left hmacCoveredBytes/storedHmac pointing at the
+// pre-rotation header, so a second rotation in the same open session (e.g.
+// configureKeyFile() right after changePassword()) authenticated the
+// correct new credentials against a stale HMAC and rejected them.
 function commitRotatedContainer(
   vaultPath: string,
   backupPath: string,
-  containerBytes: Buffer
-): ContainerMetadata {
+  containerBytes: Buffer,
+  newRawKey: Uint8Array
+): void {
   const newMetadata = readContainer(containerBytes)
-  atomicWrite(vaultPath, containerBytes)
+  const newSecureKey = storeKey(newRawKey) // zeros newRawKey
+  try {
+    atomicWrite(vaultPath, containerBytes)
+  } catch (err) {
+    freeSecureOrWipe(newSecureKey)
+    throw err
+  }
+
+  // The backup is genuinely redundant now.
   try {
     unlinkSync(backupPath)
   } catch {
     /* ignore */
   }
-  return newMetadata
+  currentMetadata = newMetadata
+  const oldKey = masterKey
+  masterKey = newSecureKey
+  if (oldKey) freeSecureOrWipe(oldKey)
 }
 
 // Goes through withVaultLock: see its docstring for why concurrent calls
@@ -766,32 +789,7 @@ async function doChangePassword(
       } finally {
         memzero(containerMasterKey)
       }
-      // Before the commit, not after it (issue #23): an allocation failure
-      // here still meets rollbackCredentialRotation()'s precondition.
-      const newSecureKey = storeKey(newRawKey) // zeros newRawKey
-      try {
-        currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-      } catch (commitErr) {
-        try {
-          freeSecure(newSecureKey)
-        } catch {
-          newSecureKey.fill(0)
-        }
-        throw commitErr
-      }
-
-      // Past the point of no return: the new container is on disk and the
-      // .bak is gone, so nothing below may throw into the rollback catch —
-      // rolling back now would put the live connection on the old key over
-      // a new-keyed file (issue #23). Swap first, then free the old key.
-      const oldKey = masterKey
-      masterKey = newSecureKey
-      try {
-        freeSecure(oldKey)
-      } catch {
-        // The rotation already succeeded; just make sure the old key is wiped.
-        oldKey.fill(0)
-      }
+      commitRotatedContainer(currentVaultPath, backupPath, containerBytes, newRawKey)
 
       return { mnemonic }
     } catch (err) {
@@ -889,38 +887,12 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
       } finally {
         memzero(containerMasterKey)
       }
-      // Before the commit, not after it (issue #23): an allocation failure
-      // here still meets rollbackCredentialRotation()'s precondition.
-      const newSecureKey = storeKey(newRawKey) // zeros newRawKey
-      try {
-        currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-      } catch (commitErr) {
-        try {
-          freeSecure(newSecureKey)
-        } catch {
-          newSecureKey.fill(0)
-        }
-        throw commitErr
-      }
-
-      // Past the point of no return: the new container is on disk and the
-      // .bak is gone, so nothing below may throw into the rollback catch —
-      // rolling back now would put the live connection on the old key over
-      // a new-keyed file (issue #23). Swap first, then free the old key.
-      const oldKey = masterKey
-      masterKey = newSecureKey
+      commitRotatedContainer(currentVaultPath, backupPath, containerBytes, newRawKey)
       currentHasKeyFile = newHasKeyFile
 
       if (pendingKeyFileContents) {
         memzero(pendingKeyFileContents)
         pendingKeyFileContents = null
-      }
-
-      try {
-        freeSecure(oldKey)
-      } catch {
-        // The rotation already succeeded; just make sure the old key is wiped.
-        oldKey.fill(0)
       }
 
       return { mnemonic }
@@ -1152,33 +1124,8 @@ async function doConfigureKeyFile(
       } finally {
         memzero(containerMasterKey)
       }
-      // Before the commit, not after it (issue #23): an allocation failure
-      // here still meets rollbackCredentialRotation()'s precondition.
-      const newSecureKey = storeKey(newRawKey) // zeros newRawKey
-      try {
-        currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-      } catch (commitErr) {
-        try {
-          freeSecure(newSecureKey)
-        } catch {
-          newSecureKey.fill(0)
-        }
-        throw commitErr
-      }
-
-      // Past the point of no return: the new container is on disk and the
-      // .bak is gone, so nothing below may throw into the rollback catch —
-      // rolling back now would put the live connection on the old key over
-      // a new-keyed file (issue #23). Swap first, then free the old key.
-      const oldKey = masterKey
-      masterKey = newSecureKey
+      commitRotatedContainer(currentVaultPath, backupPath, containerBytes, newRawKey)
       currentHasKeyFile = true
-      try {
-        freeSecure(oldKey)
-      } catch {
-        // The rotation already succeeded; just make sure the old key is wiped.
-        oldKey.fill(0)
-      }
 
       return { mnemonic }
     } catch (err) {
@@ -1293,33 +1240,8 @@ async function doRemoveKeyFile(
       } finally {
         memzero(containerMasterKey)
       }
-      // Before the commit, not after it (issue #23): an allocation failure
-      // here still meets rollbackCredentialRotation()'s precondition.
-      const newSecureKey = storeKey(newRawKey) // zeros newRawKey
-      try {
-        currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-      } catch (commitErr) {
-        try {
-          freeSecure(newSecureKey)
-        } catch {
-          newSecureKey.fill(0)
-        }
-        throw commitErr
-      }
-
-      // Past the point of no return: the new container is on disk and the
-      // .bak is gone, so nothing below may throw into the rollback catch —
-      // rolling back now would put the live connection on the old key over
-      // a new-keyed file (issue #23). Swap first, then free the old key.
-      const oldKey = masterKey
-      masterKey = newSecureKey
+      commitRotatedContainer(currentVaultPath, backupPath, containerBytes, newRawKey)
       currentHasKeyFile = false
-      try {
-        freeSecure(oldKey)
-      } catch {
-        // The rotation already succeeded; just make sure the old key is wiped.
-        oldKey.fill(0)
-      }
 
       return { mnemonic }
     } catch (err) {

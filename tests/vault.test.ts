@@ -1,5 +1,13 @@
 import { randomBytes } from 'crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -44,15 +52,6 @@ vi.mock('../src/main/vault/crypto', async (importOriginal) => {
 vi.mock('../src/main/vault/memlock', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/vault/memlock')>()
   return { allocSecure: vi.fn(actual.allocSecure), freeSecure: vi.fn(actual.freeSecure) }
-})
-
-// Same pass-through partial mock for container.ts. Inside a credential
-// rotation the only readContainer() call is commitRotatedContainer()'s
-// pre-atomicWrite parse, so mockImplementationOnce() on it fails the
-// commit itself without touching the disk (issue #23).
-vi.mock('../src/main/vault/container', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/vault/container')>()
-  return { ...actual, readContainer: vi.fn(actual.readContainer) }
 })
 
 interface RawNoteRow {
@@ -318,7 +317,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // pass-through implementation given to vi.fn().
     vi.mocked(allocSecure).mockReset()
     vi.mocked(freeSecure).mockReset()
-    vi.mocked(readContainer).mockReset()
     try {
       await closeVault()
     } catch {
@@ -1345,12 +1343,12 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     90_000
   )
 
-  // Issue #23: storeKey(newRawKey) used to run *after*
-  // commitRotatedContainer() had already written the new container and
-  // deleted the .bak, so an allocation failure there rolled the live
-  // connection back to the old key over a new-keyed file on disk.
+  // Issue #23: storeKey(newRawKey) used to run *after* the new container
+  // had already been written and the .bak deleted, so an allocation failure
+  // there rolled the live connection back to the old key over a new-keyed
+  // file on disk.
   it.each(ROTATION_CASES)(
-    '$name(): rolls back cleanly when allocating the new secure key fails before the commit (issue #23)',
+    '$name(): rolls back cleanly when allocating the new secure key fails before the new container is written (issue #23)',
     async ({ prepare }) => {
       vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
       const vaultPath = join(vaultDir, 'test.nvx')
@@ -1397,11 +1395,12 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     90_000
   )
 
-  // Issue #23: storeKey(newRawKey) now runs before the commit, so when the
-  // commit itself fails the just-allocated secure key must be freed (and
-  // thus wiped) before the normal rollback runs.
+  // Issue #23: commitRotatedContainer() allocates the new secure key before
+  // writing anything, so when the write itself fails that key must be freed
+  // (and thus wiped) before the normal rollback runs. A directory squatting
+  // on atomicWrite()'s .tmp path makes its writeFileSync() fail for real.
   it.each(ROTATION_CASES)(
-    '$name(): frees the new secure key and rolls back when the commit itself fails (issue #23)',
+    '$name(): frees the new secure key and rolls back when writing the new container fails (issue #23)',
     async ({ prepare }) => {
       vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
       const vaultPath = join(vaultDir, 'test.nvx')
@@ -1412,10 +1411,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       const freeSpy = vi.mocked(freeSecure)
       allocSpy.mockClear()
       freeSpy.mockClear()
-      vi.mocked(readContainer).mockImplementationOnce(() => {
-        throw new Error('simulated commit failure')
-      })
-      await expect(rotate()).rejects.toThrow('simulated commit failure')
+      mkdirSync(vaultPath + '.tmp')
+      await expect(rotate()).rejects.toThrow()
 
       // Only allocation inside a rotation: storeKey(newRawKey).
       expect(allocSpy).toHaveBeenCalledTimes(1)
