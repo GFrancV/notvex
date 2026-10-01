@@ -104,64 +104,6 @@ async function readNoteTitlesFromPackedContainer(
   }
 }
 
-// Shared by the double-failure regression tests below for all 4
-// credential-rotation functions: they share the exact same catch-block
-// restructure (see vault.ts), reached the exact same way — the primary
-// operation fails inside its transaction (BEGIN TRANSACTION), then the
-// rollback rekey back to the old key also fails. Mocks the live
-// connection's `run` accordingly, runs `action`, and returns the rejection
-// for the caller to assert on. Does NOT interfere with authenticateVaultKey()
-// (used by changePassword/configureKeyFile/removeKeyFile to verify the
-// caller's current credentials before any of this) — that opens its own
-// short-lived connection, never the live `db` mocked here.
-async function triggerDoubleRollbackFailure(action: () => Promise<unknown>): Promise<Error> {
-  const liveDb = getDb()
-  const originalRun = liveDb.run.bind(liveDb)
-  let rekeyCalls = 0
-  const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-    const callback = rest[rest.length - 1] as (err: Error | null) => void
-    if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-      callback(new Error('simulated transaction failure'))
-      return liveDb
-    }
-    if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
-      rekeyCalls += 1
-      if (rekeyCalls === 2) {
-        callback(new Error('simulated rollback rekey failure'))
-        return liveDb
-      }
-    }
-    return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-  })
-
-  try {
-    await action()
-  } catch (err) {
-    return err as Error
-  } finally {
-    runSpy.mockRestore()
-  }
-  // Outside the try/catch above so it's never mistaken for action()'s own
-  // rejection — a caller asserting on the returned error's message would
-  // otherwise get a confusing "expected action() to reject" instead of
-  // learning that action() unexpectedly succeeded.
-  throw new Error('expected action() to reject, but it resolved')
-}
-
-// Shared by the 4 credential-rotation double-failure tests below: asserts
-// the standard outcome of the rollback-also-fails path — an actionable
-// error naming backupPath, the vault closed, and the backup kept on disk.
-function expectRestoredWithBackupKept(rejection: Error, backupPath: string): void {
-  expect(rejection.message).toContain('restored to its previous state')
-  // Task 13's acceptance criterion is that the error tells the user
-  // *where* the backup is, not just that one exists somewhere.
-  expect(rejection.message).toContain(backupPath)
-  // doCloseVault(true) already ran as part of the double-failure fallback.
-  expect(isVaultOpen()).toBe(false)
-  // Rollback also failed — the backup must survive as the recovery copy.
-  expect(existsSync(backupPath)).toBe(true)
-}
-
 // Shared by the issue #39/#23 rollback tests below: one entry per
 // credential-rotation function. `prepare` creates a vault at `vaultPath`
 // (plus whatever precondition the function needs) and returns the rotation
@@ -172,6 +114,9 @@ const NEW_PASSWORD = 'a different correct horse battery staple'
 
 interface RotationCase {
   name: string
+  // deriveKey() calls the rotation itself makes; the last one is newRawKey
+  // (authenticateVaultKey() derives once first, except in rotateVaultCredentials).
+  deriveKeyCalls: number
   prepare: (vaultPath: string) => Promise<{
     rotate: () => Promise<unknown>
     reopenWithOriginal: () => ReturnType<typeof openVault>
@@ -182,6 +127,7 @@ interface RotationCase {
 const ROTATION_CASES: RotationCase[] = [
   {
     name: 'changePassword',
+    deriveKeyCalls: 2,
     prepare: async (vaultPath) => {
       await createVault(vaultPath, ORIGINAL_PASSWORD)
       return {
@@ -193,6 +139,7 @@ const ROTATION_CASES: RotationCase[] = [
   },
   {
     name: 'rotateVaultCredentials',
+    deriveKeyCalls: 1,
     prepare: async (vaultPath) => {
       await createVault(vaultPath, ORIGINAL_PASSWORD)
       return {
@@ -204,6 +151,7 @@ const ROTATION_CASES: RotationCase[] = [
   },
   {
     name: 'configureKeyFile',
+    deriveKeyCalls: 2,
     prepare: async (vaultPath) => {
       await createVault(vaultPath, ORIGINAL_PASSWORD)
       const keyFileContents = randomBytes(32)
@@ -216,6 +164,7 @@ const ROTATION_CASES: RotationCase[] = [
   },
   {
     name: 'removeKeyFile',
+    deriveKeyCalls: 2,
     prepare: async (vaultPath) => {
       await createVault(vaultPath, ORIGINAL_PASSWORD)
       // removeKeyFile() requires a key file to already be configured.
@@ -488,46 +437,23 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
   }, 60_000)
 
-  it("doesn't deadlock when rotateVaultCredentials()'s rollback also fails and falls back to closing the vault", async () => {
-    // Forces the exact double-failure path found by /agent-skills:ship's
-    // security-auditor: the primary rekey attempt succeeds, something
-    // inside the transaction then fails, and the rollback rekey (back to
-    // the old key) *also* fails — the catch block that used to call the
-    // locked closeVault() from inside this already-locked function. Before
-    // the doCloseVault() fix, this deadlocked the entire withVaultLock
-    // queue permanently (verified by hand: reverting the catch blocks to
-    // call closeVault() instead of doCloseVault() makes this test time out).
-    //
-    // Uses its own inline mock rather than triggerDoubleRollbackFailure()
-    // below — this test needs the bounded-time Promise.race to distinguish
-    // "rejected" from "hung" in 10s, instead of vitest's full test timeout.
+  it("doesn't deadlock when rotateVaultCredentials()'s rollback closes the vault", async () => {
+    // The rollback closes the session from inside this already-locked
+    // function. It used to call the locked closeVault() there, which
+    // deadlocked the entire withVaultLock queue permanently (verified by
+    // hand: switching rollbackCredentialRotation() to closeVault() instead of
+    // doCloseVault() makes this test time out). The bounded-time
+    // Promise.race distinguishes "rejected" from "hung" in 10s, instead of
+    // vitest's full test timeout.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
     await createVault(vaultPath, 'correct horse battery staple')
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    let rekeyCalls = 0
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-        // Primary failure: something inside the rotation's transaction
-        // fails, after the rekey to the new password already succeeded.
-        callback(new Error('simulated transaction failure'))
-        return liveDb
-      }
-      if (typeof sql === 'string' && sql.startsWith('PRAGMA rekey')) {
-        rekeyCalls += 1
-        if (rekeyCalls === 2) {
-          // Secondary failure: the rollback rekey (back to the old
-          // password) also fails.
-          callback(new Error('simulated rollback rekey failure'))
-          return liveDb
-        }
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
 
     try {
       const rotation = rotateVaultCredentials('a different correct horse battery staple')
@@ -541,13 +467,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       ])
 
       expect(outcome).toBe('rejected')
-      // Issue #17 fix: the double-failure path now throws a new,
-      // more actionable error (the original is chained via `cause`)
-      // instead of the raw transaction error — see doChangePassword() etc.
-      await expect(rotation).rejects.toThrow('restored to its previous state')
-      await expect(rotation).rejects.toMatchObject({
-        cause: expect.objectContaining({ message: 'simulated transaction failure' })
-      })
+      await expect(rotation).rejects.toThrow('simulated transaction failure')
+      expect(isVaultOpen()).toBe(false)
 
       // The queue must still be usable afterward — proves doCloseVault()
       // actually ran to completion (including releasing the lock) rather
@@ -562,17 +483,13 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     }
   }, 60_000)
 
-  // Characterization test, not a regression guard: verified by hand that
-  // this passes unchanged against pre-Task-13 code too — the rollback-
-  // succeeds path already deleted the backup and threw the original error
-  // correctly before this fix. Issue #17's bug was specifically in the
-  // double-failure path (the next test). Kept here to prove Task 13's
-  // restructure didn't regress the already-working success path.
-  it('rotateVaultCredentials(): deletes the backup and the vault reopens with the original password once the rollback rekey succeeds (issue #17)', async () => {
+  // The notes are deliberately NOT synced before rotating: the rotation must
+  // persist them itself before mutating anything, since its rollback closes
+  // the session without packing.
+  it('rotateVaultCredentials(): rolls back by closing the vault, which reopens with the original password and every note (issue #17)', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
-    const backupPath = vaultPath + '.bak'
 
     await createVault(vaultPath, originalPassword)
 
@@ -583,26 +500,11 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
       expectedTitles.set(note.id, title)
     }
-    // Persist the notes to currentVaultPath before rotating, so the
-    // backupPath copy taken at the start of the rotation actually contains
-    // them — otherwise "restore the backup" would restore the vault's
-    // original empty state, not a meaningful data-safety proof.
-    await syncContainer()
 
-    const liveDb = getDb()
-    const originalRun = liveDb.run.bind(liveDb)
-    // Only the primary transaction fails here — the rollback rekey (back
-    // to the old password) runs for real and succeeds, unlike the
-    // double-failure test above.
-    const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
-      const callback = rest[rest.length - 1] as (err: Error | null) => void
-      if (typeof sql === 'string' && sql === 'BEGIN TRANSACTION') {
-        callback(new Error('simulated transaction failure'))
-        return liveDb
-      }
-      return originalRun(sql, ...(rest as Parameters<typeof originalRun>[]))
-    })
-
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
     try {
       await expect(
         rotateVaultCredentials('a different correct horse battery staple')
@@ -611,10 +513,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       runSpy.mockRestore()
     }
 
-    // Rollback succeeded — the backup is genuinely redundant and must be gone.
-    expect(existsSync(backupPath)).toBe(false)
-
-    await closeVault()
+    expect(isVaultOpen()).toBe(false)
+    expect(existsSync(vaultPath + '.bak')).toBe(false)
     const reopened = await openVault(vaultPath, originalPassword)
     expect(reopened).not.toBeNull()
 
@@ -623,72 +523,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-    // Bumped from 60_000: same 2-real-Argon2id-derivation shape (createVault
-    // + rotateVaultCredentials) as its double-failure sibling below, which
-    // was already bumped to 90_000 for the same reason — this one was missed
-    // and timed out on this machine too (flagged by /agent-skills:ship's
-    // code-reviewer during the final pre-PR pass).
-  }, 90_000)
-
-  it('rotateVaultCredentials(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
-    // Before the issue #17 fix, this exact path deleted the backup
-    // immediately after restoring it (before the rollback rekey was even
-    // attempted) and then, post-Phase-6, ran doCloseVault()'s pack step
-    // with mismatched key material — silently overwriting the just-restored
-    // currentVaultPath with a container neither password could open, with
-    // no backup left to recover from. Verified by hand: reverting Task 13
-    // reproduces exactly that — openVault() below fails afterward.
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-    const originalPassword = 'correct horse battery staple'
-    const backupPath = vaultPath + '.bak'
-
-    await createVault(vaultPath, originalPassword)
-
-    const NOTE_COUNT = 5
-    const expectedTitles = new Map<string, string>()
-    for (let i = 0; i < NOTE_COUNT; i++) {
-      const title = `Note ${i}`
-      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
-      expectedTitles.set(note.id, title)
-    }
-    // Persist the notes to currentVaultPath before rotating — see the
-    // matching comment in the rollback-succeeds test above.
-    await syncContainer()
-
-    // Issue #24: the double-failure path (rollback's own rekey also fails,
-    // falling back to doCloseVault(true) + a rethrow) is still nested inside
-    // the outer try/finally — this proves newRawKey is zeroed there too, not
-    // just on the single-failure paths the dedicated issue #24 tests cover.
-    const deriveKeySpy = vi.mocked(deriveKey)
-    const memzeroSpy = vi.mocked(memzero)
-    deriveKeySpy.mockClear()
-    memzeroSpy.mockClear()
-
-    const rejection = await triggerDoubleRollbackFailure(() =>
-      rotateVaultCredentials('a different correct horse battery staple')
-    )
-
-    expectRestoredWithBackupKept(rejection, backupPath)
-    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
-
-    const reopened = await openVault(vaultPath, originalPassword)
-    expect(reopened).not.toBeNull()
-    // openVault()'s internal cleanupOrphanedTempFiles() call must not sweep
-    // the .bak it just walked past — see the dedicated test below.
-    expect(existsSync(backupPath)).toBe(true)
-
-    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
-    expect(persisted.size).toBe(NOTE_COUNT)
-    for (const [id, title] of expectedTitles) {
-      expect(persisted.get(id)).toBe(title)
-    }
-    // Bumped from 60_000: 60s was already tight for the 2 real Argon2id
-    // derivations this test does (createVault + rotateVaultCredentials);
-    // observed timing out on this machine after the issue #24 assertion
-    // above was added, even though that assertion itself adds no I/O —
-    // matches the 90_000 budget the equivalent-shaped issue #24 tests
-    // already use in this file.
+    // 90_000, not 60_000: 2 real Argon2id derivations (createVault +
+    // rotateVaultCredentials) timed out at 60s on this machine.
   }, 90_000)
 
   it('rotateVaultCredentials(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
@@ -809,61 +645,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expect(existsSync(tmpPath)).toBe(false)
   }, 60_000)
 
-  // The 3 tests below extend Task 14's rollback-double-failure coverage
-  // (previously scoped to rotateVaultCredentials() only — see plan.md's
-  // documented scope decision) to the other 3 credential-rotation
-  // functions, since they share the exact same catch-block restructure.
-  // Each confirmed by hand to fail against pre-Task-13 vault.ts.
-
-  it('changePassword(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-    const originalPassword = 'correct horse battery staple'
-    const backupPath = vaultPath + '.bak'
-
-    await createVault(vaultPath, originalPassword)
-
-    const NOTE_COUNT = 5
-    const expectedTitles = new Map<string, string>()
-    for (let i = 0; i < NOTE_COUNT; i++) {
-      const title = `Note ${i}`
-      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
-      expectedTitles.set(note.id, title)
-    }
-    await syncContainer()
-
-    // Issue #24: proves newRawKey is zeroed on this double-failure path
-    // too, not just on the single-failure paths the dedicated issue #24
-    // tests cover. Call 1 = authenticateVaultKey()'s verification derive;
-    // call 2 = newRawKey.
-    const deriveKeySpy = vi.mocked(deriveKey)
-    const memzeroSpy = vi.mocked(memzero)
-    deriveKeySpy.mockClear()
-    memzeroSpy.mockClear()
-
-    const rejection = await triggerDoubleRollbackFailure(() =>
-      changePassword(originalPassword, 'a different correct horse battery staple')
-    )
-
-    expectRestoredWithBackupKept(rejection, backupPath)
-    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
-
-    const reopened = await openVault(vaultPath, originalPassword)
-    expect(reopened).not.toBeNull()
-
-    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
-    expect(persisted.size).toBe(NOTE_COUNT)
-    for (const [id, title] of expectedTitles) {
-      expect(persisted.get(id)).toBe(title)
-    }
-    // Bumped from 60_000: 60s was already tight for the 3 real Argon2id
-    // derivations this test does (createVault + authenticateVaultKey +
-    // newRawKey inside changePassword); observed timing out on this
-    // machine after the issue #24 assertion above was added, even though
-    // that assertion itself adds no I/O — matches the 90_000 budget the
-    // equivalent-shaped issue #24 tests already use in this file.
-  }, 90_000)
-
   it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
     // PRAGMA rekey call sat before the existing try/catch that the diff
@@ -956,59 +737,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     } finally {
       bufferFromSpy.mockRestore()
     }
-  }, 90_000)
-
-  it('configureKeyFile(): keeps the backup and the vault still reopens with the original password when the rollback rekey also fails (issue #17)', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-    const originalPassword = 'correct horse battery staple'
-    const backupPath = vaultPath + '.bak'
-
-    await createVault(vaultPath, originalPassword)
-
-    const NOTE_COUNT = 5
-    const expectedTitles = new Map<string, string>()
-    for (let i = 0; i < NOTE_COUNT; i++) {
-      const title = `Note ${i}`
-      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
-      expectedTitles.set(note.id, title)
-    }
-    await syncContainer()
-
-    // The vault has no key file yet, so the restored backup — and thus the
-    // reopen below — needs neither this key file nor any key file at all.
-    const keyFileContents = randomBytes(32)
-
-    // Issue #24: proves newRawKey is zeroed on this double-failure path
-    // too, not just on the single-failure paths the dedicated issue #24
-    // tests cover. Call 1 = authenticateVaultKey()'s verification derive;
-    // call 2 = newRawKey.
-    const deriveKeySpy = vi.mocked(deriveKey)
-    const memzeroSpy = vi.mocked(memzero)
-    deriveKeySpy.mockClear()
-    memzeroSpy.mockClear()
-
-    const rejection = await triggerDoubleRollbackFailure(() =>
-      configureKeyFile(originalPassword, keyFileContents)
-    )
-
-    expectRestoredWithBackupKept(rejection, backupPath)
-    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
-
-    const reopened = await openVault(vaultPath, originalPassword)
-    expect(reopened).not.toBeNull()
-
-    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
-    expect(persisted.size).toBe(NOTE_COUNT)
-    for (const [id, title] of expectedTitles) {
-      expect(persisted.get(id)).toBe(title)
-    }
-    // Bumped from 60_000: 60s was already tight for the 3 real Argon2id
-    // derivations this test does (createVault + authenticateVaultKey +
-    // newRawKey inside configureKeyFile); observed timing out on this
-    // machine after the issue #24 assertion above was added, even though
-    // that assertion itself adds no I/O — matches the 90_000 budget the
-    // equivalent-shaped issue #24 tests already use in this file.
   }, 90_000)
 
   it('configureKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
@@ -1104,58 +832,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
     } finally {
       bufferFromSpy.mockRestore()
-    }
-  }, 90_000)
-
-  it('removeKeyFile(): keeps the backup and the vault still reopens with the original password and key file when the rollback rekey also fails (issue #17)', async () => {
-    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-    const vaultPath = join(vaultDir, 'test.nvx')
-    const originalPassword = 'correct horse battery staple'
-    const backupPath = vaultPath + '.bak'
-
-    await createVault(vaultPath, originalPassword)
-
-    const NOTE_COUNT = 5
-    const expectedTitles = new Map<string, string>()
-    for (let i = 0; i < NOTE_COUNT; i++) {
-      const title = `Note ${i}`
-      const note = await createNote(getDb(), { title, content: `Body ${i}` }, getMasterKey())
-      expectedTitles.set(note.id, title)
-    }
-
-    // removeKeyFile() requires a key file to already be configured — this
-    // real call establishes that (and, as its own successful rotation,
-    // persists the notes above to currentVaultPath in the process).
-    const keyFileContents = randomBytes(32)
-    await configureKeyFile(originalPassword, keyFileContents)
-
-    // Issue #24: proves newRawKey is zeroed on this double-failure path
-    // too, not just on the single-failure paths the dedicated issue #24
-    // tests cover. mockClear() runs after the configureKeyFile() setup
-    // call above (which makes its own unrelated deriveKey()/memzero()
-    // calls) so only removeKeyFile()'s own calls are counted below. Call
-    // 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
-    const deriveKeySpy = vi.mocked(deriveKey)
-    const memzeroSpy = vi.mocked(memzero)
-    deriveKeySpy.mockClear()
-    memzeroSpy.mockClear()
-
-    const rejection = await triggerDoubleRollbackFailure(() =>
-      removeKeyFile(originalPassword, keyFileContents)
-    )
-
-    expectRestoredWithBackupKept(rejection, backupPath)
-    expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
-
-    // The restored backup still has the key file configureKeyFile() just
-    // set up — removeKeyFile() never got far enough to actually remove it.
-    const reopened = await openVault(vaultPath, originalPassword, keyFileContents)
-    expect(reopened).not.toBeNull()
-
-    const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
-    expect(persisted.size).toBe(NOTE_COUNT)
-    for (const [id, title] of expectedTitles) {
-      expect(persisted.get(id)).toBe(title)
     }
   }, 90_000)
 
@@ -1285,16 +961,15 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   // Issue #39: a failed PRAGMA rekey to the new key used to propagate
-  // straight past rollbackCredentialRotation(), orphaning the .bak taken at
-  // the top of the rotation. The .bak assertions are what fail against the
-  // pre-fix code — the mocked rekey never actually re-keys the connection,
-  // so the reopen checks alone would pass either way.
+  // straight past rollbackCredentialRotation(), leaving the session open on
+  // a connection whose key state was never reconciled. isVaultOpen() is what
+  // fails against the pre-fix code — the mocked rekey never actually re-keys
+  // the connection, so the reopen check alone would pass either way.
   it.each(ROTATION_CASES)(
-    '$name(): runs the rollback and deletes the backup when the PRAGMA rekey to the new key fails (issue #39)',
+    '$name(): runs the rollback, closing the vault, when the PRAGMA rekey to the new key fails (issue #39)',
     async ({ prepare }) => {
       vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
       const vaultPath = join(vaultDir, 'test.nvx')
-      const backupPath = vaultPath + '.bak'
       const { rotate, reopenWithOriginal } = await prepare(vaultPath)
 
       const runSpy = forceNextDbRunToFail(
@@ -1307,122 +982,142 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
         runSpy.mockRestore()
       }
 
-      expect(existsSync(backupPath)).toBe(false)
-      await closeVault()
-      expect(await reopenWithOriginal()).not.toBeNull()
-    },
-    90_000
-  )
-
-  it.each(ROTATION_CASES)(
-    '$name(): keeps the backup and closes the vault when the rekey to the new key and the rollback rekey both fail (issue #39)',
-    async ({ prepare }) => {
-      vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
-      const vaultPath = join(vaultDir, 'test.nvx')
-      const backupPath = vaultPath + '.bak'
-      const { rotate, reopenWithOriginal } = await prepare(vaultPath)
-
-      const runSpy = forceNextDbRunToFail(
-        (sql) => sql.startsWith('PRAGMA rekey'),
-        'simulated rekey failure',
-        2
-      )
-      let rejection: Error | undefined
-      try {
-        await rotate()
-      } catch (err) {
-        rejection = err as Error
-      } finally {
-        runSpy.mockRestore()
-      }
-
-      expect(rejection).toBeInstanceOf(Error)
-      expectRestoredWithBackupKept(rejection as Error, backupPath)
+      expect(isVaultOpen()).toBe(false)
       expect(await reopenWithOriginal()).not.toBeNull()
     },
     90_000
   )
 
   // Issue #23: storeKey(newRawKey) used to run *after* the new container
-  // had already been written and the .bak deleted, so an allocation failure
-  // there rolled the live connection back to the old key over a new-keyed
-  // file on disk.
+  // had already been written, so an allocation failure there rolled back
+  // over a new-keyed file on disk.
   it.each(ROTATION_CASES)(
     '$name(): rolls back cleanly when allocating the new secure key fails before the new container is written (issue #23)',
-    async ({ prepare }) => {
+    async ({ prepare, deriveKeyCalls }) => {
       vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
       const vaultPath = join(vaultDir, 'test.nvx')
-      const backupPath = vaultPath + '.bak'
       const { rotate, reopenWithOriginal } = await prepare(vaultPath)
 
+      const deriveKeySpy = vi.mocked(deriveKey)
+      const memzeroSpy = vi.mocked(memzero)
+      deriveKeySpy.mockClear()
+      memzeroSpy.mockClear()
       vi.mocked(allocSecure).mockImplementationOnce(() => {
         throw new Error('simulated allocSecure failure')
       })
       await expect(rotate()).rejects.toThrow('simulated allocSecure failure')
 
-      expect(existsSync(backupPath)).toBe(false)
-      await closeVault()
+      // storeKey() threw before its own memzero(rawKey): only the outer
+      // finally is left to wipe newRawKey.
+      expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, deriveKeyCalls)
+      expect(isVaultOpen()).toBe(false)
       expect(await reopenWithOriginal()).not.toBeNull()
     },
     90_000
   )
 
   // Issue #23: once the new container is committed, the rotation has
-  // succeeded — a failure freeing the OLD key must not trigger a rollback
-  // (which would put the live connection back on the old key while disk
-  // holds the new one).
+  // succeeded — a failure freeing the OLD key must not trigger a rollback,
+  // which would discard a session whose new-keyed container is on disk.
   it.each(ROTATION_CASES)(
     '$name(): still succeeds and never rolls back when freeing the old key fails after the commit (issue #23)',
     async ({ prepare }) => {
       vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
       const vaultPath = join(vaultDir, 'test.nvx')
-      const backupPath = vaultPath + '.bak'
       const { rotate, reopenWithNew } = await prepare(vaultPath)
 
       // The live masterKey buffer itself, not a copy — the rotation's
       // fallback must still wipe it even though freeSecure() threw.
       const oldKey = getMasterKey()
-      vi.mocked(freeSecure).mockImplementationOnce(() => {
+      const freeSpy = vi.mocked(freeSecure)
+      freeSpy.mockClear() // removeKeyFile's prepare() already freed keys
+      freeSpy.mockImplementationOnce(() => {
         throw new Error('simulated freeSecure failure')
       })
       await expect(rotate()).resolves.toMatchObject({ mnemonic: expect.any(String) })
 
+      // The injected failure really hit the old key's free, after the swap.
+      expect(freeSpy.mock.calls[0][0]).toBe(oldKey)
+      expect(getMasterKey()).not.toBe(oldKey)
       expect(Array.from(oldKey).every((byte) => byte === 0)).toBe(true)
-      expect(existsSync(backupPath)).toBe(false)
+      expect(isVaultOpen()).toBe(true)
       await closeVault()
       expect(await reopenWithNew()).not.toBeNull()
     },
     90_000
   )
 
+  // Makes commitRotatedContainer()'s atomicWrite() fail for real: the
+  // directory squatting on its .tmp path is created inside the
+  // storeKey(newRawKey) allocation, i.e. after the rotation's own pre-mutation
+  // pack (which would otherwise hit it first) and right before the write.
+  function failNextContainerWrite(vaultPath: string): void {
+    const realAllocSecure = vi.mocked(allocSecure).getMockImplementation()!
+    vi.mocked(allocSecure).mockImplementationOnce((size) => {
+      mkdirSync(vaultPath + '.tmp')
+      return realAllocSecure(size)
+    })
+  }
+
   // Issue #23: commitRotatedContainer() allocates the new secure key before
   // writing anything, so when the write itself fails that key must be freed
-  // (and thus wiped) before the normal rollback runs. A directory squatting
-  // on atomicWrite()'s .tmp path makes its writeFileSync() fail for real.
+  // (and thus wiped) before the rollback runs.
   it.each(ROTATION_CASES)(
     '$name(): frees the new secure key and rolls back when writing the new container fails (issue #23)',
     async ({ prepare }) => {
       vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
       const vaultPath = join(vaultDir, 'test.nvx')
-      const backupPath = vaultPath + '.bak'
       const { rotate, reopenWithOriginal } = await prepare(vaultPath)
 
       const allocSpy = vi.mocked(allocSecure)
       const freeSpy = vi.mocked(freeSecure)
       allocSpy.mockClear()
       freeSpy.mockClear()
-      mkdirSync(vaultPath + '.tmp')
-      await expect(rotate()).rejects.toThrow()
+      failNextContainerWrite(vaultPath)
+      await expect(rotate()).rejects.toMatchObject({
+        code: expect.stringMatching(/^(EISDIR|EPERM)$/)
+      })
 
-      // Only allocation inside a rotation: storeKey(newRawKey).
-      expect(allocSpy).toHaveBeenCalledTimes(1)
-      const newSecureKey = allocSpy.mock.results[0].value as Buffer
+      // The last allocation before the write is storeKey(newRawKey).
+      const newSecureKey = allocSpy.mock.results.at(-1)!.value as Buffer
       expect(freeSpy.mock.calls.some(([buf]) => buf === newSecureKey)).toBe(true)
       expect(Array.from(newSecureKey).every((byte) => byte === 0)).toBe(true)
 
-      expect(existsSync(backupPath)).toBe(false)
-      await closeVault()
+      expect(isVaultOpen()).toBe(false)
+      rmSync(vaultPath + '.tmp', { recursive: true })
       expect(await reopenWithOriginal()).not.toBeNull()
+    },
+    90_000
+  )
+
+  // Found by /agent-skills:ship's security-auditor: a failure after
+  // reencryptNotes() has COMMITted leaves the session's temp DB holding note
+  // content encrypted under the new key, which the rollback then discards.
+  // Keeping that session (and packing it on close) made every note
+  // permanently undecryptable. The note is deliberately NOT synced first, so
+  // this also proves the rotation persists pending writes before mutating
+  // anything — closing without packing must not lose them either.
+  it.each(ROTATION_CASES)(
+    '$name(): keeps unsynced note content intact when a failure after the notes COMMIT rolls back',
+    async ({ prepare }) => {
+      vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+      const vaultPath = join(vaultDir, 'test.nvx')
+      const { rotate, reopenWithOriginal } = await prepare(vaultPath)
+      const note = await createNote(
+        getDb(),
+        { title: 'Unsynced', content: 'unsynced body' },
+        getMasterKey()
+      )
+
+      failNextContainerWrite(vaultPath)
+      await expect(rotate()).rejects.toThrow()
+
+      // The session can't safely continue after this rollback.
+      expect(isVaultOpen()).toBe(false)
+      rmSync(vaultPath + '.tmp', { recursive: true })
+      expect(await reopenWithOriginal()).not.toBeNull()
+      const reopened = await getNote(getDb(), note.id, getMasterKey())
+      expect(reopened?.content).toBe('unsynced body')
     },
     90_000
   )
