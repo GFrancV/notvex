@@ -223,6 +223,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
   beforeEach(async () => {
     handlers.clear()
     vi.resetModules()
+    vi.clearAllMocks()
     container = await import('../src/main/vault/container')
     vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(false)
     vault = await import('../src/main/vault/vault')
@@ -283,6 +284,40 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
     expect(drainRenderer).toHaveBeenLastCalledWith(given.win)
     expect(given.sent).toEqual(['vault:auto-locked'])
+  })
+
+  // macOS: the window closes mid-Argon2id, window-all-closed finds nothing to
+  // lock yet (and stops auto-lock), then the unlock finishes with no UI.
+  it('re-locks a vault whose vault:open finished after its window closed', async () => {
+    const only = fakeWindow()
+    ipc.registerIpcHandlers(only.win, () => null)
+    vi.mocked(vault.openVault).mockImplementationOnce(async () => {
+      only.destroy()
+      return { maj: 1, min: 0 }
+    })
+
+    await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+      success: false,
+      error: 'No window is open'
+    })
+    expect(vault.closeVault).toHaveBeenCalled()
+    expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
+  })
+
+  it('re-locks a vault whose vault:open-with-recovery finished after its window closed', async () => {
+    const only = fakeWindow()
+    ipc.registerIpcHandlers(only.win, () => null)
+    vi.mocked(vault.openVaultWithRecovery).mockImplementationOnce(async () => {
+      only.destroy()
+      return { maj: 1, min: 0 }
+    })
+
+    await expect(invoke('vault:open-with-recovery', '/v.nvx', 'words')).resolves.toEqual({
+      success: false,
+      error: 'No window is open'
+    })
+    expect(vault.closeVault).toHaveBeenCalled()
+    expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
   })
 
   it('auto-lock still closes the vault while no window is alive', async () => {

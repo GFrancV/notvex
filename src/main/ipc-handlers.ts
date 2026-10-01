@@ -272,6 +272,15 @@ export function cancelPendingConfirmations(): void {
   devBuildWarningResolver = null
 }
 
+// An unlock that finishes after its window closed (macOS: the window closed
+// mid-key-derivation, so window-all-closed found nothing to lock yet and
+// stopped auto-lock) must not leave an unlocked vault with no UI — the next
+// `activate` window would open straight into the notes (#36).
+async function relockOrphanedVault(): Promise<IpcResult<never>> {
+  await closeVault()
+  return fail('No window is open')
+}
+
 // Maps the internal error sentinels thrown by readContainer/runMigrations to
 // user-facing messages. 'MIGRATION_CANCELLED' is the same sentinel unlock.tsx
 // already special-cases to silently return to the idle unlock form.
@@ -401,6 +410,8 @@ export function registerIpcHandlers(
           return mapOpenVaultError(e)
         }
 
+        if (vaultVersion !== null && !liveWin()) return relockOrphanedVault()
+
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
           unlockThrottle.lockedUntil = 0
@@ -528,6 +539,8 @@ export function registerIpcHandlers(
           } catch (e) {
             return mapOpenVaultError(e)
           }
+
+          if (vaultVersion !== null && !liveWin()) return relockOrphanedVault()
 
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
