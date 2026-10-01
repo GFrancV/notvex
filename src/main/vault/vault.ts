@@ -16,7 +16,7 @@
  *   VirtualLock/mlock so the OS cannot page it to disk.
  * - All intermediate key copies are zeroed immediately after use.
  */
-import { copyFileSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
@@ -145,9 +145,9 @@ function releaseLock(): void {
 }
 
 // Removes a leftover .tmp file from a previous re-keying crash.
-// A .bak is deliberately NOT cleaned up here — its presence means a re-key
-// rollback also failed (see the catch blocks in doChangePassword() etc.),
-// and it must survive an app restart as the user's only recovery copy.
+// A .bak is deliberately NOT cleaned up here: credential rotations no longer
+// create one, but a version before that left one behind only when a re-key
+// rollback also failed, as the user's only recovery copy.
 function cleanupOrphanedTempFiles(vaultPath: string): void {
   const p = vaultPath + '.tmp'
   if (existsSync(p)) {
@@ -569,85 +569,77 @@ export async function openVaultWithRecovery(
   }
 }
 
-// Shared by the 4 credential-rotation functions' failure paths — identical
-// by construction now, not by discipline (see the plan's root-cause trace
-// for why a divergence here is exactly how this class of bug slips back
-// in). Restores backupPath over vaultPath, then attempts to rekey the live
-// connection back to the old key. Returns normally if that rollback
-// succeeds (the backup is deleted — genuinely redundant at that point).
-// Throws a new, actionable error (chaining `err` via `cause`) if the
-// rollback also fails.
-async function rollbackCredentialRotation(
-  vaultPath: string,
-  backupPath: string,
-  oldKeyHex: string,
-  err: unknown
-): Promise<void> {
+// Shared by the 4 credential-rotation functions' failure paths, so they
+// can't diverge here.
+//
+// Precondition: nothing has been written to vaultPath yet. Each caller
+// guarantees it by keeping commitRotatedContainer() as the last statement
+// inside its rollback try — the PRAGMA rekey to the new key sits inside that
+// try (issue #39), and commitRotatedContainer() can't throw once it has
+// written anything (issue #23). So the vault on disk is always intact here,
+// and no backup copy of it is needed.
+//
+// The session's temp DB is not: past reencryptNotes()'s COMMIT it holds
+// note content encrypted under the new key, which is about to be discarded.
+// Keeping that session — and packing it on close — made every note
+// permanently undecryptable. So the session is closed without packing and
+// the user unlocks again from the intact container; callers pack pending
+// writes before mutating anything, so none are lost.
+//
+// doCloseVault(), not closeVault(): we're already running inside
+// withVaultLock here — calling the locked closeVault() would deadlock the
+// whole queue permanently. See doCloseVault()'s docstring.
+async function rollbackCredentialRotation(vaultPath: string): Promise<void> {
   try {
     unlinkSync(vaultPath + '.tmp')
   } catch {
     /* ignore */
   }
+  await doCloseVault(true)
+}
+
+// Frees a secure buffer, falling back to a plain wipe if releasing the
+// memory lock throws — for the spots where a failure must not propagate.
+function freeSecureOrWipe(buf: Buffer): void {
   try {
-    copyFileSync(backupPath, vaultPath)
+    freeSecure(buf)
   } catch {
-    /* ignore */
-  }
-  try {
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${oldKeyHex}'"`, (e: Error | null) => (e ? reject(e) : resolve()))
-    })
-    // Rollback succeeded — live connection and vaultPath are both back on
-    // the old key, so the backup is genuinely redundant now.
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
-  } catch {
-    // Rollback also failed: masterKey/currentMetadata still hold the OLD
-    // key (never reassigned on this failure path) while tempDbPath's bytes
-    // are keyed with the NEW one — doCloseVault(true) skips the pack step
-    // so it doesn't atomicWrite that inconsistent container over the
-    // just-restored vaultPath, and backupPath is kept as the user's
-    // recovery copy instead of being deleted.
-    //
-    // doCloseVault(), not closeVault(): we're already running inside
-    // withVaultLock here (this function is only called from one of the
-    // four doX functions it wraps) — calling the locked closeVault() would
-    // deadlock the whole queue permanently. See doCloseVault()'s docstring.
-    await doCloseVault(true)
-    throw new Error(
-      `Your vault was restored to its previous state, but the operation could not be fully rolled back. A backup copy was kept at ${backupPath} as a precaution.`,
-      { cause: err }
-    )
+    buf.fill(0)
   }
 }
 
-// Parses the just-written container bytes before atomicWrite so a
-// hypothetical parse failure is caught while still before the point of no
-// return — rollbackCredentialRotation() above assumes nothing has been
-// written to vaultPath yet. Deletes the backup afterward: it's the last
-// step of a successful rotation, so it's genuinely redundant once this
-// returns. Re-derives metadata from containerBytes itself, not a manual
-// field patch — that previously left hmacCoveredBytes/storedHmac pointing
-// at the pre-rotation header, so a second rotation in the same open
-// session (e.g. configureKeyFile() right after changePassword())
-// authenticated the correct new credentials against a stale HMAC and
-// rejected them.
+// The point of no return of all 4 credential-rotation functions, shared so
+// they can't diverge here (issue #23). Must be the last statement inside
+// each caller's rollback try: everything that can fail — parsing the new
+// container, allocating the new secure key, writing it to vaultPath — runs
+// before anything is written, so a failure still meets
+// rollbackCredentialRotation()'s precondition. Once atomicWrite succeeds
+// nothing below can throw: rolling back then would discard a session whose
+// new-keyed container is already on disk.
+//
+// Re-derives metadata from containerBytes itself, not a manual field patch
+// — that previously left hmacCoveredBytes/storedHmac pointing at the
+// pre-rotation header, so a second rotation in the same open session (e.g.
+// configureKeyFile() right after changePassword()) authenticated the
+// correct new credentials against a stale HMAC and rejected them.
 function commitRotatedContainer(
   vaultPath: string,
-  backupPath: string,
-  containerBytes: Buffer
-): ContainerMetadata {
+  containerBytes: Buffer,
+  newRawKey: Uint8Array
+): void {
   const newMetadata = readContainer(containerBytes)
-  atomicWrite(vaultPath, containerBytes)
+  const newSecureKey = storeKey(newRawKey) // zeros newRawKey
   try {
-    unlinkSync(backupPath)
-  } catch {
-    /* ignore */
+    atomicWrite(vaultPath, containerBytes)
+  } catch (err) {
+    freeSecureOrWipe(newSecureKey)
+    throw err
   }
-  return newMetadata
+
+  currentMetadata = newMetadata
+  const oldKey = masterKey
+  masterKey = newSecureKey
+  if (oldKey) freeSecureOrWipe(oldKey)
 }
 
 // Goes through withVaultLock: see its docstring for why concurrent calls
@@ -669,8 +661,9 @@ async function doChangePassword(
     throw new Error('Vault is not open')
   }
 
-  const backupPath = currentVaultPath + '.bak'
-  copyFileSync(currentVaultPath, backupPath)
+  // Persist pending writes before mutating anything: a failed rotation
+  // closes the session without packing (see rollbackCredentialRotation()).
+  await doPackContainer()
 
   // Step 1 — verify current credentials. Pass key file only if the vault has one.
   const auth = await authenticateVaultKey({
@@ -680,11 +673,6 @@ async function doChangePassword(
     keyFileContents: currentHasKeyFile ? keyFileContents : undefined
   })
   if (!auth.valid) {
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
     throw new Error('Current password is incorrect')
   }
   auth.masterKey.fill(0) // verified; the live masterKey is already in memory
@@ -702,20 +690,20 @@ async function doChangePassword(
 
   // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
   // Unavoidable limitation of the SQLCipher Node.js binding.
-  const oldKeyHex = masterKey.toString('hex')
   const newHexBuf = Buffer.from(newRawKey)
   const newHex = newHexBuf.toString('hex')
   memzero(newHexBuf)
 
   try {
-    // Step 3 — re-key SQLCipher in-place
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Step 3 — re-key SQLCipher in-place. Inside the rollback try, not
+      // before it (issue #39) — see rollbackCredentialRotation().
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         await reencryptNotes(masterKey, newRawKey)
@@ -755,15 +743,11 @@ async function doChangePassword(
       } finally {
         memzero(containerMasterKey)
       }
-      currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-
-      const newSecureKey = storeKey(newRawKey) // zeros newRawKey
-      freeSecure(masterKey)
-      masterKey = newSecureKey
+      commitRotatedContainer(currentVaultPath, containerBytes, newRawKey)
 
       return { mnemonic }
     } catch (err) {
-      await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
+      await rollbackCredentialRotation(currentVaultPath)
       throw err
     }
   } finally {
@@ -785,8 +769,9 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
   const kfHash = pendingKeyFileContents
     ? hashKeyFile(Buffer.from(pendingKeyFileContents))
     : undefined
-  const backupPath = currentVaultPath + '.bak'
-  copyFileSync(currentVaultPath, backupPath)
+  // Persist pending writes before mutating anything: a failed rotation
+  // closes the session without packing (see rollbackCredentialRotation()).
+  await doPackContainer()
 
   const newSalt = Buffer.from(generateSalt())
   const newKdfInput: KdfInputV1 = {
@@ -797,19 +782,20 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
   const { params: newKdfParams } = getArgon2Params(newKdfInput)
   const newRawKey = deriveKey(newPassword, newSalt, newKdfParams, kfHash)
 
-  const oldKeyHex = masterKey.toString('hex')
   const newHexBuf = Buffer.from(newRawKey)
   const newHex = newHexBuf.toString('hex')
   memzero(newHexBuf)
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Re-key SQLCipher in-place. Inside the rollback try, not before it
+      // (issue #39) — see rollbackCredentialRotation().
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         const newHasKeyFile = pendingKeyFileContents !== null ? true : currentHasKeyFile
@@ -853,21 +839,16 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
       } finally {
         memzero(containerMasterKey)
       }
-      currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-
+      currentHasKeyFile = newHasKeyFile
       if (pendingKeyFileContents) {
         memzero(pendingKeyFileContents)
         pendingKeyFileContents = null
       }
-
-      const newSecureKey = storeKey(newRawKey) // zeros newRawKey
-      freeSecure(masterKey)
-      masterKey = newSecureKey
-      currentHasKeyFile = newHasKeyFile
+      commitRotatedContainer(currentVaultPath, containerBytes, newRawKey)
 
       return { mnemonic }
     } catch (err) {
-      await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
+      await rollbackCredentialRotation(currentVaultPath)
       throw err
     }
   } finally {
@@ -902,12 +883,11 @@ export function closeVault(): Promise<void> {
   return withVaultLock(doCloseVault)
 }
 
-// skipPack=true is used by the 4 credential-rotation fallbacks when the
-// re-key rollback itself also failed: at that point masterKey/currentMetadata
-// still hold the OLD key material (never reassigned on this failure path)
-// while tempDbPath's bytes are keyed with the NEW key, so packing now would
-// atomicWrite an internally-inconsistent container over the just-restored
-// currentVaultPath, destroying it. Every other cleanup step still runs.
+// skipPack=true is used by rollbackCredentialRotation(): at that point
+// masterKey/currentMetadata still hold the OLD key material while
+// tempDbPath may be keyed, and its notes re-encrypted, with the discarded
+// NEW key, so packing now would atomicWrite an unreadable container over the
+// intact currentVaultPath, destroying it. Every other cleanup step still runs.
 async function doCloseVault(skipPack = false): Promise<void> {
   // packContainer() checkpoints via `db`, so it runs before the connection
   // closes below, while there's still something to checkpoint against.
@@ -947,7 +927,7 @@ async function doCloseVault(skipPack = false): Promise<void> {
     pendingKeyFileContents = null
   }
   if (masterKey) {
-    freeSecure(masterKey)
+    freeSecureOrWipe(masterKey)
     masterKey = null
   }
   currentVaultPath = null
@@ -1011,8 +991,9 @@ async function doConfigureKeyFile(
     throw new Error('Vault is not open')
   }
 
-  const backupPath = currentVaultPath + '.bak'
-  copyFileSync(currentVaultPath, backupPath)
+  // Persist pending writes before mutating anything: a failed rotation
+  // closes the session without packing (see rollbackCredentialRotation()).
+  await doPackContainer()
 
   // Verify current credentials. Pass current key file only if one is already configured.
   const auth = await authenticateVaultKey({
@@ -1022,11 +1003,6 @@ async function doConfigureKeyFile(
     keyFileContents: currentHasKeyFile ? keyFileContents : undefined
   })
   if (!auth.valid) {
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
     throw new Error('Incorrect password or key file')
   }
   auth.masterKey.fill(0)
@@ -1040,20 +1016,21 @@ async function doConfigureKeyFile(
   }
   const { params: newKdfParams } = getArgon2Params(newKdfInput)
   const newRawKey = deriveKey(password, newSalt, newKdfParams, kfHash)
-  const oldKeyHex = masterKey.toString('hex')
 
   const newHexBuf = Buffer.from(newRawKey)
   const newHex = newHexBuf.toString('hex')
   memzero(newHexBuf)
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Re-key SQLCipher in-place. Inside the rollback try, not before it
+      // (issue #39) — see rollbackCredentialRotation().
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         await dbRun(db, 'UPDATE vault_meta SET has_key_file = 1 WHERE id = 1')
@@ -1090,16 +1067,12 @@ async function doConfigureKeyFile(
       } finally {
         memzero(containerMasterKey)
       }
-      currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-
-      const newSecureKey = storeKey(newRawKey)
-      freeSecure(masterKey)
-      masterKey = newSecureKey
       currentHasKeyFile = true
+      commitRotatedContainer(currentVaultPath, containerBytes, newRawKey)
 
       return { mnemonic }
     } catch (err) {
-      await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
+      await rollbackCredentialRotation(currentVaultPath)
       throw err
     }
   } finally {
@@ -1129,8 +1102,9 @@ async function doRemoveKeyFile(
     throw new Error('No key file is configured for this vault')
   }
 
-  const backupPath = currentVaultPath + '.bak'
-  copyFileSync(currentVaultPath, backupPath)
+  // Persist pending writes before mutating anything: a failed rotation
+  // closes the session without packing (see rollbackCredentialRotation()).
+  await doPackContainer()
 
   const auth = await authenticateVaultKey({
     dbPath: tempDbPath,
@@ -1139,11 +1113,6 @@ async function doRemoveKeyFile(
     keyFileContents
   })
   if (!auth.valid) {
-    try {
-      unlinkSync(backupPath)
-    } catch {
-      /* ignore */
-    }
     throw new Error('Incorrect password or key file')
   }
   auth.masterKey.fill(0)
@@ -1156,20 +1125,21 @@ async function doRemoveKeyFile(
   }
   const { params: newKdfParams } = getArgon2Params(newKdfInput)
   const newRawKey = deriveKey(password, newSalt, newKdfParams)
-  const oldKeyHex = masterKey.toString('hex')
 
   const newHexBuf = Buffer.from(newRawKey)
   const newHex = newHexBuf.toString('hex')
   memzero(newHexBuf)
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Re-key SQLCipher in-place. Inside the rollback try, not before it
+      // (issue #39) — see rollbackCredentialRotation().
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         await dbRun(db, 'UPDATE vault_meta SET has_key_file = 0 WHERE id = 1')
@@ -1206,16 +1176,12 @@ async function doRemoveKeyFile(
       } finally {
         memzero(containerMasterKey)
       }
-      currentMetadata = commitRotatedContainer(currentVaultPath, backupPath, containerBytes)
-
-      const newSecureKey = storeKey(newRawKey)
-      freeSecure(masterKey)
-      masterKey = newSecureKey
       currentHasKeyFile = false
+      commitRotatedContainer(currentVaultPath, containerBytes, newRawKey)
 
       return { mnemonic }
     } catch (err) {
-      await rollbackCredentialRotation(currentVaultPath, backupPath, oldKeyHex, err)
+      await rollbackCredentialRotation(currentVaultPath)
       throw err
     }
   } finally {
