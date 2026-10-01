@@ -47,6 +47,7 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
   let createWindow: typeof import('../src/main/window').createWindow
 
   beforeEach(async () => {
+    vi.clearAllMocks()
     const electron = await import('electron')
     powerMonitor = electron.powerMonitor as unknown as EventEmitter
     powerMonitor.removeAllListeners()
@@ -58,6 +59,26 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
     win.emit('closed')
 
     for (const event of POWER_EVENTS) expect(powerMonitor.listenerCount(event)).toBe(0)
+  })
+
+  it('settles any pending confirmation prompt when the window closes', async () => {
+    const { cancelPendingConfirmations } = await import('../src/main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.emit('closed')
+
+    expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
+  })
+
+  it('locks through the reopened window, not the closed one, on every lock event', async () => {
+    const { lockVaultAndNotify } = await import('../src/main/ipc-handlers')
+    createWindow(() => null).emit('closed')
+    const second = createWindow(() => null)
+
+    for (const event of POWER_EVENTS) powerMonitor.emit(event)
+
+    expect(lockVaultAndNotify).toHaveBeenCalledTimes(POWER_EVENTS.length)
+    for (const call of vi.mocked(lockVaultAndNotify).mock.calls) expect(call[0]).toBe(second)
   })
 
   it('leaves one listener per event after a close and reopen', () => {

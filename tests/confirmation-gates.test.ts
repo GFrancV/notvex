@@ -112,6 +112,7 @@ describe('confirmation gates: cancelPendingConfirmations (issue #36)', () => {
   beforeEach(async () => {
     handlers.clear()
     vi.resetModules()
+    vi.clearAllMocks()
     container = await import('../src/main/vault/container')
     vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(false)
     ipc = await import('../src/main/ipc-handlers')
@@ -146,6 +147,29 @@ describe('confirmation gates: cancelPendingConfirmations (issue #36)', () => {
     ipc.cancelPendingConfirmations()
 
     await expect(pending).resolves.toEqual({ success: false, error: 'MIGRATION_CANCELLED' })
+  })
+
+  it('never backs up a migration that was cancelled instead of confirmed', async () => {
+    const { createVaultBackup } = await import('../src/main/vault/backups')
+    const pending = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    ipc.cancelPendingConfirmations()
+    await pending
+
+    expect(createVaultBackup).not.toHaveBeenCalled()
+  })
+
+  // Control for the test above: proves its assertion can fail.
+  it('backs up a migration the user confirmed with a backup', async () => {
+    const { createVaultBackup } = await import('../src/main/vault/backups')
+    const pending = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    await invoke('vault:migration-confirmed', true)
+    await pending
+
+    expect(createVaultBackup).toHaveBeenCalledWith('/v.nvx', 'schema', 1, 2)
   })
 
   it('leaves the next vault:open free to proceed after a cancel', async () => {
