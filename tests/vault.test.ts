@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { createNote, dbAll, getNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
 import { decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
+import { allocSecure, freeSecure } from '../src/main/vault/memlock'
 import {
   changePassword,
   closeVault,
@@ -34,6 +35,15 @@ import {
 vi.mock('../src/main/vault/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
   return { ...actual, memzero: vi.fn(actual.memzero), deriveKey: vi.fn(actual.deriveKey) }
+})
+
+// Same pass-through partial mock for memlock.ts, so the issue #23 tests
+// below can force exactly one allocSecure()/freeSecure() call to throw via
+// mockImplementationOnce(). Inside a credential rotation those are only
+// storeKey(newRawKey) and freeSecure() of the old masterKey respectively.
+vi.mock('../src/main/vault/memlock', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/vault/memlock')>()
+  return { allocSecure: vi.fn(actual.allocSecure), freeSecure: vi.fn(actual.freeSecure) }
 })
 
 interface RawNoteRow {
@@ -147,7 +157,8 @@ function expectRestoredWithBackupKept(rejection: Error, backupPath: string): voi
 // Shared by the issue #39/#23 rollback tests below: one entry per
 // credential-rotation function. `prepare` creates a vault at `vaultPath`
 // (plus whatever precondition the function needs) and returns the rotation
-// to run and how to reopen the vault with its pre-rotation credentials.
+// to run and how to reopen the vault with its pre- and post-rotation
+// credentials.
 const ORIGINAL_PASSWORD = 'correct horse battery staple'
 const NEW_PASSWORD = 'a different correct horse battery staple'
 
@@ -156,6 +167,7 @@ interface RotationCase {
   prepare: (vaultPath: string) => Promise<{
     rotate: () => Promise<unknown>
     reopenWithOriginal: () => ReturnType<typeof openVault>
+    reopenWithNew: () => ReturnType<typeof openVault>
   }>
 }
 
@@ -166,7 +178,8 @@ const ROTATION_CASES: RotationCase[] = [
       await createVault(vaultPath, ORIGINAL_PASSWORD)
       return {
         rotate: () => changePassword(ORIGINAL_PASSWORD, NEW_PASSWORD),
-        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD)
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD),
+        reopenWithNew: () => openVault(vaultPath, NEW_PASSWORD)
       }
     }
   },
@@ -176,7 +189,8 @@ const ROTATION_CASES: RotationCase[] = [
       await createVault(vaultPath, ORIGINAL_PASSWORD)
       return {
         rotate: () => rotateVaultCredentials(NEW_PASSWORD),
-        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD)
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD),
+        reopenWithNew: () => openVault(vaultPath, NEW_PASSWORD)
       }
     }
   },
@@ -187,7 +201,8 @@ const ROTATION_CASES: RotationCase[] = [
       const keyFileContents = randomBytes(32)
       return {
         rotate: () => configureKeyFile(ORIGINAL_PASSWORD, keyFileContents),
-        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD)
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD),
+        reopenWithNew: () => openVault(vaultPath, ORIGINAL_PASSWORD, keyFileContents)
       }
     }
   },
@@ -200,7 +215,8 @@ const ROTATION_CASES: RotationCase[] = [
       await configureKeyFile(ORIGINAL_PASSWORD, keyFileContents)
       return {
         rotate: () => removeKeyFile(ORIGINAL_PASSWORD, keyFileContents),
-        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD, keyFileContents)
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD, keyFileContents),
+        reopenWithNew: () => openVault(vaultPath, ORIGINAL_PASSWORD)
       }
     }
   }
@@ -1309,6 +1325,54 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       expect(rejection).toBeInstanceOf(Error)
       expectRestoredWithBackupKept(rejection as Error, backupPath)
       expect(await reopenWithOriginal()).not.toBeNull()
+    },
+    90_000
+  )
+
+  // Issue #23: storeKey(newRawKey) used to run *after*
+  // commitRotatedContainer() had already written the new container and
+  // deleted the .bak, so an allocation failure there rolled the live
+  // connection back to the old key over a new-keyed file on disk.
+  it.each(ROTATION_CASES)(
+    '$name(): rolls back cleanly when allocating the new secure key fails before the commit (issue #23)',
+    async ({ prepare }) => {
+      vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+      const vaultPath = join(vaultDir, 'test.nvx')
+      const backupPath = vaultPath + '.bak'
+      const { rotate, reopenWithOriginal } = await prepare(vaultPath)
+
+      vi.mocked(allocSecure).mockImplementationOnce(() => {
+        throw new Error('simulated allocSecure failure')
+      })
+      await expect(rotate()).rejects.toThrow('simulated allocSecure failure')
+
+      expect(existsSync(backupPath)).toBe(false)
+      await closeVault()
+      expect(await reopenWithOriginal()).not.toBeNull()
+    },
+    90_000
+  )
+
+  // Issue #23: once the new container is committed, the rotation has
+  // succeeded — a failure freeing the OLD key must not trigger a rollback
+  // (which would put the live connection back on the old key while disk
+  // holds the new one).
+  it.each(ROTATION_CASES)(
+    '$name(): still succeeds and never rolls back when freeing the old key fails after the commit (issue #23)',
+    async ({ prepare }) => {
+      vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+      const vaultPath = join(vaultDir, 'test.nvx')
+      const backupPath = vaultPath + '.bak'
+      const { rotate, reopenWithNew } = await prepare(vaultPath)
+
+      vi.mocked(freeSecure).mockImplementationOnce(() => {
+        throw new Error('simulated freeSecure failure')
+      })
+      await expect(rotate()).resolves.toMatchObject({ mnemonic: expect.any(String) })
+
+      expect(existsSync(backupPath)).toBe(false)
+      await closeVault()
+      expect(await reopenWithNew()).not.toBeNull()
     },
     90_000
   )
