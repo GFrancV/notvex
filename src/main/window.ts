@@ -1,7 +1,12 @@
 import { app, BrowserWindow, powerMonitor, shell } from 'electron'
 import { join } from 'path'
 
-import { closeVaultDrained, lockVaultAndNotify, registerIpcHandlers } from './ipc-handlers'
+import {
+  cancelPendingConfirmations,
+  closeVaultDrained,
+  lockVaultAndNotify,
+  registerIpcHandlers
+} from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
 import { isVaultOpen } from './vault/vault'
@@ -103,6 +108,17 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
         closing = false
         win.close()
       })
+  })
+
+  win.on('closed', () => {
+    // A destroyed window can never answer a pending migration / dev-build
+    // prompt, so settle it here or the next unlock stays wedged (#36).
+    cancelPendingConfirmations()
+    // powerMonitor outlives this window (macOS `activate` builds another),
+    // so its listeners must not keep pointing at a dead one (#36).
+    powerMonitor.off('suspend', lockOnSuspend)
+    powerMonitor.off('lock-screen', lockOnSuspend)
+    powerMonitor.off('user-did-resign-active', lockOnSuspend)
   })
 
   return win

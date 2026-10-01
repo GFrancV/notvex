@@ -106,13 +106,33 @@ export async function closeVaultDrained(win: BrowserWindow | null): Promise<void
   await closeVault()
 }
 
-export async function lockVaultAndNotify(win: BrowserWindow): Promise<void> {
+export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {
   if (!isVaultOpen()) return
   await closeVaultDrained(win)
-  win.webContents.send('vault:auto-locked')
+  if (win && !win.isDestroyed()) win.webContents.send('vault:auto-locked')
 }
 
-function startAutoLockTimer(win: BrowserWindow): void {
+// ─── Current window ──────────────────────────────────────────────────────────
+// On macOS the app outlives its last window and `activate` builds a new one,
+// so createWindow() calls registerIpcHandlers() more than once. ipcMain.handle
+// throws on a second registration, so handlers are registered once and read
+// the window through liveWin() instead of capturing the first one (#36).
+
+let currentWin: BrowserWindow | null = null
+let handlersRegistered = false
+
+function liveWin(): BrowserWindow | null {
+  return currentWin && !currentWin.isDestroyed() ? currentWin : null
+}
+
+// For renderer-invoked handlers, which only run while their window is alive.
+function requireWin(): BrowserWindow {
+  const win = liveWin()
+  if (!win) throw new Error('No window is open')
+  return win
+}
+
+function startAutoLockTimer(): void {
   if (autoLockTimer) clearInterval(autoLockTimer)
   autoLockTimer = setInterval((): void => {
     void (async (): Promise<void> => {
@@ -121,7 +141,7 @@ function startAutoLockTimer(win: BrowserWindow): void {
       if (!isVaultOpen()) return
       const elapsed = (Date.now() - lastActivityAt) / 60000
       if (elapsed >= minutes) {
-        await lockVaultAndNotify(win)
+        await lockVaultAndNotify(liveWin())
       }
     })()
   }, 60_000)
@@ -191,14 +211,16 @@ type MigrationPayload =
 
 // Sends 'vault:migration-required' to the renderer and waits for the user's response.
 // Shared by the header-version and schema-version gates in vault:open and vault:open-with-recovery.
+// With no live window nobody can answer, so it counts as cancelled.
 async function confirmMigrationAndBackup(
-  win: BrowserWindow,
   filePath: string,
   payload: MigrationPayload
 ): Promise<boolean> {
   if (migrationResolver !== null) {
     throw new Error('A migration dialog is already open. Complete or cancel it first.')
   }
+  const win = liveWin()
+  if (!win) return false
   const backupTimestamp = Date.now()
   migrationBackupTimestamp = backupTimestamp
   win.webContents.send('vault:migration-required', {
@@ -223,14 +245,40 @@ let devBuildWarningResolver: ((confirmed: boolean) => void) | null = null
 // Sends 'vault:dev-build-warning-required' to the renderer and waits for the
 // user's response. Shared by vault:open and vault:open-with-recovery, gated
 // on shouldWarnOpeningInDevBuild() — see its docstring in container.ts.
-async function confirmDevBuildWarning(win: BrowserWindow, filePath: string): Promise<boolean> {
+// With no live window nobody can answer, so it counts as cancelled.
+async function confirmDevBuildWarning(filePath: string): Promise<boolean> {
   if (devBuildWarningResolver !== null) {
     throw new Error('A dev-build warning dialog is already open. Complete or cancel it first.')
   }
+  const win = liveWin()
+  if (!win) return false
   win.webContents.send('vault:dev-build-warning-required', { vaultPath: filePath })
   return new Promise<boolean>((resolve) => {
     devBuildWarningResolver = resolve
   })
+}
+
+// Settles whichever confirmation gate is pending as "cancelled". Resolving
+// rather than just nulling the resolver lets the parked vault:open /
+// vault:open-with-recovery unwind through its own cleanup (the finally that
+// resets isUnlocking, openVault's temp-file catch) instead of hanging forever.
+// Called by the renderer's -cancelled handlers and by the window's 'closed'
+// event, since a destroyed window can never answer (#36). The gates run in
+// sequence, so at most one is ever pending.
+export function cancelPendingConfirmations(): void {
+  migrationResolver?.({ confirmed: false, createBackup: false })
+  migrationResolver = null
+  devBuildWarningResolver?.(false)
+  devBuildWarningResolver = null
+}
+
+// An unlock that finishes after its window closed (macOS: the window closed
+// mid-key-derivation, so window-all-closed found nothing to lock yet and
+// stopped auto-lock) must not leave an unlocked vault with no UI — the next
+// `activate` window would open straight into the notes (#36).
+async function relockOrphanedVault(): Promise<IpcResult<never>> {
+  await closeVault()
+  return fail('No window is open')
 }
 
 // Maps the internal error sentinels thrown by readContainer/runMigrations to
@@ -264,7 +312,10 @@ export function registerIpcHandlers(
   win: BrowserWindow,
   takePendingFilePath: () => string | null
 ): void {
-  startAutoLockTimer(win)
+  currentWin = win
+  startAutoLockTimer()
+  if (handlersRegistered) return
+  handlersRegistered = true
 
   // ── Vault ──────────────────────────────────────────────────────────────────
 
@@ -319,12 +370,12 @@ export function registerIpcHandlers(
           // checked before any migration runs, not after, so it actually guards
           // the thing it exists to guard.
           if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
-            const confirmed = await confirmDevBuildWarning(win, filePath)
+            const confirmed = await confirmDevBuildWarning(filePath)
             if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
           }
           // Minor version: show migration dialog if needed (no-op for v1.0)
           if (header.versionMin < CURRENT_VERSION_MIN) {
-            const confirmed = await confirmMigrationAndBackup(win, filePath, {
+            const confirmed = await confirmMigrationAndBackup(filePath, {
               reason: 'header',
               fromVersion: header.versionMin,
               toVersion: CURRENT_VERSION_MIN
@@ -342,7 +393,7 @@ export function registerIpcHandlers(
 
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
         const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
-          confirmMigrationAndBackup(win, filePath, { reason: 'schema', fromVersion, toVersion })
+          confirmMigrationAndBackup(filePath, { reason: 'schema', fromVersion, toVersion })
 
         // Pass pre-read bytes to avoid a second readFileSync; after migration the file was
         // rewritten so openVault must re-read it (pass undefined to trigger the internal read).
@@ -358,6 +409,8 @@ export function registerIpcHandlers(
         } catch (e) {
           return mapOpenVaultError(e)
         }
+
+        if (vaultVersion !== null && !liveWin()) return relockOrphanedVault()
 
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
@@ -394,8 +447,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:migration-cancelled', () => {
     try {
-      migrationResolver?.({ confirmed: false, createBackup: false })
-      migrationResolver = null
+      cancelPendingConfirmations()
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -414,8 +466,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:dev-build-warning-cancelled', () => {
     try {
-      devBuildWarningResolver?.(false)
-      devBuildWarningResolver = null
+      cancelPendingConfirmations()
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -454,11 +505,11 @@ export function registerIpcHandlers(
           try {
             const header = readContainer(fileBytes)
             if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
-              const confirmed = await confirmDevBuildWarning(win, filePath)
+              const confirmed = await confirmDevBuildWarning(filePath)
               if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
             }
             if (header.versionMin < CURRENT_VERSION_MIN) {
-              const confirmed = await confirmMigrationAndBackup(win, filePath, {
+              const confirmed = await confirmMigrationAndBackup(filePath, {
                 reason: 'header',
                 fromVersion: header.versionMin,
                 toVersion: CURRENT_VERSION_MIN
@@ -475,7 +526,7 @@ export function registerIpcHandlers(
 
           const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
           const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
-            confirmMigrationAndBackup(win, filePath, { reason: 'schema', fromVersion, toVersion })
+            confirmMigrationAndBackup(filePath, { reason: 'schema', fromVersion, toVersion })
 
           let vaultVersion: Awaited<ReturnType<typeof openVaultWithRecovery>>
           try {
@@ -488,6 +539,8 @@ export function registerIpcHandlers(
           } catch (e) {
             return mapOpenVaultError(e)
           }
+
+          if (vaultVersion !== null && !liveWin()) return relockOrphanedVault()
 
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
@@ -519,7 +572,7 @@ export function registerIpcHandlers(
         const result = await changePassword(currentPassword, newPassword, kfContents)
         return ok(result)
       } catch (e) {
-        if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
+        if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
         return fail(e)
       }
     }
@@ -546,7 +599,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:close', async () => {
     try {
-      await closeVaultDrained(win)
+      await closeVaultDrained(liveWin())
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -562,7 +615,7 @@ export function registerIpcHandlers(
       if (!isValidNotvexFile(filePath)) {
         return fail('This file is not a valid Notvex vault')
       }
-      await closeVaultDrained(win)
+      await closeVaultDrained(liveWin())
       promoteVaultToTop(filePath)
       return ok(null)
     } catch (e) {
@@ -610,7 +663,7 @@ export function registerIpcHandlers(
       const vaultDir = dirname(vaultPath)
       const vaultName = basename(vaultPath, '.nvx')
 
-      const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      const { canceled, filePath } = await dialog.showSaveDialog(requireWin(), {
         title: 'Save a copy of your vault',
         defaultPath: join(vaultDir, `${vaultName}_copy.nvx`),
         filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }],
@@ -640,7 +693,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:generate-key-file', async () => {
     try {
-      const result = await dialog.showSaveDialog(win, {
+      const result = await dialog.showSaveDialog(requireWin(), {
         title: 'Save key file',
         defaultPath: 'notvex.nvxkey',
         filters: [{ name: 'Notvex Key File', extensions: ['nvxkey'] }]
@@ -657,7 +710,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('vault:select-key-file', async () => {
     try {
-      const result = await dialog.showOpenDialog(win, {
+      const result = await dialog.showOpenDialog(requireWin(), {
         title: 'Select key file',
         properties: ['openFile'],
         filters: [
@@ -689,7 +742,7 @@ export function registerIpcHandlers(
         recordVaultUsed(getVaultPath()!, true)
         return ok(result)
       } catch (e) {
-        if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
+        if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
         return fail(e)
       }
     }
@@ -706,7 +759,7 @@ export function registerIpcHandlers(
         recordVaultUsed(getVaultPath()!, false)
         return ok(result)
       } catch (e) {
-        if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
+        if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
         return fail(e)
       }
     }
@@ -726,14 +779,14 @@ export function registerIpcHandlers(
   ipcMain.handle('vault:choose-file', async (_e, mode: 'new' | 'existing') => {
     try {
       if (mode === 'new') {
-        const result = await dialog.showSaveDialog(win, {
+        const result = await dialog.showSaveDialog(requireWin(), {
           title: 'Create new vault',
           defaultPath: 'vault.nvx',
           filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }]
         })
         return ok(result.canceled ? null : result.filePath)
       } else {
-        const result = await dialog.showOpenDialog(win, {
+        const result = await dialog.showOpenDialog(requireWin(), {
           title: 'Open existing vault',
           properties: ['openFile'],
           filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }]
