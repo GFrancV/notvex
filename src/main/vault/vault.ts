@@ -708,14 +708,17 @@ async function doChangePassword(
   memzero(newHexBuf)
 
   try {
-    // Step 3 — re-key SQLCipher in-place
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Step 3 — re-key SQLCipher in-place. Inside the rollback try, not before it
+      // (issue #39): nothing has been written to vaultPath yet, so a failure
+      // here meets rollbackCredentialRotation()'s precondition — and rekeying
+      // back to oldKeyHex is harmless even if this rekey never took effect.
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         await reencryptNotes(masterKey, newRawKey)
@@ -803,13 +806,17 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
   memzero(newHexBuf)
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Re-key SQLCipher in-place. Inside the rollback try, not before it
+      // (issue #39): nothing has been written to vaultPath yet, so a failure
+      // here meets rollbackCredentialRotation()'s precondition — and rekeying
+      // back to oldKeyHex is harmless even if this rekey never took effect.
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         const newHasKeyFile = pendingKeyFileContents !== null ? true : currentHasKeyFile
@@ -1047,13 +1054,17 @@ async function doConfigureKeyFile(
   memzero(newHexBuf)
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Re-key SQLCipher in-place. Inside the rollback try, not before it
+      // (issue #39): nothing has been written to vaultPath yet, so a failure
+      // here meets rollbackCredentialRotation()'s precondition — and rekeying
+      // back to oldKeyHex is harmless even if this rekey never took effect.
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         await dbRun(db, 'UPDATE vault_meta SET has_key_file = 1 WHERE id = 1')
@@ -1163,13 +1174,17 @@ async function doRemoveKeyFile(
   memzero(newHexBuf)
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
-        err ? reject(err) : resolve()
-      )
-    })
-
     try {
+      // Re-key SQLCipher in-place. Inside the rollback try, not before it
+      // (issue #39): nothing has been written to vaultPath yet, so a failure
+      // here meets rollbackCredentialRotation()'s precondition — and rekeying
+      // back to oldKeyHex is harmless even if this rekey never took effect.
+      await new Promise<void>((resolve, reject) => {
+        db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
+          err ? reject(err) : resolve()
+        )
+      })
+
       await dbRun(db, 'BEGIN TRANSACTION')
       try {
         await dbRun(db, 'UPDATE vault_meta SET has_key_file = 0 WHERE id = 1')

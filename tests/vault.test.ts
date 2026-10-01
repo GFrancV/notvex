@@ -144,19 +144,88 @@ function expectRestoredWithBackupKept(rejection: Error, backupPath: string): voi
   expect(existsSync(backupPath)).toBe(true)
 }
 
+// Shared by the issue #39/#23 rollback tests below: one entry per
+// credential-rotation function. `prepare` creates a vault at `vaultPath`
+// (plus whatever precondition the function needs) and returns the rotation
+// to run and how to reopen the vault with its pre-rotation credentials.
+const ORIGINAL_PASSWORD = 'correct horse battery staple'
+const NEW_PASSWORD = 'a different correct horse battery staple'
+
+interface RotationCase {
+  name: string
+  prepare: (vaultPath: string) => Promise<{
+    rotate: () => Promise<unknown>
+    reopenWithOriginal: () => ReturnType<typeof openVault>
+  }>
+}
+
+const ROTATION_CASES: RotationCase[] = [
+  {
+    name: 'changePassword',
+    prepare: async (vaultPath) => {
+      await createVault(vaultPath, ORIGINAL_PASSWORD)
+      return {
+        rotate: () => changePassword(ORIGINAL_PASSWORD, NEW_PASSWORD),
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD)
+      }
+    }
+  },
+  {
+    name: 'rotateVaultCredentials',
+    prepare: async (vaultPath) => {
+      await createVault(vaultPath, ORIGINAL_PASSWORD)
+      return {
+        rotate: () => rotateVaultCredentials(NEW_PASSWORD),
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD)
+      }
+    }
+  },
+  {
+    name: 'configureKeyFile',
+    prepare: async (vaultPath) => {
+      await createVault(vaultPath, ORIGINAL_PASSWORD)
+      const keyFileContents = randomBytes(32)
+      return {
+        rotate: () => configureKeyFile(ORIGINAL_PASSWORD, keyFileContents),
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD)
+      }
+    }
+  },
+  {
+    name: 'removeKeyFile',
+    prepare: async (vaultPath) => {
+      await createVault(vaultPath, ORIGINAL_PASSWORD)
+      // removeKeyFile() requires a key file to already be configured.
+      const keyFileContents = randomBytes(32)
+      await configureKeyFile(ORIGINAL_PASSWORD, keyFileContents)
+      return {
+        rotate: () => removeKeyFile(ORIGINAL_PASSWORD, keyFileContents),
+        reopenWithOriginal: () => openVault(vaultPath, ORIGINAL_PASSWORD, keyFileContents)
+      }
+    }
+  }
+]
+
 // Shared by the issue #24 newRawKey-zeroing tests below: forces the next
-// liveDb.run() call matching `matchSql` to fail with `errorMessage`, every
-// other call passing through to the real implementation. Caller is
-// responsible for `runSpy.mockRestore()` once its action under test settles.
+// `times` liveDb.run() calls matching `matchSql` to fail with
+// `errorMessage`, every other call passing through to the real
+// implementation. Caller is responsible for `runSpy.mockRestore()` once its
+// action under test settles. One-shot by default (issue #39): once the
+// PRAGMA rekey to the new key routes into rollbackCredentialRotation(),
+// failing *every* rekey would also fail the rollback's own rekey back to
+// the old key and turn a single-failure test into a double-failure one.
 function forceNextDbRunToFail(
   matchSql: (sql: string) => boolean,
-  errorMessage: string
+  errorMessage: string,
+  times = 1
 ): ReturnType<typeof vi.spyOn> {
   const liveDb = getDb()
   const originalRun = liveDb.run.bind(liveDb)
+  let remaining = times
   return vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
     const callback = rest[rest.length - 1] as (err: Error | null) => void
-    if (typeof sql === 'string' && matchSql(sql)) {
+    if (typeof sql === 'string' && remaining > 0 && matchSql(sql)) {
+      remaining -= 1
       callback(new Error(errorMessage))
       return liveDb
     }
@@ -594,9 +663,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
   it('rotateVaultCredentials(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sits before the existing try/catch that the diff
-    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
-    // this failure point must zero it too.
+    // PRAGMA rekey call sat before the existing try/catch that the diff
+    // wraps (issue #39 later moved it inside). The approved fix wraps
+    // newRawKey's whole lifetime instead, so this failure point must zero it
+    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -766,9 +836,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
   it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sits before the existing try/catch that the diff
-    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
-    // this failure point must zero it too.
+    // PRAGMA rekey call sat before the existing try/catch that the diff
+    // wraps (issue #39 later moved it inside). The approved fix wraps
+    // newRawKey's whole lifetime instead, so this failure point must zero it
+    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -912,9 +983,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
   it('configureKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sits before the existing try/catch that the diff
-    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
-    // this failure point must zero it too.
+    // PRAGMA rekey call sat before the existing try/catch that the diff
+    // wraps (issue #39 later moved it inside). The approved fix wraps
+    // newRawKey's whole lifetime instead, so this failure point must zero it
+    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -1059,9 +1131,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
   it('removeKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sits before the existing try/catch that the diff
-    // wraps. The approved fix wraps newRawKey's whole lifetime instead, so
-    // this failure point must zero it too.
+    // PRAGMA rekey call sat before the existing try/catch that the diff
+    // wraps (issue #39 later moved it inside). The approved fix wraps
+    // newRawKey's whole lifetime instead, so this failure point must zero it
+    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -1180,6 +1253,65 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       changePassword(secondPassword, 'yet another correct horse battery staple')
     ).resolves.toMatchObject({ mnemonic: expect.any(String) })
   }, 90_000)
+
+  // Issue #39: a failed PRAGMA rekey to the new key used to propagate
+  // straight past rollbackCredentialRotation(), orphaning the .bak taken at
+  // the top of the rotation. The .bak assertions are what fail against the
+  // pre-fix code — the mocked rekey never actually re-keys the connection,
+  // so the reopen checks alone would pass either way.
+  it.each(ROTATION_CASES)(
+    '$name(): runs the rollback and deletes the backup when the PRAGMA rekey to the new key fails (issue #39)',
+    async ({ prepare }) => {
+      vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+      const vaultPath = join(vaultDir, 'test.nvx')
+      const backupPath = vaultPath + '.bak'
+      const { rotate, reopenWithOriginal } = await prepare(vaultPath)
+
+      const runSpy = forceNextDbRunToFail(
+        (sql) => sql.startsWith('PRAGMA rekey'),
+        'simulated rekey failure'
+      )
+      try {
+        await expect(rotate()).rejects.toThrow('simulated rekey failure')
+      } finally {
+        runSpy.mockRestore()
+      }
+
+      expect(existsSync(backupPath)).toBe(false)
+      await closeVault()
+      expect(await reopenWithOriginal()).not.toBeNull()
+    },
+    90_000
+  )
+
+  it.each(ROTATION_CASES)(
+    '$name(): keeps the backup and closes the vault when the rekey to the new key and the rollback rekey both fail (issue #39)',
+    async ({ prepare }) => {
+      vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+      const vaultPath = join(vaultDir, 'test.nvx')
+      const backupPath = vaultPath + '.bak'
+      const { rotate, reopenWithOriginal } = await prepare(vaultPath)
+
+      const runSpy = forceNextDbRunToFail(
+        (sql) => sql.startsWith('PRAGMA rekey'),
+        'simulated rekey failure',
+        2
+      )
+      let rejection: Error | undefined
+      try {
+        await rotate()
+      } catch (err) {
+        rejection = err as Error
+      } finally {
+        runSpy.mockRestore()
+      }
+
+      expect(rejection).toBeInstanceOf(Error)
+      expectRestoredWithBackupKept(rejection as Error, backupPath)
+      expect(await reopenWithOriginal()).not.toBeNull()
+    },
+    90_000
+  )
 })
 
 // Structural test, not a behavioral one: tests/vault.test.ts cannot invoke
