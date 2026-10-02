@@ -486,13 +486,49 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
   // to answer it either. `other` stands in for any renderer but the requester.
   describe('gate answers from a renderer other than the requester (issue #50)', () => {
     let requester: WebContents
+    let requesterSent: string[]
     let other: WebContents
 
     beforeEach(() => {
       const a = fakeWindow()
       ipc.registerIpcHandlers(a.win, () => null)
       requester = a.win.webContents
+      requesterSent = a.sent
       other = fakeWindow().win.webContents
+    })
+
+    // The real #50 shape: B is the window the user now sees, so a check on
+    // "is the sender live?" instead of "is it the requester?" would let it answer.
+    it('ignores an answer from the window that replaced the requester', async () => {
+      const { createVaultBackup } = await import('../src/main/vault/backups')
+      const pending = invokeFrom(requester, 'vault:open', '/v.nvx', 'pw')
+      await flush()
+      const b = fakeWindow()
+      ipc.registerIpcHandlers(b.win, () => null)
+
+      await invokeFrom(b.win.webContents, 'vault:migration-confirmed', true)
+      ipc.cancelPendingConfirmations()
+
+      await expect(pending).resolves.toEqual({ success: false, error: 'MIGRATION_CANCELLED' })
+      expect(createVaultBackup).not.toHaveBeenCalled()
+    })
+
+    it('lets the requester answer both gates of one unlock in turn', async () => {
+      const { createVaultBackup } = await import('../src/main/vault/backups')
+      vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+      const pending = invokeFrom(requester, 'vault:open', '/v.nvx', 'pw')
+      await flush()
+
+      await invokeFrom(requester, 'vault:dev-build-warning-confirmed')
+      await flush()
+      expect(requesterSent).toEqual([
+        'vault:dev-build-warning-required',
+        'vault:migration-required'
+      ])
+      await invokeFrom(requester, 'vault:migration-confirmed', true)
+
+      await expect(pending).resolves.toEqual({ success: true, data: 1 })
+      expect(createVaultBackup).toHaveBeenCalledWith('/v.nvx', 'schema', 1, 2)
     })
 
     it('ignores vault:migration-confirmed and never backs up', async () => {
