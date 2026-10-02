@@ -305,6 +305,10 @@ export function cancelPendingConfirmations(): void {
 // is sitting on its own unlock view, out of sync with an open vault (#50). And
 // when the renderer was reloaded or crashed mid-unlock: the window survives, but
 // the page that asked is gone and the new one would boot into the notes (#51).
+function isUnlockOrphaned(sender: WebContents, generation: number): boolean {
+  return !isLiveSender(sender) || generation !== rendererGeneration
+}
+
 async function relockOrphanedVault(): Promise<IpcResult<never>> {
   await closeVault()
   return fail('No window is open')
@@ -444,10 +448,7 @@ export function registerIpcHandlers(
           return mapOpenVaultError(e)
         }
 
-        if (
-          vaultVersion !== null &&
-          (!isLiveSender(event.sender) || generation !== rendererGeneration)
-        ) {
+        if (vaultVersion !== null && isUnlockOrphaned(event.sender, generation)) {
           return relockOrphanedVault()
         }
 
@@ -589,10 +590,7 @@ export function registerIpcHandlers(
             return mapOpenVaultError(e)
           }
 
-          if (
-            vaultVersion !== null &&
-            (!isLiveSender(event.sender) || generation !== rendererGeneration)
-          ) {
+          if (vaultVersion !== null && isUnlockOrphaned(event.sender, generation)) {
             return relockOrphanedVault()
           }
 
