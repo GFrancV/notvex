@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContents } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The confirmation gates in ipc-handlers.ts park a vault:open call on a
@@ -77,6 +77,10 @@ vi.mock('../src/main/db/queries', () => ({}))
 vi.mock('../src/main/clipboard-guard', () => ({}))
 vi.mock('../src/main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
+// The renderer a handler call comes from by default: the most recently created
+// window, i.e. the one the user is looking at.
+let lastSender: WebContents | null = null
+
 // Like a real BrowserWindow, sending to a destroyed one throws.
 function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void } {
   const sent: string[] = []
@@ -84,19 +88,27 @@ function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void
   const win = {
     isDestroyed: () => destroyed,
     webContents: {
+      isDestroyed: () => destroyed,
       send: (channel: string) => {
         if (destroyed) throw new Error('Object has been destroyed')
         sent.push(channel)
       }
     }
   } as unknown as BrowserWindow
+  lastSender = win.webContents
   return { win, sent, destroy: () => (destroyed = true) }
 }
 
-function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+// Calls a handler the way ipcMain does: with an event carrying the calling renderer.
+function invokeFrom(sender: WebContents, channel: string, ...args: unknown[]): Promise<unknown> {
   const fn = handlers.get(channel)
   if (!fn) throw new Error(`no handler for ${channel}`)
-  return Promise.resolve(fn({}, ...args))
+  return Promise.resolve(fn({ sender }, ...args))
+}
+
+function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+  if (!lastSender) throw new Error('no window created yet')
+  return invokeFrom(lastSender, channel, ...args)
 }
 
 // Lets the handler run up to the point where it parks on a gate.
