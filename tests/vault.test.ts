@@ -268,6 +268,21 @@ function expectNewRawKeyZeroedTwice(
   expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
 }
 
+// Issue #40: authenticateVaultKey()'s candidateKey (returned as
+// auth.masterKey on success) must go through memzero(), not a plain
+// fill(0). candidateKey is the Buffer.from() copy of the verification
+// derive, identified by reference like expectNewRawKeyCopiesZeroed() does.
+function expectVerifyKeyMemzeroed(
+  bufferFromSpy: ReturnType<typeof vi.spyOn>,
+  verifyDerivedRef: Uint8Array,
+  memzeroSpy: Mock<typeof memzero>
+): void {
+  const idx = bufferFromSpy.mock.calls.findIndex((args: unknown[]) => args[0] === verifyDerivedRef)
+  expect(idx).toBeGreaterThanOrEqual(0)
+  const candidateKey = bufferFromSpy.mock.results[idx].value as Buffer
+  expect(memzeroSpy.mock.calls.some(([buf]) => buf === candidateKey)).toBe(true)
+}
+
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   let vaultDir: string | undefined
 
@@ -752,6 +767,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
+      expectVerifyKeyMemzeroed(bufferFromSpy, deriveKeySpy.mock.results[0].value, memzeroSpy)
     } finally {
       bufferFromSpy.mockRestore()
     }
@@ -851,6 +867,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
+      expectVerifyKeyMemzeroed(bufferFromSpy, deriveKeySpy.mock.results[0].value, memzeroSpy)
     } finally {
       bufferFromSpy.mockRestore()
     }
@@ -957,6 +974,34 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
+      expectVerifyKeyMemzeroed(bufferFromSpy, deriveKeySpy.mock.results[0].value, memzeroSpy)
+    } finally {
+      bufferFromSpy.mockRestore()
+    }
+  }, 90_000)
+
+  it('changePassword(): rejects a wrong current password and zeroes the verify key via memzero (issue #40)', async () => {
+    // Covers authenticateVaultKey()'s HMAC-mismatch branch, which used to
+    // wipe candidateKey with a plain fill(0).
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, 'correct horse battery staple')
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
+    deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
+    const bufferFromSpy = vi.spyOn(Buffer, 'from')
+
+    try {
+      await expect(
+        changePassword('not the password', 'a different correct horse battery staple')
+      ).rejects.toThrow('Current password is incorrect')
+
+      // Only the verification derive runs; it never reaches newRawKey.
+      expect(deriveKeySpy).toHaveBeenCalledTimes(1)
+      expectVerifyKeyMemzeroed(bufferFromSpy, deriveKeySpy.mock.results[0].value, memzeroSpy)
     } finally {
       bufferFromSpy.mockRestore()
     }
