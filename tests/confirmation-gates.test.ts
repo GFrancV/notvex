@@ -524,6 +524,8 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
     it('ignores vault:dev-build-warning-confirmed', async () => {
       vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+      // No schema gate after it, so a regression fails on the assertion instead of hanging.
+      vi.mocked(vault.openVault).mockResolvedValueOnce({ maj: 1, min: 0 })
       const pending = invokeFrom(requester, 'vault:open', '/v.nvx', 'pw')
       await flush()
 
