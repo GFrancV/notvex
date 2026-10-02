@@ -418,6 +418,30 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     await expect(orphaned).resolves.toEqual({ success: false, error: 'No window is open' })
   })
 
+  // Only a vault that actually opened is orphaned: a wrong password must still
+  // count toward the throttle, or reloading mid-attempt would bypass it.
+  it('counts a wrong password toward the throttle even if the renderer was replaced', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    const wrongPasswordDuringReload = async (): Promise<null> => {
+      ipc.markRendererReplaced()
+      return null
+    }
+
+    for (let i = 0; i < 4; i++) {
+      vi.mocked(vault.openVault).mockImplementationOnce(wrongPasswordDuringReload)
+      await expect(invoke('vault:open', '/v.nvx', 'bad')).resolves.toEqual({
+        success: true,
+        data: null
+      })
+    }
+
+    expect(vault.closeVault).not.toHaveBeenCalled()
+    await expect(invoke('vault:open', '/v.nvx', 'bad')).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/Too many failed attempts/)
+    })
+  })
+
   // Control: only a replacement *during* the unlock counts, not an earlier one.
   it('lets an unlock started from the reloaded renderer open normally', async () => {
     ipc.registerIpcHandlers(fakeWindow().win, () => null)
