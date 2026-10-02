@@ -368,4 +368,117 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
     expect(vault.closeVault).toHaveBeenCalled()
   })
+
+  // macOS, issue #50: window A starts the unlock, the user closes A and clicks
+  // the dock icon mid-Argon2id, and `activate` builds window B. B never asked
+  // to unlock, so a gate firing now must not prompt it.
+  describe('when another window replaces the requester mid-unlock (issue #50)', () => {
+    let a: ReturnType<typeof fakeWindow>
+    let b: ReturnType<typeof fakeWindow> | null
+
+    function replaceRequester({ destroyA = true } = {}): void {
+      if (destroyA) a.destroy()
+      b = fakeWindow()
+      ipc.registerIpcHandlers(b.win, () => null)
+    }
+
+    type Gate = (req: { fromVersion: number; toVersion: number }) => Promise<boolean>
+
+    beforeEach(() => {
+      a = fakeWindow()
+      b = null
+      ipc.registerIpcHandlers(a.win, () => null)
+    })
+
+    it('cancels the schema-migration gate of vault:open without prompting the new window', async () => {
+      vi.mocked(vault.openVault).mockImplementationOnce(async (...args) => {
+        replaceRequester()
+        const gate = args[4] as Gate
+        if (!(await gate({ fromVersion: 1, toVersion: 2 }))) {
+          throw new Error('SCHEMA_MIGRATION_CANCELLED')
+        }
+        return { maj: 1, min: 0 }
+      })
+
+      await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+        success: false,
+        error: 'MIGRATION_CANCELLED'
+      })
+      expect(b?.sent).toEqual([])
+    })
+
+    // A requester that is still alive but no longer the current window is just as
+    // unable to answer from the user's point of view: isLiveSender checks identity,
+    // not only isDestroyed().
+    it('cancels a gate whose requester is alive but no longer the current window', async () => {
+      vi.mocked(container.shouldWarnOpeningInDevBuild).mockImplementationOnce(() => {
+        replaceRequester({ destroyA: false })
+        return true
+      })
+
+      await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+        success: false,
+        error: 'DEV_BUILD_WARNING_CANCELLED'
+      })
+      expect(a.sent).toEqual([])
+      expect(b?.sent).toEqual([])
+    })
+
+    it('cancels the dev-build warning without prompting the new window', async () => {
+      vi.mocked(container.shouldWarnOpeningInDevBuild).mockImplementationOnce(() => {
+        replaceRequester()
+        return true
+      })
+
+      await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+        success: false,
+        error: 'DEV_BUILD_WARNING_CANCELLED'
+      })
+      expect(b?.sent).toEqual([])
+    })
+
+    it('cancels the schema-migration gate of vault:open-with-recovery the same way', async () => {
+      vi.mocked(vault.openVaultWithRecovery).mockImplementationOnce(async (...args) => {
+        replaceRequester()
+        const gate = args[3] as Gate
+        if (!(await gate({ fromVersion: 1, toVersion: 2 }))) {
+          throw new Error('SCHEMA_MIGRATION_CANCELLED')
+        }
+        return { maj: 1, min: 0 }
+      })
+
+      await expect(invoke('vault:open-with-recovery', '/v.nvx', 'words')).resolves.toEqual({
+        success: false,
+        error: 'MIGRATION_CANCELLED'
+      })
+      expect(b?.sent).toEqual([])
+    })
+
+    it('re-locks a vault whose unlock finished after the requester was replaced', async () => {
+      vi.mocked(vault.openVault).mockImplementationOnce(async () => {
+        replaceRequester()
+        return { maj: 1, min: 0 }
+      })
+
+      await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+        success: false,
+        error: 'No window is open'
+      })
+      expect(vault.closeVault).toHaveBeenCalled()
+      expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
+    })
+
+    it('re-locks a recovery unlock that finished after the requester was replaced', async () => {
+      vi.mocked(vault.openVaultWithRecovery).mockImplementationOnce(async () => {
+        replaceRequester()
+        return { maj: 1, min: 0 }
+      })
+
+      await expect(invoke('vault:open-with-recovery', '/v.nvx', 'words')).resolves.toEqual({
+        success: false,
+        error: 'No window is open'
+      })
+      expect(vault.closeVault).toHaveBeenCalled()
+    })
+  })
 })

@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, WebContents } from 'electron'
 import { app, dialog, ipcMain, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
@@ -125,6 +125,13 @@ function liveWin(): BrowserWindow | null {
   return currentWin && !currentWin.isDestroyed() ? currentWin : null
 }
 
+// Whether the renderer that made a call is still the window the user sees. On
+// macOS `activate` can replace it mid-unlock with a window that never asked for
+// the unlock, so long-running handlers check this instead of liveWin() (#50).
+function isLiveSender(sender: WebContents): boolean {
+  return !sender.isDestroyed() && sender === liveWin()?.webContents
+}
+
 // For renderer-invoked handlers, which only run while their window is alive.
 function requireWin(): BrowserWindow {
   const win = liveWin()
@@ -209,21 +216,22 @@ type MigrationPayload =
   | { reason: 'header'; fromVersion: number; toVersion: number }
   | { reason: 'schema'; fromVersion: number; toVersion: number }
 
-// Sends 'vault:migration-required' to the renderer and waits for the user's response.
-// Shared by the header-version and schema-version gates in vault:open and vault:open-with-recovery.
-// With no live window nobody can answer, so it counts as cancelled.
+// Sends 'vault:migration-required' to the renderer that requested the unlock and waits
+// for the user's response. Shared by the header-version and schema-version gates in
+// vault:open and vault:open-with-recovery. If that renderer is gone nobody can answer,
+// so it counts as cancelled — never re-routed to another window (#50).
 async function confirmMigrationAndBackup(
+  sender: WebContents,
   filePath: string,
   payload: MigrationPayload
 ): Promise<boolean> {
   if (migrationResolver !== null) {
     throw new Error('A migration dialog is already open. Complete or cancel it first.')
   }
-  const win = liveWin()
-  if (!win) return false
+  if (!isLiveSender(sender)) return false
   const backupTimestamp = Date.now()
   migrationBackupTimestamp = backupTimestamp
-  win.webContents.send('vault:migration-required', {
+  sender.send('vault:migration-required', {
     vaultPath: filePath,
     backupTimestamp,
     ...payload
@@ -242,17 +250,17 @@ async function confirmMigrationAndBackup(
 
 let devBuildWarningResolver: ((confirmed: boolean) => void) | null = null
 
-// Sends 'vault:dev-build-warning-required' to the renderer and waits for the
-// user's response. Shared by vault:open and vault:open-with-recovery, gated
-// on shouldWarnOpeningInDevBuild() — see its docstring in container.ts.
-// With no live window nobody can answer, so it counts as cancelled.
-async function confirmDevBuildWarning(filePath: string): Promise<boolean> {
+// Sends 'vault:dev-build-warning-required' to the renderer that requested the
+// unlock and waits for the user's response. Shared by vault:open and
+// vault:open-with-recovery, gated on shouldWarnOpeningInDevBuild() — see its
+// docstring in container.ts. If that renderer is gone nobody can answer, so it
+// counts as cancelled (#50).
+async function confirmDevBuildWarning(sender: WebContents, filePath: string): Promise<boolean> {
   if (devBuildWarningResolver !== null) {
     throw new Error('A dev-build warning dialog is already open. Complete or cancel it first.')
   }
-  const win = liveWin()
-  if (!win) return false
-  win.webContents.send('vault:dev-build-warning-required', { vaultPath: filePath })
+  if (!isLiveSender(sender)) return false
+  sender.send('vault:dev-build-warning-required', { vaultPath: filePath })
   return new Promise<boolean>((resolve) => {
     devBuildWarningResolver = resolve
   })
@@ -275,7 +283,9 @@ export function cancelPendingConfirmations(): void {
 // An unlock that finishes after its window closed (macOS: the window closed
 // mid-key-derivation, so window-all-closed found nothing to lock yet and
 // stopped auto-lock) must not leave an unlocked vault with no UI — the next
-// `activate` window would open straight into the notes (#36).
+// `activate` window would open straight into the notes (#36). The same holds
+// when that `activate` window already exists: it never asked for the unlock and
+// is sitting on its own unlock view, out of sync with an open vault (#50).
 async function relockOrphanedVault(): Promise<IpcResult<never>> {
   await closeVault()
   return fail('No window is open')
@@ -349,7 +359,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'vault:open',
-    async (_e, filePath: string, password: string, keyFileContents?: Uint8Array) => {
+    async (event, filePath: string, password: string, keyFileContents?: Uint8Array) => {
       const throttleErr = checkAndSetThrottle()
       if (throttleErr) return throttleErr
       isUnlocking = true
@@ -370,12 +380,12 @@ export function registerIpcHandlers(
           // checked before any migration runs, not after, so it actually guards
           // the thing it exists to guard.
           if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
-            const confirmed = await confirmDevBuildWarning(filePath)
+            const confirmed = await confirmDevBuildWarning(event.sender, filePath)
             if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
           }
           // Minor version: show migration dialog if needed (no-op for v1.0)
           if (header.versionMin < CURRENT_VERSION_MIN) {
-            const confirmed = await confirmMigrationAndBackup(filePath, {
+            const confirmed = await confirmMigrationAndBackup(event.sender, filePath, {
               reason: 'header',
               fromVersion: header.versionMin,
               toVersion: CURRENT_VERSION_MIN
@@ -393,7 +403,11 @@ export function registerIpcHandlers(
 
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
         const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
-          confirmMigrationAndBackup(filePath, { reason: 'schema', fromVersion, toVersion })
+          confirmMigrationAndBackup(event.sender, filePath, {
+            reason: 'schema',
+            fromVersion,
+            toVersion
+          })
 
         // Pass pre-read bytes to avoid a second readFileSync; after migration the file was
         // rewritten so openVault must re-read it (pass undefined to trigger the internal read).
@@ -410,7 +424,7 @@ export function registerIpcHandlers(
           return mapOpenVaultError(e)
         }
 
-        if (vaultVersion !== null && !liveWin()) return relockOrphanedVault()
+        if (vaultVersion !== null && !isLiveSender(event.sender)) return relockOrphanedVault()
 
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
@@ -489,7 +503,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'vault:open-with-recovery',
-    async (_e, filePath: string, mnemonic: string, keyFileContents?: Uint8Array) => {
+    async (event, filePath: string, mnemonic: string, keyFileContents?: Uint8Array) => {
       try {
         const throttleErr = checkAndSetThrottle()
         if (throttleErr) return throttleErr
@@ -505,11 +519,11 @@ export function registerIpcHandlers(
           try {
             const header = readContainer(fileBytes)
             if (shouldWarnOpeningInDevBuild(app.isPackaged, header)) {
-              const confirmed = await confirmDevBuildWarning(filePath)
+              const confirmed = await confirmDevBuildWarning(event.sender, filePath)
               if (!confirmed) return fail('DEV_BUILD_WARNING_CANCELLED')
             }
             if (header.versionMin < CURRENT_VERSION_MIN) {
-              const confirmed = await confirmMigrationAndBackup(filePath, {
+              const confirmed = await confirmMigrationAndBackup(event.sender, filePath, {
                 reason: 'header',
                 fromVersion: header.versionMin,
                 toVersion: CURRENT_VERSION_MIN
@@ -526,7 +540,11 @@ export function registerIpcHandlers(
 
           const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
           const onSchemaMigrationNeeded: SchemaMigrationGate = ({ fromVersion, toVersion }) =>
-            confirmMigrationAndBackup(filePath, { reason: 'schema', fromVersion, toVersion })
+            confirmMigrationAndBackup(event.sender, filePath, {
+              reason: 'schema',
+              fromVersion,
+              toVersion
+            })
 
           let vaultVersion: Awaited<ReturnType<typeof openVaultWithRecovery>>
           try {
@@ -540,7 +558,7 @@ export function registerIpcHandlers(
             return mapOpenVaultError(e)
           }
 
-          if (vaultVersion !== null && !liveWin()) return relockOrphanedVault()
+          if (vaultVersion !== null && !isLiveSender(event.sender)) return relockOrphanedVault()
 
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
