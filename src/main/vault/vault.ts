@@ -274,7 +274,7 @@ async function authenticateVaultKey(params: {
   if (
     !verifyHeaderHmac(params.metadata.hmacCoveredBytes, params.metadata.storedHmac, candidateKey)
   ) {
-    candidateKey.fill(0)
+    memzero(candidateKey)
     return { valid: false }
   }
 
@@ -286,7 +286,7 @@ async function authenticateVaultKey(params: {
     await dbGet(verifyDb, 'SELECT 1 FROM schema_migrations LIMIT 1')
     return { valid: true, masterKey: candidateKey }
   } catch {
-    candidateKey.fill(0)
+    memzero(candidateKey)
     return { valid: false }
   } finally {
     if (verifyDb) await closeDatabase(verifyDb).catch(() => {})
@@ -463,7 +463,7 @@ export async function openVault(
     return { maj: metadata.versionMaj, min: metadata.versionMin }
   } catch (err) {
     releaseLock()
-    if (auth?.valid) auth.masterKey.fill(0)
+    if (auth?.valid) memzero(auth.masterKey)
     if (database) {
       try {
         await closeDatabase(database)
@@ -675,7 +675,7 @@ async function doChangePassword(
   if (!auth.valid) {
     throw new Error('Current password is incorrect')
   }
-  auth.masterKey.fill(0) // verified; the live masterKey is already in memory
+  memzero(auth.masterKey) // verified; the live masterKey is already in memory
 
   // Step 2 — derive new key with a fresh salt, same tier
   const kfHash = keyFileContents ? hashKeyFile(Buffer.from(keyFileContents)) : undefined
@@ -1005,7 +1005,7 @@ async function doConfigureKeyFile(
   if (!auth.valid) {
     throw new Error('Incorrect password or key file')
   }
-  auth.masterKey.fill(0)
+  memzero(auth.masterKey)
 
   const kfHash = hashKeyFile(Buffer.from(keyFileContents))
   const newSalt = Buffer.from(generateSalt())
@@ -1115,7 +1115,7 @@ async function doRemoveKeyFile(
   if (!auth.valid) {
     throw new Error('Incorrect password or key file')
   }
-  auth.masterKey.fill(0)
+  memzero(auth.masterKey)
 
   const newSalt = Buffer.from(generateSalt())
   const newKdfInput: KdfInputV1 = {
