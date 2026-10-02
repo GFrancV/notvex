@@ -281,6 +281,7 @@ function expectVerifyKeyMemzeroed(
   expect(idx).toBeGreaterThanOrEqual(0)
   const candidateKey = bufferFromSpy.mock.results[idx].value as Buffer
   expect(memzeroSpy.mock.calls.some(([buf]) => buf === candidateKey)).toBe(true)
+  expect(Array.from(candidateKey).every((byte) => byte === 0)).toBe(true)
 }
 
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
@@ -620,7 +621,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 1)
   }, 90_000)
 
-  it('rotateVaultCredentials(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+  it('rotateVaultCredentials(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
     // Unlike #24's newRawKey itself, these two copies are made and
     // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -743,7 +744,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
-  it('changePassword(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+  it('changePassword(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
     // Unlike #24's newRawKey itself, these two copies are made and
     // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -842,7 +843,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
-  it('configureKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+  it('configureKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
     // Unlike #24's newRawKey itself, these two copies are made and
     // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -947,7 +948,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     expectNewRawKeyZeroed(deriveKeySpy, memzeroSpy, 2)
   }, 90_000)
 
-  it('removeKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issue #38)', async () => {
+  it('removeKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
     // Unlike #24's newRawKey itself, these two copies are made and
     // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
