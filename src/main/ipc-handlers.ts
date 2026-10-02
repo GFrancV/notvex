@@ -212,6 +212,11 @@ let migrationResolver: ((result: { confirmed: boolean; createBackup: boolean }) 
   null
 let migrationBackupTimestamp: number | null = null
 
+// The renderer the pending gate was sent to — the only one whose answer counts,
+// so a window that never got the prompt can't confirm or cancel it (#50). One
+// value covers both gates since they run in sequence.
+let gateRequester: WebContents | null = null
+
 type MigrationPayload =
   | { reason: 'header'; fromVersion: number; toVersion: number }
   | { reason: 'schema'; fromVersion: number; toVersion: number }
@@ -229,6 +234,7 @@ async function confirmMigrationAndBackup(
     throw new Error('A migration dialog is already open. Complete or cancel it first.')
   }
   if (!isLiveSender(sender)) return false
+  gateRequester = sender
   const backupTimestamp = Date.now()
   migrationBackupTimestamp = backupTimestamp
   sender.send('vault:migration-required', {
@@ -260,6 +266,7 @@ async function confirmDevBuildWarning(sender: WebContents, filePath: string): Pr
     throw new Error('A dev-build warning dialog is already open. Complete or cancel it first.')
   }
   if (!isLiveSender(sender)) return false
+  gateRequester = sender
   sender.send('vault:dev-build-warning-required', { vaultPath: filePath })
   return new Promise<boolean>((resolve) => {
     devBuildWarningResolver = resolve
@@ -278,6 +285,7 @@ export function cancelPendingConfirmations(): void {
   migrationResolver = null
   devBuildWarningResolver?.(false)
   devBuildWarningResolver = null
+  gateRequester = null
 }
 
 // An unlock that finishes after its window closed (macOS: the window closed
@@ -445,22 +453,26 @@ export function registerIpcHandlers(
     }
   )
 
-  ipcMain.handle('vault:migration-confirmed', (_e, createBackup: boolean) => {
+  // The four gate answers below are no-ops unless they come from gateRequester (#50).
+  ipcMain.handle('vault:migration-confirmed', (event, createBackup: boolean) => {
     try {
+      if (event.sender !== gateRequester) return ok(null)
       // Resolving here only schedules the awaiting migration-flow code's continuation as a
       // microtask — it doesn't run inline. Nulling migrationBackupTimestamp here would race
       // that continuation (which still needs to read it to decide whether to back up), so
       // leave it to that code to clear once it's done reading it.
       migrationResolver?.({ confirmed: true, createBackup })
       migrationResolver = null
+      gateRequester = null
       return ok(null)
     } catch (e) {
       return fail(e)
     }
   })
 
-  ipcMain.handle('vault:migration-cancelled', () => {
+  ipcMain.handle('vault:migration-cancelled', (event) => {
     try {
+      if (event.sender !== gateRequester) return ok(null)
       cancelPendingConfirmations()
       return ok(null)
     } catch (e) {
@@ -468,18 +480,21 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:dev-build-warning-confirmed', () => {
+  ipcMain.handle('vault:dev-build-warning-confirmed', (event) => {
     try {
+      if (event.sender !== gateRequester) return ok(null)
       devBuildWarningResolver?.(true)
       devBuildWarningResolver = null
+      gateRequester = null
       return ok(null)
     } catch (e) {
       return fail(e)
     }
   })
 
-  ipcMain.handle('vault:dev-build-warning-cancelled', () => {
+  ipcMain.handle('vault:dev-build-warning-cancelled', (event) => {
     try {
+      if (event.sender !== gateRequester) return ok(null)
       cancelPendingConfirmations()
       return ok(null)
     } catch (e) {

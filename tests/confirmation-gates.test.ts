@@ -481,4 +481,71 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
       expect(vault.closeVault).toHaveBeenCalled()
     })
   })
+
+  // The other half of #50: a window that never got the prompt must not be able
+  // to answer it either. `other` stands in for any renderer but the requester.
+  describe('gate answers from a renderer other than the requester (issue #50)', () => {
+    let requester: WebContents
+    let other: WebContents
+
+    beforeEach(() => {
+      const a = fakeWindow()
+      ipc.registerIpcHandlers(a.win, () => null)
+      requester = a.win.webContents
+      other = fakeWindow().win.webContents
+    })
+
+    it('ignores vault:migration-confirmed and never backs up', async () => {
+      const { createVaultBackup } = await import('../src/main/vault/backups')
+      const pending = invokeFrom(requester, 'vault:open', '/v.nvx', 'pw')
+      await flush()
+
+      await expect(invokeFrom(other, 'vault:migration-confirmed', true)).resolves.toEqual({
+        success: true,
+        data: null
+      })
+      ipc.cancelPendingConfirmations()
+
+      await expect(pending).resolves.toEqual({ success: false, error: 'MIGRATION_CANCELLED' })
+      expect(createVaultBackup).not.toHaveBeenCalled()
+    })
+
+    it('ignores vault:migration-cancelled, leaving the requester free to confirm', async () => {
+      const { createVaultBackup } = await import('../src/main/vault/backups')
+      const pending = invokeFrom(requester, 'vault:open', '/v.nvx', 'pw')
+      await flush()
+
+      await invokeFrom(other, 'vault:migration-cancelled')
+      await invokeFrom(requester, 'vault:migration-confirmed', true)
+
+      await expect(pending).resolves.toEqual({ success: true, data: 1 })
+      expect(createVaultBackup).toHaveBeenCalledWith('/v.nvx', 'schema', 1, 2)
+    })
+
+    it('ignores vault:dev-build-warning-confirmed', async () => {
+      vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+      const pending = invokeFrom(requester, 'vault:open', '/v.nvx', 'pw')
+      await flush()
+
+      await invokeFrom(other, 'vault:dev-build-warning-confirmed')
+      ipc.cancelPendingConfirmations()
+
+      await expect(pending).resolves.toEqual({
+        success: false,
+        error: 'DEV_BUILD_WARNING_CANCELLED'
+      })
+    })
+
+    it('ignores vault:dev-build-warning-cancelled, leaving the requester free to confirm', async () => {
+      vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(true)
+      vi.mocked(vault.openVault).mockResolvedValueOnce({ maj: 1, min: 0 })
+      const pending = invokeFrom(requester, 'vault:open', '/v.nvx', 'pw')
+      await flush()
+
+      await invokeFrom(other, 'vault:dev-build-warning-cancelled')
+      await invokeFrom(requester, 'vault:dev-build-warning-confirmed')
+
+      await expect(pending).resolves.toEqual({ success: true, data: { maj: 1, min: 0 } })
+    })
+  })
 })
