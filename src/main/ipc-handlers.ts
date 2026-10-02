@@ -213,8 +213,9 @@ let migrationResolver: ((result: { confirmed: boolean; createBackup: boolean }) 
 let migrationBackupTimestamp: number | null = null
 
 // The renderer the pending gate was sent to — the only one whose answer counts,
-// so a window that never got the prompt can't confirm or cancel it (#50). One
-// value covers both gates since they run in sequence.
+// so a window that never got the prompt can't confirm or cancel it (#50). Never
+// reset: it is only read while a resolver is pending, and every gate assigns it
+// before parking, so a stale value is always overwritten first.
 let gateRequester: WebContents | null = null
 
 type MigrationPayload =
@@ -285,7 +286,6 @@ export function cancelPendingConfirmations(): void {
   migrationResolver = null
   devBuildWarningResolver?.(false)
   devBuildWarningResolver = null
-  gateRequester = null
 }
 
 // An unlock that finishes after its window closed (macOS: the window closed
@@ -463,7 +463,6 @@ export function registerIpcHandlers(
       // leave it to that code to clear once it's done reading it.
       migrationResolver?.({ confirmed: true, createBackup })
       migrationResolver = null
-      gateRequester = null
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -485,7 +484,6 @@ export function registerIpcHandlers(
       if (event.sender !== gateRequester) return ok(null)
       devBuildWarningResolver?.(true)
       devBuildWarningResolver = null
-      gateRequester = null
       return ok(null)
     } catch (e) {
       return fail(e)
