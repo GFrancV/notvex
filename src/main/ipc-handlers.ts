@@ -180,6 +180,15 @@ interface ThrottleState {
 const unlockThrottle: ThrottleState = { failedAttempts: 0, lockedUntil: 0 }
 let isUnlocking = false
 
+// Bumped when the renderer is replaced while its window stays alive (reload,
+// crash). An unlock started under an older renderer has nobody left to show
+// the vault to, and isLiveSender() can't tell: the webContents is the same (#51).
+let rendererGeneration = 0
+
+export function markRendererReplaced(): void {
+  rendererGeneration++
+}
+
 function throttleDelaySeconds(attempts: number): number {
   if (attempts <= 3) return 0
   if (attempts === 4) return 5
@@ -371,6 +380,7 @@ export function registerIpcHandlers(
       const throttleErr = checkAndSetThrottle()
       if (throttleErr) return throttleErr
       isUnlocking = true
+      const generation = rendererGeneration
       try {
         // Pre-check container header before authenticating to surface format errors early
         let fileBytes: Buffer
@@ -432,7 +442,12 @@ export function registerIpcHandlers(
           return mapOpenVaultError(e)
         }
 
-        if (vaultVersion !== null && !isLiveSender(event.sender)) return relockOrphanedVault()
+        if (
+          vaultVersion !== null &&
+          (!isLiveSender(event.sender) || generation !== rendererGeneration)
+        ) {
+          return relockOrphanedVault()
+        }
 
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
@@ -521,6 +536,7 @@ export function registerIpcHandlers(
         const throttleErr = checkAndSetThrottle()
         if (throttleErr) return throttleErr
         isUnlocking = true
+        const generation = rendererGeneration
         try {
           let fileBytes: Buffer
           try {
@@ -571,7 +587,12 @@ export function registerIpcHandlers(
             return mapOpenVaultError(e)
           }
 
-          if (vaultVersion !== null && !isLiveSender(event.sender)) return relockOrphanedVault()
+          if (
+            vaultVersion !== null &&
+            (!isLiveSender(event.sender) || generation !== rendererGeneration)
+          ) {
+            return relockOrphanedVault()
+          }
 
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0

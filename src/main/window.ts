@@ -5,6 +5,7 @@ import {
   cancelPendingConfirmations,
   closeVaultDrained,
   lockVaultAndNotify,
+  markRendererReplaced,
   registerIpcHandlers
 } from './ipc-handlers'
 import { getPref } from './prefs'
@@ -111,9 +112,13 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
   })
 
   // A reloaded or crashed renderer can never answer a prompt sent to the old
-  // one, so settle it like a closed window would or unlock stays wedged (#51).
+  // one, so settle it like a closed window would or unlock stays wedged. The
+  // new renderer starts with no vault UI, so drop the key too — null skips the
+  // drain, since there is no renderer left with pending edits (#51).
   const onRendererGone = (): void => {
+    markRendererReplaced()
     cancelPendingConfirmations()
+    void closeVaultDrained(null).catch(() => undefined)
   }
   win.webContents.on('render-process-gone', onRendererGone)
   win.webContents.on('did-start-navigation', (details) => {

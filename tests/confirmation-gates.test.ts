@@ -356,6 +356,49 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
   })
 
+  // A reload or renderer crash keeps the window alive, so liveWin() can't tell
+  // — but the unlock that finishes afterwards has no renderer left to show it
+  // to, and the reloaded one would boot straight into the notes (#51).
+  it('re-locks a vault whose vault:open finished after the renderer was replaced', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    vi.mocked(vault.openVault).mockImplementationOnce(async () => {
+      ipc.markRendererReplaced()
+      return { maj: 1, min: 0 }
+    })
+
+    await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+      success: false,
+      error: 'No window is open'
+    })
+    expect(vault.closeVault).toHaveBeenCalled()
+    expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
+  })
+
+  it('re-locks a vault whose vault:open-with-recovery finished after the renderer was replaced', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    vi.mocked(vault.openVaultWithRecovery).mockImplementationOnce(async () => {
+      ipc.markRendererReplaced()
+      return { maj: 1, min: 0 }
+    })
+
+    await expect(invoke('vault:open-with-recovery', '/v.nvx', 'words')).resolves.toEqual({
+      success: false,
+      error: 'No window is open'
+    })
+    expect(vault.closeVault).toHaveBeenCalled()
+    expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
+  })
+
+  // Control: only a replacement *during* the unlock counts, not an earlier one.
+  it('lets an unlock started from the reloaded renderer open normally', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    ipc.markRendererReplaced()
+    vi.mocked(vault.openVault).mockResolvedValueOnce({ maj: 1, min: 0 })
+
+    await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toMatchObject({ success: true })
+    expect(vault.closeVault).not.toHaveBeenCalled()
+  })
+
   it('auto-lock still closes the vault while no window is alive', async () => {
     vi.useFakeTimers()
     const only = fakeWindow()
