@@ -121,9 +121,10 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     void closeVaultDrained(null).catch(() => undefined)
   }
   win.webContents.on('render-process-gone', onRendererGone)
-  win.webContents.on('did-start-navigation', (details) => {
-    if (details.isMainFrame && !details.isSameDocument) onRendererGone()
-  })
+  // did-navigate, not did-start-navigation: the latter fires before
+  // will-navigate can block the navigation, so the old page may survive it.
+  // did-navigate only fires once a main-frame, cross-document load commits.
+  win.webContents.on('did-navigate', onRendererGone)
 
   win.on('closed', () => {
     // A destroyed window can never answer a pending migration / dev-build

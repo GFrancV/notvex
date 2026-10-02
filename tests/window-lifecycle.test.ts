@@ -101,11 +101,6 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
     ;({ createWindow } = await import('../src/main/window'))
   })
 
-  const navigation = (isMainFrame: boolean, isSameDocument: boolean): object => ({
-    isMainFrame,
-    isSameDocument
-  })
-
   it('settles the pending prompt and closes the vault when the renderer crashes', async () => {
     const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
       await import('../src/main/ipc-handlers')
@@ -118,25 +113,27 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
     expect(markRendererReplaced).toHaveBeenCalledTimes(1)
   })
 
-  it('settles the pending prompt and closes the vault on a main-frame reload', async () => {
+  it('settles the pending prompt and closes the vault once a reload commits', async () => {
     const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
       await import('../src/main/ipc-handlers')
     const win = createWindow(() => null)
 
-    win.webContents.emit('did-start-navigation', navigation(true, false))
+    win.webContents.emit('did-navigate')
 
     expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
     expect(closeVaultDrained).toHaveBeenCalledExactlyOnceWith(null)
     expect(markRendererReplaced).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores same-document and subframe navigations', async () => {
+  // did-start-navigation fires before will-navigate can block the navigation
+  // (e.g. a plain external <a href>), so the old page may well survive it —
+  // closing the vault there would drop unsaved edits under a live UI.
+  it('leaves the vault alone when a navigation only starts', async () => {
     const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
       await import('../src/main/ipc-handlers')
     const win = createWindow(() => null)
 
-    win.webContents.emit('did-start-navigation', navigation(true, true))
-    win.webContents.emit('did-start-navigation', navigation(false, false))
+    win.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
 
     expect(cancelPendingConfirmations).not.toHaveBeenCalled()
     expect(closeVaultDrained).not.toHaveBeenCalled()
