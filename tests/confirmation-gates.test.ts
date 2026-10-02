@@ -53,6 +53,8 @@ vi.mock('../src/main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 
 // Mirrors runMigrations: a declined schema gate surfaces as SCHEMA_MIGRATION_CANCELLED.
 vi.mock('../src/main/vault/vault', () => ({
+  getVaultPath: vi.fn(() => null),
+  withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn()),
   isVaultOpen: vi.fn(() => false),
   closeVault: vi.fn(async () => undefined),
   openVaultWithRecovery: vi.fn(async () => 1),
@@ -354,6 +356,122 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     })
     expect(vault.closeVault).toHaveBeenCalled()
     expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
+  })
+
+  // A reload or renderer crash keeps the window alive, so liveWin() can't tell
+  // — but the unlock that finishes afterwards has no renderer left to show it
+  // to, and the reloaded one would boot straight into the notes (#51).
+  it('re-locks a vault whose vault:open finished after the renderer was replaced', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    vi.mocked(vault.openVault).mockImplementationOnce(async () => {
+      ipc.markRendererReplaced()
+      return { maj: 1, min: 0 }
+    })
+
+    await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toEqual({
+      success: false,
+      error: 'No window is open'
+    })
+    expect(vault.closeVault).toHaveBeenCalled()
+    expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
+  })
+
+  it('re-locks a vault whose vault:open-with-recovery finished after the renderer was replaced', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    vi.mocked(vault.openVaultWithRecovery).mockImplementationOnce(async () => {
+      ipc.markRendererReplaced()
+      return { maj: 1, min: 0 }
+    })
+
+    await expect(invoke('vault:open-with-recovery', '/v.nvx', 'words')).resolves.toEqual({
+      success: false,
+      error: 'No window is open'
+    })
+    expect(vault.closeVault).toHaveBeenCalled()
+    expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
+  })
+
+  // The relock's close packs the whole container (seconds on a large vault).
+  // Until it is done, a retry from the reloaded page must still be refused,
+  // or it races the close for the vault's file lock.
+  it('keeps the unlock in progress until the orphaned vault is closed again', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    vi.mocked(vault.openVault).mockImplementationOnce(async () => {
+      ipc.markRendererReplaced()
+      return { maj: 1, min: 0 }
+    })
+    let releaseClose = (): void => undefined
+    vi.mocked(vault.closeVault).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseClose = resolve))
+    )
+
+    const orphaned = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    // The retry goes through recovery: its mock opens straight away, with no
+    // gate to park on, so a retry that isn't refused fails here, not by timeout.
+    await expect(invoke('vault:open-with-recovery', '/v.nvx', 'words')).resolves.toEqual({
+      success: false,
+      error: 'Unlock already in progress'
+    })
+    releaseClose()
+    await expect(orphaned).resolves.toEqual({ success: false, error: 'No window is open' })
+  })
+
+  // Only a vault that actually opened is orphaned: a wrong password must still
+  // count toward the throttle, or reloading mid-attempt would bypass it.
+  it('counts a wrong password toward the throttle even if the renderer was replaced', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    const wrongPasswordDuringReload = async (): Promise<null> => {
+      ipc.markRendererReplaced()
+      return null
+    }
+
+    for (let i = 0; i < 4; i++) {
+      vi.mocked(vault.openVault).mockImplementationOnce(wrongPasswordDuringReload)
+      await expect(invoke('vault:open', '/v.nvx', 'bad')).resolves.toEqual({
+        success: true,
+        data: null
+      })
+    }
+
+    expect(vault.closeVault).not.toHaveBeenCalled()
+    await expect(invoke('vault:open', '/v.nvx', 'bad')).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/Too many failed attempts/)
+    })
+  })
+
+  // Control: only a replacement *during* the unlock counts, not an earlier one.
+  it('lets an unlock started from the reloaded renderer open normally', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    ipc.markRendererReplaced()
+    vi.mocked(vault.openVault).mockResolvedValueOnce({ maj: 1, min: 0 })
+
+    await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toMatchObject({ success: true })
+    expect(vault.closeVault).not.toHaveBeenCalled()
+  })
+
+  // closeVault() packs the whole container before clearing the vault path, so
+  // a renderer reloaded mid-close would read "open" and boot into the notes
+  // over a vault about to close. Reading through the vault lock queues the
+  // status behind any in-flight close instead (#51).
+  it('vault:status waits for an in-flight close before reading the vault path', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    let releaseClose = (): void => undefined
+    const closing = new Promise<void>((resolve) => (releaseClose = resolve))
+    vi.mocked(vault.withVaultLock).mockImplementationOnce((fn) => closing.then(fn))
+    vi.mocked(vault.getVaultPath).mockReturnValue('/v.nvx')
+
+    let settled = false
+    const status = invoke('vault:status').then((res) => ((settled = true), res))
+    await flush()
+    expect(settled).toBe(false)
+
+    vi.mocked(vault.getVaultPath).mockReturnValue(null)
+    releaseClose()
+
+    await expect(status).resolves.toEqual({ success: true, data: { isOpen: false } })
   })
 
   it('auto-lock still closes the vault while no window is alive', async () => {

@@ -33,6 +33,7 @@ vi.mock('../src/main/ipc-handlers', () => ({
   cancelPendingConfirmations: vi.fn(),
   closeVaultDrained: vi.fn(async () => undefined),
   lockVaultAndNotify: vi.fn(async () => undefined),
+  markRendererReplaced: vi.fn(),
   registerIpcHandlers: vi.fn()
 }))
 
@@ -86,5 +87,56 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
     createWindow(() => null)
 
     for (const event of POWER_EVENTS) expect(powerMonitor.listenerCount(event)).toBe(1)
+  })
+})
+
+// A reload or renderer crash leaves the BrowserWindow alive, so 'closed' never
+// fires, yet the prompt was sent to a renderer that no longer exists — and the
+// new renderer starts with no vault UI, so the key must not stay in memory (#51).
+describe('createWindow: renderer reload / crash (issue #51)', () => {
+  let createWindow: typeof import('../src/main/window').createWindow
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    ;({ createWindow } = await import('../src/main/window'))
+  })
+
+  it('settles the pending prompt and closes the vault when the renderer crashes', async () => {
+    const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
+      await import('../src/main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.webContents.emit('render-process-gone')
+
+    expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
+    expect(closeVaultDrained).toHaveBeenCalledExactlyOnceWith(null)
+    expect(markRendererReplaced).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles the pending prompt and closes the vault once a reload commits', async () => {
+    const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
+      await import('../src/main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.webContents.emit('did-navigate')
+
+    expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
+    expect(closeVaultDrained).toHaveBeenCalledExactlyOnceWith(null)
+    expect(markRendererReplaced).toHaveBeenCalledTimes(1)
+  })
+
+  // did-start-navigation fires before will-navigate can block the navigation
+  // (e.g. a plain external <a href>), so the old page may well survive it —
+  // closing the vault there would drop unsaved edits under a live UI.
+  it('leaves the vault alone when a navigation only starts', async () => {
+    const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
+      await import('../src/main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+
+    expect(cancelPendingConfirmations).not.toHaveBeenCalled()
+    expect(closeVaultDrained).not.toHaveBeenCalled()
+    expect(markRendererReplaced).not.toHaveBeenCalled()
   })
 })

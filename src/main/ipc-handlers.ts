@@ -180,6 +180,15 @@ interface ThrottleState {
 const unlockThrottle: ThrottleState = { failedAttempts: 0, lockedUntil: 0 }
 let isUnlocking = false
 
+// Bumped when the renderer is replaced while its window stays alive (reload,
+// crash). An unlock started under an older renderer has nobody left to show
+// the vault to, and isLiveSender() can't tell: the webContents is the same (#51).
+let rendererGeneration = 0
+
+export function markRendererReplaced(): void {
+  rendererGeneration++
+}
+
 function throttleDelaySeconds(attempts: number): number {
   if (attempts <= 3) return 0
   if (attempts === 4) return 5
@@ -293,7 +302,13 @@ export function cancelPendingConfirmations(): void {
 // stopped auto-lock) must not leave an unlocked vault with no UI — the next
 // `activate` window would open straight into the notes (#36). The same holds
 // when that `activate` window already exists: it never asked for the unlock and
-// is sitting on its own unlock view, out of sync with an open vault (#50).
+// is sitting on its own unlock view, out of sync with an open vault (#50). And
+// when the renderer was reloaded or crashed mid-unlock: the window survives, but
+// the page that asked is gone and the new one would boot into the notes (#51).
+function isUnlockOrphaned(sender: WebContents, generation: number): boolean {
+  return !isLiveSender(sender) || generation !== rendererGeneration
+}
+
 async function relockOrphanedVault(): Promise<IpcResult<never>> {
   await closeVault()
   return fail('No window is open')
@@ -371,6 +386,7 @@ export function registerIpcHandlers(
       const throttleErr = checkAndSetThrottle()
       if (throttleErr) return throttleErr
       isUnlocking = true
+      const generation = rendererGeneration
       try {
         // Pre-check container header before authenticating to surface format errors early
         let fileBytes: Buffer
@@ -432,7 +448,11 @@ export function registerIpcHandlers(
           return mapOpenVaultError(e)
         }
 
-        if (vaultVersion !== null && !isLiveSender(event.sender)) return relockOrphanedVault()
+        // await, not return: the finally that clears isUnlocking must wait for
+        // the close, or a retry from the reloaded page races it (#51).
+        if (vaultVersion !== null && isUnlockOrphaned(event.sender, generation)) {
+          return await relockOrphanedVault()
+        }
 
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
@@ -521,6 +541,7 @@ export function registerIpcHandlers(
         const throttleErr = checkAndSetThrottle()
         if (throttleErr) return throttleErr
         isUnlocking = true
+        const generation = rendererGeneration
         try {
           let fileBytes: Buffer
           try {
@@ -571,7 +592,9 @@ export function registerIpcHandlers(
             return mapOpenVaultError(e)
           }
 
-          if (vaultVersion !== null && !isLiveSender(event.sender)) return relockOrphanedVault()
+          if (vaultVersion !== null && isUnlockOrphaned(event.sender, generation)) {
+            return await relockOrphanedVault()
+          }
 
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
@@ -797,9 +820,12 @@ export function registerIpcHandlers(
     }
   )
 
-  ipcMain.handle('vault:status', () => {
+  ipcMain.handle('vault:status', async () => {
     try {
-      const path = getVaultPath()
+      // closeVault() packs the container before it clears the path, so queue
+      // behind any in-flight close: a renderer reloaded mid-close must not
+      // read "open" and boot into the notes over a closing vault (#51).
+      const path = await withVaultLock(async () => getVaultPath())
       return ok(
         path !== null ? { isOpen: true as const, vaultPath: path } : { isOpen: false as const }
       )
