@@ -256,6 +256,18 @@ function expectNewRawKeyCopiesZeroed(
   }
 }
 
+// Issue #40: on the success path newRawKey is zeroed twice — once by
+// storeKey() inside commitRotatedContainer(), once by the outer finally —
+// proving the finally's memzero() is a harmless no-op there rather than
+// missing or throwing.
+function expectNewRawKeyZeroedTwice(
+  memzeroSpy: Mock<typeof memzero>,
+  newRawKeyRef: Uint8Array
+): void {
+  expect(memzeroSpy.mock.calls.filter(([buf]) => buf === newRawKeyRef)).toHaveLength(2)
+  expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
+}
+
 describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   let vaultDir: string | undefined
 
@@ -603,7 +615,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await createVault(vaultPath, originalPassword)
 
     const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
     const bufferFromSpy = vi.spyOn(Buffer, 'from')
 
     try {
@@ -615,6 +629,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       // only deriveKey() call is the one that produces newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
     } finally {
       bufferFromSpy.mockRestore()
     }
@@ -723,7 +738,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await createVault(vaultPath, originalPassword)
 
     const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
     const bufferFromSpy = vi.spyOn(Buffer, 'from')
 
     try {
@@ -734,6 +751,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
     } finally {
       bufferFromSpy.mockRestore()
     }
@@ -818,7 +836,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await createVault(vaultPath, originalPassword)
 
     const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
     const bufferFromSpy = vi.spyOn(Buffer, 'from')
 
     const keyFileContents = randomBytes(32)
@@ -830,6 +850,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
     } finally {
       bufferFromSpy.mockRestore()
     }
@@ -922,7 +943,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await configureKeyFile(originalPassword, keyFileContents)
 
     const deriveKeySpy = vi.mocked(deriveKey)
+    const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
+    memzeroSpy.mockClear()
     const bufferFromSpy = vi.spyOn(Buffer, 'from')
 
     try {
@@ -933,6 +956,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
     } finally {
       bufferFromSpy.mockRestore()
     }
