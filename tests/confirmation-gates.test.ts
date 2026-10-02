@@ -53,6 +53,8 @@ vi.mock('../src/main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 
 // Mirrors runMigrations: a declined schema gate surfaces as SCHEMA_MIGRATION_CANCELLED.
 vi.mock('../src/main/vault/vault', () => ({
+  getVaultPath: vi.fn(() => null),
+  withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn()),
   isVaultOpen: vi.fn(() => false),
   closeVault: vi.fn(async () => undefined),
   openVaultWithRecovery: vi.fn(async () => 1),
@@ -397,6 +399,28 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
     await expect(invoke('vault:open', '/v.nvx', 'pw')).resolves.toMatchObject({ success: true })
     expect(vault.closeVault).not.toHaveBeenCalled()
+  })
+
+  // closeVault() packs the whole container before clearing the vault path, so
+  // a renderer reloaded mid-close would read "open" and boot into the notes
+  // over a vault about to close. Reading through the vault lock queues the
+  // status behind any in-flight close instead (#51).
+  it('vault:status waits for an in-flight close before reading the vault path', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    let releaseClose = (): void => undefined
+    const closing = new Promise<void>((resolve) => (releaseClose = resolve))
+    vi.mocked(vault.withVaultLock).mockImplementationOnce((fn) => closing.then(fn))
+    vi.mocked(vault.getVaultPath).mockReturnValue('/v.nvx')
+
+    let settled = false
+    const status = invoke('vault:status').then((res) => ((settled = true), res))
+    await flush()
+    expect(settled).toBe(false)
+
+    vi.mocked(vault.getVaultPath).mockReturnValue(null)
+    releaseClose()
+
+    await expect(status).resolves.toEqual({ success: true, data: { isOpen: false } })
   })
 
   it('auto-lock still closes the vault while no window is alive', async () => {

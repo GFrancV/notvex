@@ -302,7 +302,9 @@ export function cancelPendingConfirmations(): void {
 // stopped auto-lock) must not leave an unlocked vault with no UI — the next
 // `activate` window would open straight into the notes (#36). The same holds
 // when that `activate` window already exists: it never asked for the unlock and
-// is sitting on its own unlock view, out of sync with an open vault (#50).
+// is sitting on its own unlock view, out of sync with an open vault (#50). And
+// when the renderer was reloaded or crashed mid-unlock: the window survives, but
+// the page that asked is gone and the new one would boot into the notes (#51).
 async function relockOrphanedVault(): Promise<IpcResult<never>> {
   await closeVault()
   return fail('No window is open')
@@ -818,9 +820,12 @@ export function registerIpcHandlers(
     }
   )
 
-  ipcMain.handle('vault:status', () => {
+  ipcMain.handle('vault:status', async () => {
     try {
-      const path = getVaultPath()
+      // closeVault() packs the container before it clears the path, so queue
+      // behind any in-flight close: a renderer reloaded mid-close must not
+      // read "open" and boot into the notes over a closing vault (#51).
+      const path = await withVaultLock(async () => getVaultPath())
       return ok(
         path !== null ? { isOpen: true as const, vaultPath: path } : { isOpen: false as const }
       )
