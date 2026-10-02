@@ -448,8 +448,10 @@ export function registerIpcHandlers(
           return mapOpenVaultError(e)
         }
 
+        // await, not return: the finally that clears isUnlocking must wait for
+        // the close, or a retry from the reloaded page races it (#51).
         if (vaultVersion !== null && isUnlockOrphaned(event.sender, generation)) {
-          return relockOrphanedVault()
+          return await relockOrphanedVault()
         }
 
         if (vaultVersion !== null) {
@@ -591,7 +593,7 @@ export function registerIpcHandlers(
           }
 
           if (vaultVersion !== null && isUnlockOrphaned(event.sender, generation)) {
-            return relockOrphanedVault()
+            return await relockOrphanedVault()
           }
 
           if (vaultVersion !== null) {

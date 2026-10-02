@@ -391,6 +391,33 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     expect(prefs.recordVaultUsed).not.toHaveBeenCalled()
   })
 
+  // The relock's close packs the whole container (seconds on a large vault).
+  // Until it is done, a retry from the reloaded page must still be refused,
+  // or it races the close for the vault's file lock.
+  it('keeps the unlock in progress until the orphaned vault is closed again', async () => {
+    ipc.registerIpcHandlers(fakeWindow().win, () => null)
+    vi.mocked(vault.openVault).mockImplementationOnce(async () => {
+      ipc.markRendererReplaced()
+      return { maj: 1, min: 0 }
+    })
+    let releaseClose = (): void => undefined
+    vi.mocked(vault.closeVault).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseClose = resolve))
+    )
+
+    const orphaned = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    // The retry goes through recovery: its mock opens straight away, with no
+    // gate to park on, so a retry that isn't refused fails here, not by timeout.
+    await expect(invoke('vault:open-with-recovery', '/v.nvx', 'words')).resolves.toEqual({
+      success: false,
+      error: 'Unlock already in progress'
+    })
+    releaseClose()
+    await expect(orphaned).resolves.toEqual({ success: false, error: 'No window is open' })
+  })
+
   // Control: only a replacement *during* the unlock counts, not an earlier one.
   it('lets an unlock started from the reloaded renderer open normally', async () => {
     ipc.registerIpcHandlers(fakeWindow().win, () => null)
