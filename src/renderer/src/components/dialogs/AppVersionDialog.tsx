@@ -15,6 +15,22 @@ interface Props {
   onClose: () => void
 }
 
+// A plain <a href> would navigate the window, which main blocks (#60).
+function ExternalLink({ url, children }: { url: string; children: ReactNode }): ReactNode {
+  return (
+    <Button
+      variant="link"
+      onClick={(e) => {
+        e.preventDefault()
+        void notvex.shell.openExternal(url)
+      }}
+      className="text-muted-foreground hover:text-foreground h-auto p-0 font-normal underline"
+    >
+      {children}
+    </Button>
+  )
+}
+
 export function AppVersionDialog({ open, onClose }: Props): ReactNode {
   const isDev = useIsDev()
   const [appVersion, setAppVersion] = useState<string | null>(null)
@@ -83,23 +99,15 @@ export function AppVersionDialog({ open, onClose }: Props): ReactNode {
           </section>
           <ul className="text-muted-foreground mt-8 flex items-center justify-center gap-1 text-sm">
             <li>
-              <a
-                href="https://github.com/GFrancV/notvex"
-                className="hover:text-foreground underline"
-              >
-                Docs
-              </a>
+              <ExternalLink url="https://github.com/GFrancV/notvex">Docs</ExternalLink>
             </li>
             <li>
               <DotIcon className="size-6" />
             </li>
             <li>
-              <a
-                href="https://github.com/GFrancV/notvex/issues/new"
-                className="hover:text-foreground underline"
-              >
+              <ExternalLink url="https://github.com/GFrancV/notvex/issues/new">
                 Report Issue
-              </a>
+              </ExternalLink>
             </li>
           </ul>
         </div>
