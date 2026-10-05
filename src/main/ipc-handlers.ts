@@ -39,6 +39,7 @@ import {
   recordVaultUsed,
   setPref
 } from './prefs'
+import { isSafeExternalUrl } from './url-guard'
 import {
   createVaultBackup,
   ensureVaultBackupDir,
@@ -1108,7 +1109,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle('shell:open-external', async (_e, url: string) => {
     try {
-      if (!/^https?:\/\//.test(url)) return fail('URL must start with http:// or https://')
+      if (!isSafeExternalUrl(url)) return fail('URL must start with http:// or https://')
       await shell.openExternal(url)
       return ok(null)
     } catch (e) {

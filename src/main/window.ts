@@ -10,6 +10,7 @@ import {
 } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
+import { isSafeExternalUrl } from './url-guard'
 import { isVaultOpen } from './vault/vault'
 
 const isMac = process.platform === 'darwin'
@@ -58,9 +59,9 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     }
   })
 
-  // Open external links in system browser, not in-app
+  // Open external links in system browser, not in-app — http(s) only (#56)
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
 
