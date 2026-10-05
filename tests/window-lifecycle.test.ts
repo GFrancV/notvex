@@ -141,6 +141,34 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
   })
 })
 
+// The renderer is a SPA and never navigates, and any page the window loads
+// gets the preload's window.notvex. A prefix filter let through
+// http://localhost.attacker.example and every file:// (a dropped .html file
+// navigates there by default), so every navigation is blocked (#57).
+describe('createWindow: navigation (issue #57)', () => {
+  let createWindow: typeof import('../src/main/window').createWindow
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    ;({ createWindow } = await import('../src/main/window'))
+  })
+
+  it.each([
+    'file:///C:/Users/me/Downloads/evil.html',
+    'http://localhost.attacker.example/',
+    'http://localhost:5173/',
+    'https://github.com/GFrancV/notvex'
+  ])('blocks navigation to %s', (url) => {
+    const win = createWindow(() => null)
+    const event = { preventDefault: vi.fn() }
+
+    win.webContents.emit('will-navigate', event, url)
+    win.emit('closed')
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+  })
+})
+
 // target="_blank" links (note live preview, release notes) and window.open
 // reach the OS through setWindowOpenHandler, so it must apply the same scheme
 // filter as shell:open-external — file:, ms-msdt:, search-ms: etc. are the

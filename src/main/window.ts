@@ -52,12 +52,11 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     win.on('page-title-updated', (event) => event.preventDefault())
   }
 
-  // Block navigation away from the app
-  win.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://localhost') && !url.startsWith('file://')) {
-      event.preventDefault()
-    }
-  })
+  // The renderer is a SPA and never navigates; any page this window loads
+  // would get the preload's window.notvex, so block every navigation —
+  // including a dropped file, which navigates to file:// by default (#57).
+  // Reloads (Vite HMR, Ctrl+R) don't fire will-navigate.
+  win.webContents.on('will-navigate', (event) => event.preventDefault())
 
   // Open external links in system browser, not in-app — http(s) only (#56)
   win.webContents.setWindowOpenHandler(({ url }) => {
