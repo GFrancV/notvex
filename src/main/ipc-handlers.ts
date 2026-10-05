@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import type { BrowserWindow, WebContents } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent, WebContents } from 'electron'
 import { app, dialog, ipcMain, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
@@ -39,7 +39,7 @@ import {
   recordVaultUsed,
   setPref
 } from './prefs'
-import { isSafeExternalUrl } from './url-guard'
+import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
 import {
   createVaultBackup,
   ensureVaultBackupDir,
@@ -78,6 +78,18 @@ function ok<T>(data: T): IpcResult<T> {
 
 function fail(error: unknown): IpcResult<never> {
   return { success: false, error: error instanceof Error ? error.message : String(error) }
+}
+
+// Every handler registers through this so a call from any frame other than the
+// app's own page is refused before it runs (#57). ipcMain.handle has no
+// middleware, and a guard line per handler is easy to forget on a new channel.
+function handle(
+  channel: string,
+  fn: (event: IpcMainInvokeEvent, ...args: never[]) => unknown
+): void {
+  ipcMain.handle(channel, (event, ...args: unknown[]) =>
+    isTrustedFrame(event) ? fn(event, ...(args as never[])) : fail('Untrusted sender')
+  )
 }
 
 function requireVault(): void {
@@ -353,7 +365,7 @@ export function registerIpcHandlers(
 
   // ── Vault ──────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('vault:get-pending-file', () => {
+  handle('vault:get-pending-file', () => {
     try {
       return ok(takePendingFilePath())
     } catch (e) {
@@ -361,7 +373,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:has-vault', (_e, filePath?: string) => {
+  handle('vault:has-vault', (_e, filePath?: string) => {
     try {
       const path = filePath ?? getCurrentVaultPath()
       return ok(path ? existsSync(path) && isValidNotvexFile(path) : false)
@@ -370,7 +382,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:create', async (_e, filePath: string, password: string) => {
+  handle('vault:create', async (_e, filePath: string, password: string) => {
     try {
       const result = await createVault(filePath, password, !app.isPackaged)
       recordVaultUsed(filePath)
@@ -381,7 +393,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(
+  handle(
     'vault:open',
     async (event, filePath: string, password: string, keyFileContents?: Uint8Array) => {
       const throttleErr = checkAndSetThrottle()
@@ -475,7 +487,7 @@ export function registerIpcHandlers(
   )
 
   // The four gate answers below are no-ops unless they come from gateRequester (#50).
-  ipcMain.handle('vault:migration-confirmed', (event, createBackup: boolean) => {
+  handle('vault:migration-confirmed', (event, createBackup: boolean) => {
     try {
       if (event.sender !== gateRequester) return ok(null)
       // Resolving here only schedules the awaiting migration-flow code's continuation as a
@@ -490,7 +502,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:migration-cancelled', (event) => {
+  handle('vault:migration-cancelled', (event) => {
     try {
       if (event.sender !== gateRequester) return ok(null)
       cancelPendingConfirmations()
@@ -500,7 +512,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:dev-build-warning-confirmed', (event) => {
+  handle('vault:dev-build-warning-confirmed', (event) => {
     try {
       if (event.sender !== gateRequester) return ok(null)
       devBuildWarningResolver?.(true)
@@ -511,7 +523,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:dev-build-warning-cancelled', (event) => {
+  handle('vault:dev-build-warning-cancelled', (event) => {
     try {
       if (event.sender !== gateRequester) return ok(null)
       cancelPendingConfirmations()
@@ -521,7 +533,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:unlock-throttle-status', () => {
+  handle('vault:unlock-throttle-status', () => {
     try {
       const now = Date.now()
       const waitMs = Math.max(0, unlockThrottle.lockedUntil - now)
@@ -535,7 +547,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(
+  handle(
     'vault:open-with-recovery',
     async (event, filePath: string, mnemonic: string, keyFileContents?: Uint8Array) => {
       try {
@@ -617,7 +629,7 @@ export function registerIpcHandlers(
     }
   )
 
-  ipcMain.handle(
+  handle(
     'vault:change-password',
     async (_e, currentPassword: string, newPassword: string, keyFileContents?: Uint8Array) => {
       try {
@@ -633,7 +645,7 @@ export function registerIpcHandlers(
     }
   )
 
-  ipcMain.handle('vault:rotate-credentials', async (_e, newPassword: string) => {
+  handle('vault:rotate-credentials', async (_e, newPassword: string) => {
     try {
       requireVault()
       touchActivity()
@@ -645,7 +657,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:confirm-recovery-saved', () => {
+  handle('vault:confirm-recovery-saved', () => {
     try {
       return ok(null)
     } catch (e) {
@@ -653,7 +665,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:close', async () => {
+  handle('vault:close', async () => {
     try {
       await closeVaultDrained(liveWin())
       return ok(null)
@@ -662,7 +674,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:switch', async (_e, filePath: string) => {
+  handle('vault:switch', async (_e, filePath: string) => {
     try {
       // Validate before closeVaultDrained() so a bad target never locks the current vault
       if (!existsSync(filePath)) {
@@ -679,7 +691,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:clear-decrypted', () => {
+  handle('vault:clear-decrypted', () => {
     try {
       // Main process has no accumulated plaintext — the belt-and-suspenders signal is enough.
       return ok(null)
@@ -688,7 +700,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:get-has-key-file', () => {
+  handle('vault:get-has-key-file', () => {
     try {
       requireVault()
       return ok(getHasKeyFileFromOpenVault())
@@ -697,7 +709,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:save-copy-as', async () => {
+  handle('vault:save-copy-as', async () => {
     try {
       const vaultPath = getVaultPath()
       if (!vaultPath) return fail('No vault open')
@@ -735,7 +747,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:open-backups-folder', async () => {
+  handle('vault:open-backups-folder', async () => {
     try {
       const filePath = getVaultPath()
       if (!filePath) return fail('No vault is currently open.')
@@ -747,7 +759,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:generate-key-file', async () => {
+  handle('vault:generate-key-file', async () => {
     try {
       const result = await dialog.showSaveDialog(requireWin(), {
         title: 'Save key file',
@@ -764,7 +776,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:select-key-file', async () => {
+  handle('vault:select-key-file', async () => {
     try {
       const result = await dialog.showOpenDialog(requireWin(), {
         title: 'Select key file',
@@ -787,41 +799,35 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(
-    'vault:configure-key-file',
-    async (_e, password: string, keyFileContents: Uint8Array) => {
-      try {
-        requireVault()
-        touchActivity()
-        const kfContents = readKeyFileContents(keyFileContents)
-        const result = await configureKeyFile(password, kfContents)
-        recordVaultUsed(getVaultPath()!, true)
-        return ok(result)
-      } catch (e) {
-        if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
-        return fail(e)
-      }
+  handle('vault:configure-key-file', async (_e, password: string, keyFileContents: Uint8Array) => {
+    try {
+      requireVault()
+      touchActivity()
+      const kfContents = readKeyFileContents(keyFileContents)
+      const result = await configureKeyFile(password, kfContents)
+      recordVaultUsed(getVaultPath()!, true)
+      return ok(result)
+    } catch (e) {
+      if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
+      return fail(e)
     }
-  )
+  })
 
-  ipcMain.handle(
-    'vault:remove-key-file',
-    async (_e, password: string, keyFileContents: Uint8Array) => {
-      try {
-        requireVault()
-        touchActivity()
-        const kfContents = readKeyFileContents(keyFileContents)
-        const result = await removeKeyFile(password, kfContents)
-        recordVaultUsed(getVaultPath()!, false)
-        return ok(result)
-      } catch (e) {
-        if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
-        return fail(e)
-      }
+  handle('vault:remove-key-file', async (_e, password: string, keyFileContents: Uint8Array) => {
+    try {
+      requireVault()
+      touchActivity()
+      const kfContents = readKeyFileContents(keyFileContents)
+      const result = await removeKeyFile(password, kfContents)
+      recordVaultUsed(getVaultPath()!, false)
+      return ok(result)
+    } catch (e) {
+      if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
+      return fail(e)
     }
-  )
+  })
 
-  ipcMain.handle('vault:status', async () => {
+  handle('vault:status', async () => {
     try {
       // closeVault() packs the container before it clears the path, so queue
       // behind any in-flight close: a renderer reloaded mid-close must not
@@ -835,7 +841,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('vault:choose-file', async (_e, mode: 'new' | 'existing') => {
+  handle('vault:choose-file', async (_e, mode: 'new' | 'existing') => {
     try {
       if (mode === 'new') {
         const result = await dialog.showSaveDialog(requireWin(), {
@@ -859,7 +865,7 @@ export function registerIpcHandlers(
 
   // ── Notes ─────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('notes:create', async (_e, input: CreateNoteInput) => {
+  handle('notes:create', async (_e, input: CreateNoteInput) => {
     try {
       requireVault()
       touchActivity()
@@ -869,7 +875,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:get', async (_e, id: string) => {
+  handle('notes:get', async (_e, id: string) => {
     try {
       requireVault()
       touchActivity()
@@ -879,7 +885,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:list', async (_e, filter: NoteFilter = {}) => {
+  handle('notes:list', async (_e, filter: NoteFilter = {}) => {
     try {
       requireVault()
       touchActivity()
@@ -889,7 +895,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:update', async (_e, id: string, patch: NotePatch) => {
+  handle('notes:update', async (_e, id: string, patch: NotePatch) => {
     try {
       requireVault()
       touchActivity()
@@ -900,7 +906,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:trash', async (_e, id: string) => {
+  handle('notes:trash', async (_e, id: string) => {
     try {
       requireVault()
       touchActivity()
@@ -911,7 +917,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:restore', async (_e, id: string) => {
+  handle('notes:restore', async (_e, id: string) => {
     try {
       requireVault()
       touchActivity()
@@ -922,7 +928,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:delete', async (_e, id: string) => {
+  handle('notes:delete', async (_e, id: string) => {
     try {
       requireVault()
       touchActivity()
@@ -933,7 +939,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:empty-trash', async () => {
+  handle('notes:empty-trash', async () => {
     try {
       requireVault()
       touchActivity()
@@ -944,7 +950,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('notes:search', async (_e, query: string) => {
+  handle('notes:search', async (_e, query: string) => {
     try {
       requireVault()
       touchActivity()
@@ -956,7 +962,7 @@ export function registerIpcHandlers(
 
   // ── Tags ──────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('tags:create', async (_e, input: CreateTagInput) => {
+  handle('tags:create', async (_e, input: CreateTagInput) => {
     try {
       requireVault()
       touchActivity()
@@ -966,7 +972,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(
+  handle(
     'tags:create-and-assign',
     async (_e, input: { noteId: string; name: string; color: string }) => {
       try {
@@ -979,7 +985,7 @@ export function registerIpcHandlers(
     }
   )
 
-  ipcMain.handle('tags:list', async () => {
+  handle('tags:list', async () => {
     try {
       requireVault()
       touchActivity()
@@ -989,7 +995,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('tags:update', async (_e, id: string, patch: TagPatch) => {
+  handle('tags:update', async (_e, id: string, patch: TagPatch) => {
     try {
       requireVault()
       touchActivity()
@@ -1000,7 +1006,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('tags:delete', async (_e, id: string) => {
+  handle('tags:delete', async (_e, id: string) => {
     try {
       requireVault()
       touchActivity()
@@ -1013,7 +1019,7 @@ export function registerIpcHandlers(
 
   // ── Note-tags ─────────────────────────────────────────────────────────────
 
-  ipcMain.handle('note-tags:add', async (_e, noteId: string, tagId: string) => {
+  handle('note-tags:add', async (_e, noteId: string, tagId: string) => {
     try {
       requireVault()
       touchActivity()
@@ -1024,7 +1030,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('note-tags:remove', async (_e, noteId: string, tagId: string) => {
+  handle('note-tags:remove', async (_e, noteId: string, tagId: string) => {
     try {
       requireVault()
       touchActivity()
@@ -1035,7 +1041,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('note-tags:list', async (_e, noteId: string) => {
+  handle('note-tags:list', async (_e, noteId: string) => {
     try {
       requireVault()
       touchActivity()
@@ -1045,7 +1051,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('note-tags:counts', async () => {
+  handle('note-tags:counts', async () => {
     try {
       requireVault()
       touchActivity()
@@ -1055,7 +1061,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('note-tags:all', async () => {
+  handle('note-tags:all', async () => {
     try {
       requireVault()
       touchActivity()
@@ -1067,7 +1073,7 @@ export function registerIpcHandlers(
 
   // ── Prefs ─────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('prefs:get', () => {
+  handle('prefs:get', () => {
     try {
       const prefs = getPrefs()
       const validatedVaults = prefs.recentVaults.filter(
@@ -1082,7 +1088,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('prefs:set', (_e, key: keyof Prefs, value: Prefs[keyof Prefs]) => {
+  handle('prefs:set', (_e, key: keyof Prefs, value: Prefs[keyof Prefs]) => {
     try {
       const validator = PREFS_VALIDATORS[key as keyof Prefs]
       if (!validator) return fail(`Unknown preference key: ${key}`)
@@ -1097,7 +1103,7 @@ export function registerIpcHandlers(
 
   // ── Clipboard ────────────────────────────────────────────────────────────
 
-  ipcMain.handle('clipboard:schedule-clear', (_e, value: unknown) => {
+  handle('clipboard:schedule-clear', (_e, value: unknown) => {
     try {
       if (typeof value !== 'string') return fail('Invalid clipboard value')
       scheduleClipboardClear(value)
@@ -1107,7 +1113,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('shell:open-external', async (_e, url: string) => {
+  handle('shell:open-external', async (_e, url: string) => {
     try {
       if (!isSafeExternalUrl(url)) return fail('URL must start with http:// or https://')
       await shell.openExternal(url)
@@ -1119,7 +1125,7 @@ export function registerIpcHandlers(
 
   // ── Updater ────────────────────────────────────────────────────────────────
 
-  ipcMain.handle('updater:check-now', async () => {
+  handle('updater:check-now', async () => {
     try {
       const result = await autoUpdater.checkForUpdates()
       const available = result?.isUpdateAvailable ?? false
@@ -1129,7 +1135,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('updater:download', async () => {
+  handle('updater:download', async () => {
     try {
       await autoUpdater.downloadUpdate()
       return ok(null)
@@ -1138,7 +1144,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('updater:install-now', () => {
+  handle('updater:install-now', () => {
     try {
       autoUpdater.quitAndInstall(false, true)
       return ok(null)
@@ -1147,7 +1153,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('updater:get-current-version', () => {
+  handle('updater:get-current-version', () => {
     try {
       return ok(app.getVersion())
     } catch (e) {
@@ -1155,7 +1161,7 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('app:is-dev', () => {
+  handle('app:is-dev', () => {
     try {
       return ok(!app.isPackaged)
     } catch (e) {

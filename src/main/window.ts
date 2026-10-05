@@ -10,7 +10,7 @@ import {
 } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
-import { isSafeExternalUrl } from './url-guard'
+import { isSafeExternalUrl, rendererIndexPath } from './url-guard'
 import { isVaultOpen } from './vault/vault'
 
 const isMac = process.platform === 'darwin'
@@ -68,7 +68,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
     win.webContents.openDevTools()
   } else {
-    void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
+    void win.loadFile(rendererIndexPath)
   }
 
   registerIpcHandlers(win, takePendingFilePath)
