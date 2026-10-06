@@ -261,4 +261,36 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(fileOpener.resolveOpenFilePath).toHaveBeenCalledWith(windows[1], NVX)
     expect(createWindow).toHaveBeenCalledTimes(2)
   })
+
+  it('second-instance after the window closed stores the .nvx and opens a new window', async () => {
+    await startApp()
+    windows[0].close()
+
+    // Would throw 'Object has been destroyed' if the dead window were touched.
+    app.emit('second-instance', {}, ['notvex', NVX])
+
+    expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
+    expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
+    expect(createWindow).toHaveBeenCalledTimes(2)
+  })
+
+  it('second-instance after the window closed opens a window even without a .nvx', async () => {
+    await startApp()
+    windows[0].close()
+
+    app.emit('second-instance', {}, ['notvex'])
+
+    expect(fileOpener.setValidatedPending).not.toHaveBeenCalled()
+    expect(createWindow).toHaveBeenCalledTimes(2)
+  })
+
+  it('second-instance with a live window focuses it and hands it the .nvx', async () => {
+    await startApp()
+
+    app.emit('second-instance', {}, ['notvex', NVX])
+
+    expect(windows[0].focus).toHaveBeenCalled()
+    expect(fileOpener.resolveOpenFilePath).toHaveBeenCalledWith(windows[0], NVX)
+    expect(createWindow).toHaveBeenCalledTimes(1)
+  })
 })

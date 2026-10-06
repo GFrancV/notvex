@@ -95,9 +95,18 @@ app.on('before-quit', (event): void => {
 })
 
 app.on('second-instance', (_event, argv): void => {
-  if (mainWindow?.isMinimized()) mainWindow.restore()
-  mainWindow?.focus()
   const filePath = extractNvxArgv(argv)
+
+  // Same as open-file: no window means store the path and, once started,
+  // open a window for it — the user relaunched the app either way.
+  if (!mainWindow) {
+    if (filePath) setValidatedPending(filePath)
+    if (startupDone) openMainWindow()
+    return
+  }
+
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.focus()
 
   if (filePath) {
     resolveOpenFilePath(mainWindow, filePath).catch((e) => {
