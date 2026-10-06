@@ -104,6 +104,18 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
     expect(openExternal).toHaveBeenCalledOnce()
   })
 
+  // Even the app's own page only gets http(s) handed to the OS: shell:open-external
+  // shares isSafeExternalUrl with the window-open handler (#56).
+  it.each(['file:///C:/Windows/System32/calc.exe', 'ms-msdt:/id PCWDiagnostic', 'javascript:x'])(
+    'shell:open-external refuses %s from the app page',
+    async (url) => {
+      const result = await invokeFromFrame(APP_URL, 'shell:open-external', url)
+
+      expect(result).toMatchObject({ success: false })
+      expect(openExternal).not.toHaveBeenCalled()
+    }
+  )
+
   // Behavioural guard against a new channel registered without the check.
   it('every registered channel refuses a foreign frame', async () => {
     expect(handlers.size).toBeGreaterThan(40)
