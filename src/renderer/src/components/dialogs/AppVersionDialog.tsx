@@ -20,10 +20,7 @@ function ExternalLink({ url, children }: { url: string; children: ReactNode }): 
   return (
     <Button
       variant="link"
-      onClick={(e) => {
-        e.preventDefault()
-        void notvex.shell.openExternal(url)
-      }}
+      onClick={() => void notvex.shell.openExternal(url)}
       className="text-muted-foreground hover:text-foreground h-auto p-0 font-normal underline"
     >
       {children}

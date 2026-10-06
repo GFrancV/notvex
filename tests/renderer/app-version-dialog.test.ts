@@ -31,11 +31,14 @@ describe('AppVersionDialog links (issue #60)', () => {
     ['Report Issue', 'https://github.com/GFrancV/notvex/issues/new']
   ])('"%s" opens %s in the system browser instead of navigating', (label, url) => {
     render(createElement(AppVersionDialog, { open: true, onClose: () => {} }))
+    const link = screen.getByText(label)
 
-    // fireEvent returns false when the handler called preventDefault().
-    const navigated = fireEvent.click(screen.getByText(label))
+    fireEvent.click(link)
 
-    expect(navigated).toBe(false)
+    // Nothing that could start a main-frame navigation (the dialog renders in a
+    // portal, so look at the whole document).
+    expect(link.closest('a[href]')).toBeNull()
+    expect(document.querySelector(`a[href="${url}"]`)).toBeNull()
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(url)
   })
 })
