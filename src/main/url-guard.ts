@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 // The page a packaged build loads. Shared with window.ts so the IPC sender
 // check below compares against exactly what the window loaded.
 export const rendererIndexPath = join(import.meta.dirname, '../renderer/index.html')
+const rendererIndexUrl = pathToFileURL(rendererIndexPath).href
 
 // The one scheme check for every route that hands a URL to the OS
 // (shell:open-external and setWindowOpenHandler), so they can't drift (#56).
@@ -23,7 +24,7 @@ export function isTrustedFrame(event: IpcMainInvokeEvent): boolean {
     if (devUrl) return url.origin === new URL(devUrl).origin
     url.hash = ''
     url.search = ''
-    return url.href === pathToFileURL(rendererIndexPath).href
+    return url.href === rendererIndexUrl
   } catch {
     return false
   }
