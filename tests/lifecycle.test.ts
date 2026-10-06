@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Electron's real `app` isn't available outside a running Electron process,
 // so it's replaced with a minimal EventEmitter double: `index.ts` only
 // needs `on`/`emit`/`quit`/`whenReady`/`requestSingleInstanceLock`/`isPackaged`.
-// `whenReady()` never resolves — the startup path (window creation, sodium
-// init) is out of scope for this suite, which only covers the shutdown
-// handlers (issue #18). The dynamic `import('events')` (instead of a
+// `whenReady()` never resolves by default, so the shutdown tests (issue #18)
+// never reach startup; the issue #49 block resolves it once per test to get a
+// started app with a window. The dynamic `import('events')` (instead of a
 // top-level import) avoids vi.mock's hoisting running before that binding
 // is initialized.
 vi.mock('electron', async () => {
@@ -66,14 +66,12 @@ vi.mock('../src/main/file-opener', () => ({
 // A BrowserWindow double that, like the real one, throws once destroyed.
 class FakeWindow extends EventEmitter {
   destroyed = false
-  isDestroyed = vi.fn(() => this.destroyed)
   isMinimized = vi.fn(() => {
     this.assertAlive()
     return false
   })
   restore = vi.fn(() => this.assertAlive())
   focus = vi.fn(() => this.assertAlive())
-  webContents = { send: vi.fn() }
 
   close(): void {
     this.destroyed = true
