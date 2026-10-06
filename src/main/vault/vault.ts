@@ -539,6 +539,16 @@ export async function openVaultWithRecovery(
     if (!meta) {
       memzero(rawKey)
       releaseLock()
+      try {
+        await closeDatabase(database)
+      } catch {
+        /* ignore */
+      }
+      try {
+        unlinkSync(tmp)
+      } catch {
+        /* ignore */
+      }
       return null
     }
 

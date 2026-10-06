@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   unlinkSync,
@@ -15,7 +16,7 @@ import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 
-import { createNote, dbAll, getNote } from '../src/main/db/queries'
+import { createNote, dbAll, dbRun, getNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
 import { decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
 import { allocSecure, freeSecure } from '../src/main/vault/memlock'
@@ -28,6 +29,7 @@ import {
   getMasterKey,
   isVaultOpen,
   openVault,
+  openVaultWithRecovery,
   packContainer,
   removeKeyFile,
   rotateVaultCredentials,
@@ -674,6 +676,54 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     expect(existsSync(backupPath)).toBe(true)
     expect(existsSync(tmpPath)).toBe(false)
+  }, 60_000)
+
+  it('openVaultWithRecovery() closes its connection and deletes its temp DB when vault_meta is missing (issue #58)', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const password = 'correct horse battery staple'
+
+    const { mnemonic } = await createVault(vaultPath, password)
+    await dbRun(getDb(), 'DELETE FROM vault_meta')
+    await closeVault() // repacks the container, persisting the deletion
+
+    const tempDbPattern = /^notvex_[a-f0-9]{16}\.db(-wal|-shm)?$/
+    const tempDbsBefore = readdirSync(tmpdir()).filter((f) => tempDbPattern.test(f))
+
+    // On Linux/macOS unlink succeeds on an open file, so the temp-file check
+    // alone can't prove the connection was closed. Database.prototype.close
+    // is non-configurable (vi.spyOn can't wrap it), but vault.ts looks up
+    // sqlcipher.Database on every call, so a subclass swapped in for this one
+    // call can track which connections it opened and which it closed.
+    const RealDatabase = sqlcipher.Database
+    const opened: sqlite3.Database[] = []
+    const closed: sqlite3.Database[] = []
+    class TrackedDatabase extends RealDatabase {
+      constructor(filename: string, callback?: (err: Error | null) => void) {
+        super(filename, callback)
+        opened.push(this)
+      }
+      close(callback?: (err: Error | null) => void): void {
+        closed.push(this)
+        super.close(callback)
+      }
+    }
+    const mutableSqlcipher = sqlcipher as { Database: unknown }
+    mutableSqlcipher.Database = TrackedDatabase
+    try {
+      await expect(openVaultWithRecovery(vaultPath, mnemonic)).resolves.toBeNull()
+    } finally {
+      mutableSqlcipher.Database = RealDatabase
+    }
+    expect(opened).toHaveLength(1)
+    expect(closed).toEqual(opened)
+
+    expect(isVaultOpen()).toBe(false)
+    const tempDbsAfter = readdirSync(tmpdir()).filter((f) => tempDbPattern.test(f))
+    expect(tempDbsAfter.filter((f) => !tempDbsBefore.includes(f))).toEqual([])
+
+    // The lock was released. The password path doesn't read vault_meta.
+    await expect(openVault(vaultPath, password)).resolves.not.toBeNull()
   }, 60_000)
 
   it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
