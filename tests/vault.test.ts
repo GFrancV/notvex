@@ -1638,6 +1638,29 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
     expect(order).toEqual(['first', 'second'])
   })
 
+  // closeVault() hands doCloseVault(skipPack = false) to the queue by
+  // reference, so a forwarded predecessor value lands in skipPack and skips
+  // the pack on close (#61).
+  it('calls fn with no arguments after a predecessor that resolves with a value', async () => {
+    void withVaultLock(async () => ['truthy'])
+    const fn = vi.fn(async () => undefined)
+
+    await withVaultLock(fn)
+
+    expect(fn).toHaveBeenCalledWith()
+  })
+
+  it('calls fn with no arguments after a predecessor that rejects', async () => {
+    withVaultLock(async () => {
+      throw new Error('boom')
+    }).catch(() => undefined)
+    const fn = vi.fn(async () => undefined)
+
+    await withVaultLock(fn)
+
+    expect(fn).toHaveBeenCalledWith()
+  })
+
   it('deadlocks permanently on a reentrant call — this is why closeVault()s catch-block fallbacks call doCloseVault() directly, never closeVault()', async () => {
     // withVaultLock is a plain FIFO queue, not a reentrant mutex: calling
     // it again from inside a function it's already running deadlocks that

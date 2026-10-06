@@ -73,9 +73,16 @@ interface RawNote {
 // calls), so a second caller must run its own body, not reuse the first
 // caller's result. Exported only so the test suite can verify the ordering
 // directly and fast, without real Argon2id/SQLCipher timing.
+//
+// fn is wrapped, never passed to .then() directly: .then(fn, fn) calls it
+// with the predecessor's result, which landed in doCloseVault's skipPack and
+// silently skipped the pack on close (#61).
 let vaultOpLock: Promise<unknown> = Promise.resolve()
 export function withVaultLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = vaultOpLock.then(fn, fn)
+  const run = vaultOpLock.then(
+    () => fn(),
+    () => fn()
+  )
   vaultOpLock = run.catch(() => undefined)
   return run
 }
