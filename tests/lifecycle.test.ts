@@ -217,6 +217,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
     expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
     expect(createWindow).toHaveBeenCalledTimes(2)
+    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingOpenFilePath)
   })
 
   it('open-file during startup only stores the path, and startup opens exactly one window', async () => {
@@ -236,6 +237,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
 
     finishSodium()
     await vi.waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1))
+    expect(createWindow).toHaveBeenCalledWith(fileOpener.takePendingOpenFilePath)
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
   })
 
@@ -270,6 +272,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
     expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
     expect(createWindow).toHaveBeenCalledTimes(2)
+    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingOpenFilePath)
   })
 
   it('second-instance after the window closed opens a window even without a .nvx', async () => {
