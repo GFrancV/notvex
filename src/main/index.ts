@@ -101,7 +101,7 @@ app.on('second-instance', (_event, argv): void => {
   // open a window for it — the user relaunched the app either way.
   if (!mainWindow) {
     if (filePath) setValidatedPending(filePath)
-    if (startupDone) openMainWindow()
+    if (startupDone && !isQuitting) openMainWindow()
     return
   }
 
@@ -125,7 +125,8 @@ app.on('open-file', (event, filePath): void => {
   }
 
   // No window yet (cold start) or anymore (macOS dock): store the path; the
-  // window's renderer picks it up via takePendingOpenFilePath on load.
+  // window's renderer picks it up via takePendingOpenFilePath on load. No new
+  // window mid-quit: it would re-arm the auto-lock timer before-quit stopped.
   setValidatedPending(filePath)
-  if (startupDone) openMainWindow()
+  if (startupDone && !isQuitting) openMainWindow()
 })

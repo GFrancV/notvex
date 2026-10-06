@@ -282,6 +282,18 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(createWindow).toHaveBeenCalledTimes(2)
   })
 
+  it('open-file / second-instance while quitting do not open a window', async () => {
+    await startApp()
+    // Cmd+Q: before-quit is already in flight when the window closes.
+    app.emit('before-quit', { preventDefault: vi.fn() })
+    windows[0].close()
+
+    app.emit('open-file', { preventDefault: vi.fn() }, NVX)
+    app.emit('second-instance', {}, ['notvex', NVX])
+
+    expect(createWindow).toHaveBeenCalledTimes(1)
+  })
+
   it('second-instance with a live window focuses it and hands it the .nvx', async () => {
     await startApp()
 
