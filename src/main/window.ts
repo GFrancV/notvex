@@ -10,6 +10,7 @@ import {
 } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
+import { devRendererUrl, isSafeExternalUrl, rendererIndexPath } from './url-guard'
 import { isVaultOpen } from './vault/vault'
 
 const isMac = process.platform === 'darwin'
@@ -51,24 +52,24 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     win.on('page-title-updated', (event) => event.preventDefault())
   }
 
-  // Block navigation away from the app
-  win.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://localhost') && !url.startsWith('file://')) {
-      event.preventDefault()
-    }
-  })
+  // The renderer is a SPA and never navigates; any page this window loads
+  // would get the preload's window.notvex, so block every navigation —
+  // including a dropped file, which navigates to file:// by default (#57).
+  // Reloads (Vite HMR, Ctrl+R) don't fire will-navigate.
+  win.webContents.on('will-navigate', (event) => event.preventDefault())
 
-  // Open external links in system browser, not in-app
+  // Open external links in system browser, not in-app — http(s) only (#56)
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  const devUrl = devRendererUrl()
+  if (devUrl) {
+    void win.loadURL(devUrl)
     win.webContents.openDevTools()
   } else {
-    void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
+    void win.loadFile(rendererIndexPath)
   }
 
   registerIpcHandlers(win, takePendingFilePath)

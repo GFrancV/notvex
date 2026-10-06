@@ -1234,15 +1234,18 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
 
   it('each notes:*/tags:*/note-tags:* handler wraps its body in withVaultLock(...)', () => {
     const source = readFileSync(new URL('../src/main/ipc-handlers.ts', import.meta.url), 'utf-8')
-    const handleCallStarts = [...source.matchAll(/ipcMain\.handle\(/g)].map((m) => m.index)
+    // Handlers register through the local handle() wrapper (#57), one call per
+    // line at registerIpcHandlers' indentation.
+    const handleCallStarts = [...source.matchAll(/^ {2}handle\(/gm)].map((m) => m.index)
+    expect(handleCallStarts.length).toBeGreaterThan(NOTE_AND_TAG_CHANNELS.length)
 
     for (const channel of NOTE_AND_TAG_CHANNELS) {
       const channelIdx = source.indexOf(`'${channel}'`)
       expect(channelIdx, `channel '${channel}' not found in ipc-handlers.ts`).toBeGreaterThan(-1)
 
-      // The block for this channel runs from its own ipcMain.handle( call up
+      // The block for this channel runs from its own handle( call up
       // to the next one (or EOF for the last channel in the file) — no
-      // paren-balancing needed, every handler's own ipcMain.handle( starts
+      // paren-balancing needed, every handler's own handle( starts
       // strictly before its channel-name string literal.
       const blockStart = handleCallStarts.filter((i) => i <= channelIdx).pop()
       const blockEnd = handleCallStarts.find((i) => i > channelIdx) ?? source.length

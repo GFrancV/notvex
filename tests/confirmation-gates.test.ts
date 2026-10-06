@@ -1,5 +1,8 @@
 import type { BrowserWindow, WebContents } from 'electron'
+import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { rendererIndexPath } from '../src/main/url-guard'
 
 // The confirmation gates in ipc-handlers.ts park a vault:open call on a
 // module-level resolver until the renderer answers. If the window is destroyed
@@ -101,11 +104,14 @@ function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void
   return { win, sent, destroy: () => (destroyed = true) }
 }
 
+// The app's own page, which every handler requires as the calling frame (#57).
+const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
+
 // Calls a handler the way ipcMain does: with an event carrying the calling renderer.
 function invokeFrom(sender: WebContents, channel: string, ...args: unknown[]): Promise<unknown> {
   const fn = handlers.get(channel)
   if (!fn) throw new Error(`no handler for ${channel}`)
-  return Promise.resolve(fn({ sender }, ...args))
+  return Promise.resolve(fn({ sender, senderFrame }, ...args))
 }
 
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
