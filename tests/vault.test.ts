@@ -726,6 +726,44 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await expect(openVault(vaultPath, password)).resolves.not.toBeNull()
   }, 60_000)
 
+  it('openVaultWithRecovery() still returns null and cleans up when closing the connection fails on missing vault_meta (issue #58)', async () => {
+    // Without its own try/catch, a close error in the !meta branch falls into
+    // the outer catch, which rethrows: the caller would get an exception
+    // instead of null.
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const password = 'correct horse battery staple'
+
+    const { mnemonic } = await createVault(vaultPath, password)
+    await dbRun(getDb(), 'DELETE FROM vault_meta')
+    await closeVault() // repacks the container, persisting the deletion
+
+    // Same swap as the test above. This close really closes the connection,
+    // then reports a failure to the caller.
+    const RealDatabase = sqlcipher.Database
+    const openedPaths: string[] = []
+    class FailingCloseDatabase extends RealDatabase {
+      constructor(filename: string, callback?: (err: Error | null) => void) {
+        super(filename, callback)
+        openedPaths.push(filename)
+      }
+      close(callback?: (err: Error | null) => void): void {
+        super.close(() => callback?.(new Error('simulated close failure')))
+      }
+    }
+    const mutableSqlcipher = sqlcipher as { Database: unknown }
+    mutableSqlcipher.Database = FailingCloseDatabase
+    try {
+      await expect(openVaultWithRecovery(vaultPath, mnemonic)).resolves.toBeNull()
+    } finally {
+      mutableSqlcipher.Database = RealDatabase
+    }
+
+    expect(openedPaths).toHaveLength(1)
+    expect(existsSync(openedPaths[0])).toBe(false)
+    await expect(openVault(vaultPath, password)).resolves.not.toBeNull()
+  }, 60_000)
+
   it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     // Failure point the issue's literal suggested diff did NOT cover: the
     // PRAGMA rekey call sat before the existing try/catch that the diff
