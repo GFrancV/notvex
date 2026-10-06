@@ -29,16 +29,29 @@ if (!app.requestSingleInstanceLock()) {
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 let readyToQuit = false
+// Not app.isReady(): open-file can also arrive while initSodium() is still
+// pending, and opening a window there would run before sodium is ready and
+// leave startup to open a second one.
+let startupDone = false
+
+function openMainWindow(): void {
+  const win = createWindow(takePendingOpenFilePath)
+  // On macOS the app outlives its last window; open-file / second-instance
+  // must not reuse the destroyed one (#49).
+  win.on('closed', (): void => {
+    if (mainWindow === win) mainWindow = null
+  })
+  mainWindow = win
+}
 
 void app.whenReady().then(async (): Promise<void> => {
   cleanupOrphanedTempDbs()
   await initSodium()
-  mainWindow = createWindow(takePendingOpenFilePath)
+  openMainWindow()
+  startupDone = true
 
   app.on('activate', (): void => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow(takePendingOpenFilePath)
-    }
+    if (BrowserWindow.getAllWindows().length === 0) openMainWindow()
   })
 })
 
@@ -102,5 +115,8 @@ app.on('open-file', (event, filePath): void => {
     return
   }
 
+  // No window yet (cold start) or anymore (macOS dock): store the path; the
+  // window's renderer picks it up via takePendingOpenFilePath on load.
   setValidatedPending(filePath)
+  if (startupDone) openMainWindow()
 })

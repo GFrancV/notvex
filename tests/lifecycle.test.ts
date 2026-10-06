@@ -1,3 +1,6 @@
+import { EventEmitter } from 'events'
+
+import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Electron's real `app` isn't available outside a running Electron process,
@@ -42,6 +45,45 @@ vi.mock('../src/main/ipc-handlers', async () => {
 vi.mock('../src/main/window', () => ({
   createWindow: vi.fn()
 }))
+
+// Startup side effects: the real cleanupOrphanedTempDbs() deletes files in
+// os.tmpdir(), so neither may run once whenReady() resolves (issue #49 block).
+vi.mock('../src/main/vault/crypto', () => ({
+  initSodium: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('../src/main/vault/container', () => ({
+  cleanupOrphanedTempDbs: vi.fn()
+}))
+
+vi.mock('../src/main/file-opener', () => ({
+  extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
+  resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),
+  setValidatedPending: vi.fn(),
+  takePendingOpenFilePath: vi.fn(() => null)
+}))
+
+// A BrowserWindow double that, like the real one, throws once destroyed.
+class FakeWindow extends EventEmitter {
+  destroyed = false
+  isDestroyed = vi.fn(() => this.destroyed)
+  isMinimized = vi.fn(() => {
+    this.assertAlive()
+    return false
+  })
+  restore = vi.fn(() => this.assertAlive())
+  focus = vi.fn(() => this.assertAlive())
+  webContents = { send: vi.fn() }
+
+  close(): void {
+    this.destroyed = true
+    this.emit('closed')
+  }
+
+  private assertAlive(): void {
+    if (this.destroyed) throw new TypeError('Object has been destroyed')
+  }
+}
 
 const originalPlatform = process.platform
 
@@ -136,5 +178,87 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     app.emit('window-all-closed')
     expect(closeVault).toHaveBeenCalledTimes(1)
     expect(quit).not.toHaveBeenCalled()
+  })
+})
+
+describe('lifecycle: .nvx opened while the app has no window (issue #49)', () => {
+  const NVX = '/Users/me/vault.nvx'
+  let app: Electron.App
+  let createWindow: ReturnType<typeof vi.fn>
+  let fileOpener: typeof import('../src/main/file-opener')
+  let windows: FakeWindow[]
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.resetModules()
+    app = (await import('electron')).app
+    app.removeAllListeners()
+    windows = []
+    createWindow = vi.mocked((await import('../src/main/window')).createWindow)
+    createWindow.mockImplementation(() => {
+      const win = new FakeWindow()
+      windows.push(win)
+      return win as unknown as BrowserWindow
+    })
+    fileOpener = await import('../src/main/file-opener')
+    // Once, so the #18 block above keeps its never-resolving whenReady().
+    vi.mocked(app.whenReady).mockResolvedValueOnce(undefined)
+  })
+
+  async function startApp(): Promise<void> {
+    await import('../src/main/index')
+    await vi.waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1))
+  }
+
+  it('open-file after the window closed stores the path and opens a new window', async () => {
+    await startApp()
+    windows[0].close()
+
+    app.emit('open-file', { preventDefault: vi.fn() }, NVX)
+
+    expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
+    expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
+    expect(createWindow).toHaveBeenCalledTimes(2)
+  })
+
+  it('open-file during startup only stores the path, and startup opens exactly one window', async () => {
+    let finishSodium: () => void = () => {}
+    const { initSodium } = await import('../src/main/vault/crypto')
+    vi.mocked(initSodium).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishSodium = resolve
+      })
+    )
+    await import('../src/main/index')
+    await vi.waitFor(() => expect(initSodium).toHaveBeenCalled())
+
+    app.emit('open-file', { preventDefault: vi.fn() }, NVX)
+    expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
+    expect(createWindow).not.toHaveBeenCalled()
+
+    finishSodium()
+    await vi.waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1))
+    expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
+  })
+
+  it('open-file with a live window hands the file to it without opening another', async () => {
+    await startApp()
+
+    app.emit('open-file', { preventDefault: vi.fn() }, NVX)
+
+    expect(fileOpener.resolveOpenFilePath).toHaveBeenCalledWith(windows[0], NVX)
+    expect(createWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it("a stale 'closed' from an old window does not drop the current one", async () => {
+    await startApp()
+    windows[0].close()
+    app.emit('open-file', { preventDefault: vi.fn() }, NVX)
+    windows[0].emit('closed')
+
+    app.emit('open-file', { preventDefault: vi.fn() }, NVX)
+
+    expect(fileOpener.resolveOpenFilePath).toHaveBeenCalledWith(windows[1], NVX)
+    expect(createWindow).toHaveBeenCalledTimes(2)
   })
 })
