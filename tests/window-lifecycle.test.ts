@@ -196,6 +196,18 @@ describe('createWindow: dev server url (issue #57)', () => {
 
     expect(win.loadURL).not.toHaveBeenCalled()
     expect(win.loadFile).toHaveBeenCalledExactlyOnceWith(rendererIndexPath)
+    expect(win.webContents.openDevTools).not.toHaveBeenCalled()
+  })
+
+  it('loads the built renderer in a dev build with no dev server', async () => {
+    const { rendererIndexPath } = await import('../src/main/url-guard')
+    app.isPackaged = false
+
+    const win = createWindow(() => null)
+    win.emit('closed')
+
+    expect(win.loadURL).not.toHaveBeenCalled()
+    expect(win.loadFile).toHaveBeenCalledExactlyOnceWith(rendererIndexPath)
   })
 
   it('loads the dev server in a dev build', () => {
