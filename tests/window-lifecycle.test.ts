@@ -1,6 +1,6 @@
 import type { EventEmitter } from 'node:events'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // createWindow() runs once per window, and on macOS `activate` can run it many
 // times in one process. Anything it hangs on an app-wide emitter must come off
@@ -166,6 +166,46 @@ describe('createWindow: navigation (issue #57)', () => {
     win.emit('closed')
 
     expect(event.preventDefault).toHaveBeenCalledTimes(1)
+  })
+})
+
+// The bundle still reads ELECTRON_RENDERER_URL at runtime, so an installed app
+// launched with it set would load that (remote) page with the preload. Only a
+// dev build may load from the dev server (#57).
+describe('createWindow: dev server url (issue #57)', () => {
+  let createWindow: typeof import('../src/main/window').createWindow
+  let app: { isPackaged: boolean }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    app = (await import('electron')).app as unknown as { isPackaged: boolean }
+    ;({ createWindow } = await import('../src/main/window'))
+  })
+
+  afterEach(() => {
+    app.isPackaged = true
+    vi.unstubAllEnvs()
+  })
+
+  it('ignores ELECTRON_RENDERER_URL in a packaged build', async () => {
+    const { rendererIndexPath } = await import('../src/main/url-guard')
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'https://attacker.example/')
+
+    const win = createWindow(() => null)
+    win.emit('closed')
+
+    expect(win.loadURL).not.toHaveBeenCalled()
+    expect(win.loadFile).toHaveBeenCalledExactlyOnceWith(rendererIndexPath)
+  })
+
+  it('loads the dev server in a dev build', () => {
+    app.isPackaged = false
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
+
+    const win = createWindow(() => null)
+    win.emit('closed')
+
+    expect(win.loadURL).toHaveBeenCalledExactlyOnceWith('http://localhost:5173')
   })
 })
 

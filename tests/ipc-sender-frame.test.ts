@@ -104,6 +104,26 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
     expect(openExternal).toHaveBeenCalledOnce()
   })
 
+  it('in a packaged build, ignores ELECTRON_RENDERER_URL', async () => {
+    const app = (await import('electron')).app as unknown as { isPackaged: boolean }
+    app.isPackaged = true
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'https://attacker.example')
+
+    try {
+      await expect(
+        Promise.resolve(
+          invokeFromFrame('https://attacker.example/', 'shell:open-external', 'https://x')
+        )
+      ).resolves.toEqual({ success: false, error: 'Untrusted sender' })
+      await expect(invokeFromFrame(APP_URL, 'shell:open-external', 'https://x')).resolves.toEqual({
+        success: true,
+        data: null
+      })
+    } finally {
+      app.isPackaged = false
+    }
+  })
+
   // Even the app's own page only gets http(s) handed to the OS: shell:open-external
   // shares isSafeExternalUrl with the window-open handler (#56).
   it.each(['file:///C:/Windows/System32/calc.exe', 'ms-msdt:/id PCWDiagnostic', 'javascript:x'])(
