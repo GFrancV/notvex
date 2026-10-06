@@ -36,10 +36,18 @@ vi.mock('../src/main/drain-renderer', () => ({}))
 
 const APP_URL = pathToFileURL(rendererIndexPath).href
 
-function invokeFromFrame(url: string | null, channel: string, ...args: unknown[]): unknown {
+const REFUSED = { success: false, error: 'Untrusted sender' }
+
+// A refused call returns synchronously and a served one is async, so always
+// hand back a promise.
+function invokeFromFrame(
+  url: string | null,
+  channel: string,
+  ...args: unknown[]
+): Promise<unknown> {
   const fn = handlers.get(channel)
   if (!fn) throw new Error(`no handler for ${channel}`)
-  return fn({ sender: {}, senderFrame: url === null ? null : { url } }, ...args)
+  return Promise.resolve(fn({ sender: {}, senderFrame: url === null ? null : { url } }, ...args))
 }
 
 describe('ipc handlers: sender frame check (issue #57)', () => {
@@ -78,8 +86,8 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
     ['an unparsable url', 'not a url']
   ])('refuses %s before running the handler', async (_label, url) => {
     await expect(
-      Promise.resolve(invokeFromFrame(url, 'shell:open-external', 'https://example.com'))
-    ).resolves.toEqual({ success: false, error: 'Untrusted sender' })
+      invokeFromFrame(url, 'shell:open-external', 'https://example.com')
+    ).resolves.toEqual(REFUSED)
     expect(openExternal).not.toHaveBeenCalled()
   })
 
@@ -87,17 +95,11 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 
     await expect(
-      Promise.resolve(
-        invokeFromFrame(
-          'http://localhost.attacker.example:5173/',
-          'shell:open-external',
-          'https://x'
-        )
-      )
-    ).resolves.toEqual({ success: false, error: 'Untrusted sender' })
-    await expect(
-      Promise.resolve(invokeFromFrame(APP_URL, 'shell:open-external', 'https://x'))
-    ).resolves.toEqual({ success: false, error: 'Untrusted sender' })
+      invokeFromFrame('http://localhost.attacker.example:5173/', 'shell:open-external', 'https://x')
+    ).resolves.toEqual(REFUSED)
+    await expect(invokeFromFrame(APP_URL, 'shell:open-external', 'https://x')).resolves.toEqual(
+      REFUSED
+    )
     await expect(
       invokeFromFrame('http://localhost:5173/', 'shell:open-external', 'https://x')
     ).resolves.toEqual({ success: true, data: null })
@@ -111,10 +113,8 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
 
     try {
       await expect(
-        Promise.resolve(
-          invokeFromFrame('https://attacker.example/', 'shell:open-external', 'https://x')
-        )
-      ).resolves.toEqual({ success: false, error: 'Untrusted sender' })
+        invokeFromFrame('https://attacker.example/', 'shell:open-external', 'https://x')
+      ).resolves.toEqual(REFUSED)
       await expect(invokeFromFrame(APP_URL, 'shell:open-external', 'https://x')).resolves.toEqual({
         success: true,
         data: null
@@ -140,10 +140,9 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
   it('every registered channel refuses a foreign frame', async () => {
     expect(handlers.size).toBeGreaterThan(40)
     for (const channel of handlers.keys()) {
-      await expect(
-        Promise.resolve(invokeFromFrame('file:///tmp/evil.html', channel)),
-        channel
-      ).resolves.toEqual({ success: false, error: 'Untrusted sender' })
+      await expect(invokeFromFrame('file:///tmp/evil.html', channel), channel).resolves.toEqual(
+        REFUSED
+      )
     }
   })
 })
