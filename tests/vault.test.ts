@@ -13,11 +13,11 @@ import { join } from 'path'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type Mock } from 'vitest'
 
-import { createNote, dbAll, dbRun, getNote } from '../src/main/db/queries'
+import { createNote, dbAll, dbRun, getNote, listNotes, updateNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
-import { decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
+import { calibrateArgon2id, decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
 import { allocSecure, freeSecure } from '../src/main/vault/memlock'
 import {
   changePassword,
@@ -43,7 +43,12 @@ import {
 // instance is wiped, not just that some zeroing call happened somewhere.
 vi.mock('../src/main/vault/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
-  return { ...actual, memzero: vi.fn(actual.memzero), deriveKey: vi.fn(actual.deriveKey) }
+  return {
+    ...actual,
+    memzero: vi.fn(actual.memzero),
+    deriveKey: vi.fn(actual.deriveKey),
+    calibrateArgon2id: vi.fn(actual.calibrateArgon2id)
+  }
 })
 
 // Same pass-through partial mock for memlock.ts, so the issue #23 tests
@@ -1586,6 +1591,62 @@ describe('devBuild propagation (issue #34)', () => {
 
     expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
   }, 150_000)
+})
+
+// The editor's autosave ends with loadNotes(), which queues a notes:list
+// that resolves with an array. withVaultLock used to forward that array to
+// doCloseVault as skipPack, so the vault closed without packing and the
+// edit was lost (#61). Real SQLCipher, no vault mocks; calibration is
+// stubbed to the cheapest tier because it's not what's under test here.
+describe('closeVault() packs regardless of the previous queued operation (issue #61)', () => {
+  const PASSWORD = 'correct horse battery staple'
+  let vaultDir: string
+  let vaultPath: string
+
+  beforeAll(async () => {
+    vi.mocked(calibrateArgon2id).mockReturnValue({ tier: 10 })
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    vaultPath = join(vaultDir, 'test.nvx')
+    await createVault(vaultPath, PASSWORD)
+    await closeVault()
+  }, 60_000)
+
+  // A failed assertion would otherwise leave the vault open for the next case.
+  afterEach(async () => {
+    await closeVault()
+  })
+
+  afterAll(() => {
+    vi.mocked(calibrateArgon2id).mockReset()
+    rmSync(vaultDir, { recursive: true, force: true })
+  })
+
+  it('keeps an edit when the operation before the close resolved with a value (notes:list)', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const note = await createNote(getDb(), { title: 'Draft', content: 'before' }, getMasterKey())
+    await updateNote(getDb(), note.id, { content: 'after' }, getMasterKey())
+
+    void withVaultLock(() => listNotes(getDb(), getMasterKey()))
+    await closeVault()
+
+    await openVault(vaultPath, PASSWORD)
+    expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('after')
+  }, 60_000)
+
+  // Characterization: on main a rejection already reached fn as undefined
+  // (vaultOpLock swallows it), which hit the skipPack default, so this case
+  // never lost data. It guards the rejection path going forward.
+  it('keeps an edit when the operation before the close rejected', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const note = await createNote(getDb(), { title: 'Draft', content: 'before' }, getMasterKey())
+    await updateNote(getDb(), note.id, { content: 'after' }, getMasterKey())
+
+    withVaultLock(() => Promise.reject(new Error('boom'))).catch(() => undefined)
+    await closeVault()
+
+    await openVault(vaultPath, PASSWORD)
+    expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('after')
+  }, 60_000)
 })
 
 // Pure ordering test — no vault/crypto involved, deliberately fast and
