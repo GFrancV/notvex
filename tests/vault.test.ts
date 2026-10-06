@@ -690,20 +690,19 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     // alone can't prove the connection was closed. Database.prototype.close
     // is non-configurable (vi.spyOn can't wrap it), but vault.ts looks up
     // sqlcipher.Database on every call, so a subclass swapped in for this one
-    // call can track which connections it opened, on which file, and which
-    // it closed.
+    // call can record each connection it opens, its file, and whether it was
+    // closed.
     const RealDatabase = sqlcipher.Database
-    const opened: sqlite3.Database[] = []
-    const openedPaths: string[] = []
-    const closed: sqlite3.Database[] = []
+    const connections: { path: string; closed: boolean }[] = []
     class TrackedDatabase extends RealDatabase {
+      private readonly connection: { path: string; closed: boolean }
       constructor(filename: string, callback?: (err: Error | null) => void) {
         super(filename, callback)
-        opened.push(this)
-        openedPaths.push(filename)
+        this.connection = { path: filename, closed: false }
+        connections.push(this.connection)
       }
       close(callback?: (err: Error | null) => void): void {
-        closed.push(this)
+        this.connection.closed = true
         super.close(callback)
       }
     }
@@ -714,14 +713,13 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     } finally {
       mutableSqlcipher.Database = RealDatabase
     }
-    expect(opened).toHaveLength(1)
-    expect(closed).toEqual(opened)
+    expect(connections).toEqual([{ path: expect.any(String), closed: true }])
 
     expect(isVaultOpen()).toBe(false)
     // Checks only the file this call created, not a tmpdir snapshot, so other
     // processes creating notvex_*.db files concurrently can't affect it.
     for (const suffix of ['', '-wal', '-shm']) {
-      expect(existsSync(openedPaths[0] + suffix)).toBe(false)
+      expect(existsSync(connections[0].path + suffix)).toBe(false)
     }
 
     // The lock was released. The password path doesn't read vault_meta.
