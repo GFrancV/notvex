@@ -124,6 +124,46 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
     }
   })
 
+  // Chromium canonicalizes the frame URL its own way, which need not match
+  // Node's pathToFileURL byte for byte. A mismatch would refuse every call and
+  // leave the app (and its renderer-driven updater) unusable, so the check
+  // compares paths, not strings.
+  it('serves the app page when the frame url escapes it differently', async () => {
+    const escaped = APP_URL.replace(/index\.html$/, '%69ndex.html')
+
+    await expect(invokeFromFrame(escaped, 'shell:open-external', 'https://x')).resolves.toEqual({
+      success: true,
+      data: null
+    })
+  })
+
+  it.runIf(process.platform === 'win32')(
+    'serves the app page when the drive letter case differs',
+    async () => {
+      const flipped = APP_URL.replace(
+        /^file:\/\/\/([A-Za-z]):/,
+        (_m, d: string) => `file:///${d === d.toUpperCase() ? d.toLowerCase() : d.toUpperCase()}:`
+      )
+      expect(flipped).not.toBe(APP_URL)
+
+      await expect(invokeFromFrame(flipped, 'shell:open-external', 'https://x')).resolves.toEqual({
+        success: true,
+        data: null
+      })
+    }
+  )
+
+  // IPC arguments are untyped at runtime: a non-string must never reach the OS.
+  it.each([[undefined], [{}], [['https://example.com']]])(
+    'shell:open-external refuses a non-string url (%j)',
+    async (url) => {
+      const result = await invokeFromFrame(APP_URL, 'shell:open-external', url)
+
+      expect(result).toMatchObject({ success: false })
+      expect(openExternal).not.toHaveBeenCalled()
+    }
+  )
+
   // Even the app's own page only gets http(s) handed to the OS: shell:open-external
   // shares isSafeExternalUrl with the window-open handler (#56).
   it.each(['file:///C:/Windows/System32/calc.exe', 'ms-msdt:/id PCWDiagnostic', 'javascript:x'])(
