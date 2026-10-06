@@ -386,7 +386,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await closeVault()
     expect(isVaultOpen()).toBe(false)
 
-    await expect(closeVault()).resolves.toBeUndefined()
+    await expect(closeVault()).resolves.toEqual({ packFailed: false })
     expect(isVaultOpen()).toBe(false)
   }, 60_000)
 
@@ -1646,6 +1646,32 @@ describe('closeVault() packs regardless of the previous queued operation (issue 
 
     await openVault(vaultPath, PASSWORD)
     expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('after')
+  }, 60_000)
+
+  it('reports a successful close as packFailed: false', async () => {
+    await openVault(vaultPath, PASSWORD)
+
+    await expect(closeVault()).resolves.toEqual({ packFailed: false })
+  }, 60_000)
+
+  it('reports a failed pack on close and logs only the error code, never the vault path', async () => {
+    await openVault(vaultPath, PASSWORD)
+    // atomicWrite() writes <vault>.tmp first; a directory there makes the pack fail
+    // without touching the .nvx itself.
+    const blocker = vaultPath + '.tmp'
+    mkdirSync(blocker)
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(closeVault()).resolves.toEqual({ packFailed: true })
+
+      expect(log).toHaveBeenCalledExactlyOnceWith('[close] pack failed:', expect.any(String))
+      for (const arg of log.mock.calls[0]) expect(String(arg)).not.toContain(vaultDir)
+      expect(isVaultOpen()).toBe(false)
+    } finally {
+      log.mockRestore()
+      rmSync(blocker, { recursive: true, force: true })
+    }
   }, 60_000)
 })
 

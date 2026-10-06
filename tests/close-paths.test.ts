@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, rmSync } from 'fs'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'node:url'
@@ -117,4 +117,31 @@ describe('every close path packs the latest edit (issue #61)', () => {
     },
     60_000
   )
+
+  it('tells the window when the pack on close fails', async () => {
+    await openVault(vaultPath, PASSWORD)
+    // atomicWrite() writes <vault>.tmp first; a directory there makes the pack fail
+    const blocker = vaultPath + '.tmp'
+    mkdirSync(blocker)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    win.webContents.send.mockClear()
+
+    try {
+      await ipc.closeVaultDrained(win as never)
+
+      expect(win.webContents.send).toHaveBeenCalledWith('vault:pack-failed')
+    } finally {
+      vi.mocked(console.error).mockRestore()
+      rmSync(blocker, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  it('sends nothing when the pack on close succeeds', async () => {
+    await openVault(vaultPath, PASSWORD)
+    win.webContents.send.mockClear()
+
+    await ipc.closeVaultDrained(win as never)
+
+    expect(win.webContents.send).not.toHaveBeenCalled()
+  }, 60_000)
 })

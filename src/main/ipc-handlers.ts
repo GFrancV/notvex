@@ -113,10 +113,13 @@ function touchActivity(): void {
 // lock, vault switch, opening a different .nvx, quitting, auto-lock) routes
 // through this instead of calling closeVault() directly, so none of them can
 // silently regress back to discarding a pending edit (#19).
+// A failed pack on close loses every write since the last sync, so the
+// window is told; with no window (quit) the log in doCloseVault is all (#61).
 export async function closeVaultDrained(win: BrowserWindow | null): Promise<void> {
   if (!isVaultOpen()) return
   if (win) await drainRenderer(win)
-  await closeVault()
+  const { packFailed } = await closeVault()
+  if (packFailed && win && !win.isDestroyed()) win.webContents.send('vault:pack-failed')
 }
 
 export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {

@@ -59,7 +59,7 @@ vi.mock('../src/main/vault/vault', () => ({
   getVaultPath: vi.fn(() => null),
   withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn()),
   isVaultOpen: vi.fn(() => false),
-  closeVault: vi.fn(async () => undefined),
+  closeVault: vi.fn(async () => ({ packFailed: false })),
   openVaultWithRecovery: vi.fn(async () => 1),
   syncContainer: vi.fn(),
   openVault: vi.fn(
@@ -408,7 +408,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     })
     let releaseClose = (): void => undefined
     vi.mocked(vault.closeVault).mockImplementationOnce(
-      () => new Promise<void>((resolve) => (releaseClose = resolve))
+      () => new Promise((resolve) => (releaseClose = (): void => resolve({ packFailed: false })))
     )
 
     const orphaned = invoke('vault:open', '/v.nvx', 'pw')

@@ -26,7 +26,7 @@ vi.mock('electron', async () => {
 })
 
 vi.mock('../src/main/vault/vault', () => ({
-  closeVault: vi.fn().mockResolvedValue(undefined),
+  closeVault: vi.fn().mockResolvedValue({ packFailed: false }),
   getVaultPath: vi.fn(() => null),
   isVaultOpen: vi.fn(() => false)
 }))
