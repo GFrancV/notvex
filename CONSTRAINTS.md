@@ -15,6 +15,12 @@ continuing.
 | Lint | `pnpm lint` | `eslint --max-warnings 0` |
 | Format | `pnpm format:check` | Prettier clean |
 
+## Code comments
+
+| Check | Command | Rule | Reason |
+|---|---|---|---|
+| Comment intent | `pnpm lint` | 0 `local/no-history-comments` errors (`eslint-rules/no-history-comments.mjs`) | Comments explain *why*. Issue/PR tags, task numbers, tooling narrative and `file:line` refs belong in the commit or PR, and go stale in the code. Narrative and duplication aren't machine-checkable — see CLAUDE.md, Code Style. |
+
 ## Security
 
 | Check | Command | Rule | Reason |
@@ -54,42 +60,28 @@ nothing — this was verified with a probe, not assumed.
 
 ## Coverage — measured only, not gated
 
-First test file landed with issue #16's fix: `tests/vault.test.ts`
-(regression test for `packContainer()` ignoring the WAL — see git history).
 Measured via `pnpm test:coverage`:
 
-| Metric | Value | Floor before #19 |
+| Metric | Value | Previous floor |
 |---|---|---|
 | Statements | 19.61% (665/3390) | 8.06% (268/3325) |
 | Branches | 12.27% (201/1638) | 4.77% (78/1633) |
 | Functions | 15.17% (129/850) | 7.09% (58/818) |
 | Lines | 20.79% (639/3073) | 8.67% (262/3019) |
 
-Read the jump carefully — it is two separate things:
-
-- **~240 covered statements were already earned.** The old floor was recorded
-  before PR #28 landed its vault regression tests and was never refreshed on
-  merge, so that backlog is only now being measured.
-- **Issue #19 added 21 tests across 4 files**, covering `pending-save.ts`
-  (25/25 statements), `drain-renderer.ts`, the `usePendingSave` lifecycle and
-  the note-title persistence path.
-
-Every one of those 21 was verified by mutation: the covered code was broken on
-purpose and the test confirmed to fail. Coverage percentage alone does not
-prove a test asserts anything — one of them passed against a deliberately
-broken build until it was fixed, and a five-axis review still found a bug all
-of them missed, because they modelled a commit as instantaneous.
+Coverage percentage alone does not prove a test asserts anything: a covered
+line can still pass against deliberately broken code.
 
 - Floor: the numbers above. From here, coverage must not regress below this
   floor — re-run `pnpm test:coverage` and update this table when it improves.
 - Do not invent a target (e.g. "80%") — that's fabricated, not measured.
 
-A percentage can also fall because the denominator shrank. A simplification
-pass late in #19 moved statements from 666/3391 to 665/3390 and functions from
-131/852 to 129/850 — the same 37 tests, less code under them. That direction is
-fine and this entry records it, because the rule above exists to stop a number
-being quietly edited down. A drop with no such note, or one where the test
-count also fell, is the thing it is guarding against.
+A percentage can also fall because the denominator shrank: less code under the
+same tests (e.g. statements 666/3391 → 665/3390 and functions 131/852 → 129/850
+after a simplification pass, same 37 tests). That direction is fine when it is
+recorded here with its before/after counts, because the rule above exists to
+stop a number being quietly edited down. A drop with no such note, or one where
+the test count also fell, is the thing it is guarding against.
 
 ## Speed budget
 
