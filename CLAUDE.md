@@ -23,11 +23,12 @@ pnpm format         # Prettier format (TS, CSS, JSON)
 pnpm format:check   # Check formatting without writing
 pnpm validate       # typecheck + lint + format:check
 pnpm depcruise      # IPC/vault boundary check (.dependency-cruiser.cjs)
-pnpm test:vault     # Vitest, all tests
+pnpm test           # Vitest, all tests (test:watch for watch mode)
+pnpm test:<area>    # One folder under tests/: main, vault, db, ipc, app, preload, renderer
 pnpm test:coverage  # Vitest with coverage
 pnpm doctor         # react-doctor scan (doctor:staged for staged files only)
 pnpm check:fast     # typecheck + lint — edit loop
-pnpm check:task     # validate + depcruise + test:vault — run before calling work done
+pnpm check:task     # validate + depcruise + test — run before calling work done
 pnpm check:full     # check:task + coverage — review/CI
 ```
 
@@ -57,7 +58,7 @@ The project uses electron-vite with three separate build targets. Directories ar
 
 **`src/shared/types.ts`** — TypeScript types shared across all three processes.
 
-**`tests/`** — Vitest tests: `tests/*.test.ts` run in node, `tests/renderer/*.test.ts` in jsdom. Never colocate tests in `src/`. Placement and typecheck rules: [`CONSTRAINTS.md` § Test file location](./CONSTRAINTS.md#test-file-location).
+**`tests/`** — Vitest tests, one folder per area mirroring `src/`: `tests/main/{vault,db,ipc,app}/`, `tests/preload/` and `tests/eslint-rules/` run in node, `tests/renderer/` in jsdom. One file per topic, not per module. Never colocate tests in `src/`. Placement and typecheck rules: [`CONSTRAINTS.md` § Test file location](./CONSTRAINTS.md#test-file-location).
 
 ### IPC Pattern
 
