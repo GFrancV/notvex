@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react'
 
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
 import { DevBuildWarningDialog } from '@/components/dialogs/DevBuildWarningDialog'
@@ -67,6 +68,13 @@ export default function App(): ReactNode {
       setStatus('locked')
     })
   }, [setStatus, setPendingOpenVaultPath])
+
+  // Lives here, not in Main: Main unmounts when the vault locks, which is when this fires
+  useEffect(() => {
+    return notvex.onPackFailed(() => {
+      toast.error("Recent changes couldn't be saved when the vault was locked.")
+    })
+  }, [])
 
   if (status === 'checking') {
     return (

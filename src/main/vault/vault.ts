@@ -73,9 +73,14 @@ interface RawNote {
 // calls), so a second caller must run its own body, not reuse the first
 // caller's result. Exported only so the test suite can verify the ordering
 // directly and fast, without real Argon2id/SQLCipher timing.
+//
+// fn is wrapped, never passed to .then() directly: that calls it with the
+// predecessor's result, which landed in doCloseVault's skipPack and silently
+// skipped the pack on close (#61). No rejection handler: vaultOpLock never
+// rejects, the .catch() below sees to that.
 let vaultOpLock: Promise<unknown> = Promise.resolve()
 export function withVaultLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = vaultOpLock.then(fn, fn)
+  const run = vaultOpLock.then(() => fn())
   vaultOpLock = run.catch(() => undefined)
   return run
 }
@@ -889,7 +894,10 @@ export async function syncContainer(): Promise<void> {
 // nested call — a permanent deadlock that also wedges every future queued
 // operation (including the 30s sync timer) and leaves masterKey un-zeroed.
 // Those fallbacks call doCloseVault() directly for this reason.
-export function closeVault(): Promise<void> {
+//
+// Never throws on a failed pack: it resolves with packFailed so the caller
+// can tell the user their latest changes weren't saved (#61).
+export function closeVault(): Promise<{ packFailed: boolean }> {
   return withVaultLock(doCloseVault)
 }
 
@@ -898,7 +906,8 @@ export function closeVault(): Promise<void> {
 // tempDbPath may be keyed, and its notes re-encrypted, with the discarded
 // NEW key, so packing now would atomicWrite an unreadable container over the
 // intact currentVaultPath, destroying it. Every other cleanup step still runs.
-async function doCloseVault(skipPack = false): Promise<void> {
+async function doCloseVault(skipPack = false): Promise<{ packFailed: boolean }> {
+  let packFailed = false
   // packContainer() checkpoints via `db`, so it runs before the connection
   // closes below, while there's still something to checkpoint against.
   // (SQLite implicitly checkpoints WAL when the last connection to a
@@ -913,8 +922,13 @@ async function doCloseVault(skipPack = false): Promise<void> {
   if (!skipPack && tempDbPath && currentVaultPath && currentMetadata) {
     try {
       await doPackContainer()
-    } catch {
-      /* don't throw on close */
+    } catch (e) {
+      // Don't throw on close, not even from here: the key wipe and lock release
+      // below depend on it. Log the error code only: fs messages embed the
+      // vault path (username, location, file name), which must not leak to stdout.
+      const tag = e instanceof Error ? ((e as NodeJS.ErrnoException).code ?? e.name) : typeof e
+      console.error('[close] pack failed:', tag)
+      packFailed = true
     }
   }
   if (db) {
@@ -945,6 +959,7 @@ async function doCloseVault(skipPack = false): Promise<void> {
   currentHasKeyFile = false
   tempDbPath = null
   releaseLock()
+  return { packFailed }
 }
 
 // Helper to re-encrypt all notes with a new key inside an open transaction.

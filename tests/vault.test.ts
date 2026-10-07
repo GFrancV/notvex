@@ -13,11 +13,17 @@ import { join } from 'path'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type Mock } from 'vitest'
 
-import { createNote, dbAll, dbRun, getNote } from '../src/main/db/queries'
+import { createNote, dbAll, dbRun, getNote, listNotes, updateNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
-import { decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
+import {
+  calibrateArgon2id,
+  decryptField,
+  deriveKey,
+  getArgon2Params,
+  memzero
+} from '../src/main/vault/crypto'
 import { allocSecure, freeSecure } from '../src/main/vault/memlock'
 import {
   changePassword,
@@ -43,7 +49,13 @@ import {
 // instance is wiped, not just that some zeroing call happened somewhere.
 vi.mock('../src/main/vault/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
-  return { ...actual, memzero: vi.fn(actual.memzero), deriveKey: vi.fn(actual.deriveKey) }
+  return {
+    ...actual,
+    memzero: vi.fn(actual.memzero),
+    deriveKey: vi.fn(actual.deriveKey),
+    calibrateArgon2id: vi.fn(actual.calibrateArgon2id),
+    getArgon2Params: vi.fn(actual.getArgon2Params)
+  }
 })
 
 // Same pass-through partial mock for memlock.ts, so the issue #23 tests
@@ -381,7 +393,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await closeVault()
     expect(isVaultOpen()).toBe(false)
 
-    await expect(closeVault()).resolves.toBeUndefined()
+    await expect(closeVault()).resolves.toEqual({ packFailed: false })
     expect(isVaultOpen()).toBe(false)
   }, 60_000)
 
@@ -1588,6 +1600,131 @@ describe('devBuild propagation (issue #34)', () => {
   }, 150_000)
 })
 
+// The editor's autosave ends with loadNotes(), which queues a notes:list
+// that resolves with an array. withVaultLock used to forward that array to
+// doCloseVault as skipPack, so the vault closed without packing and the
+// edit was lost (#61). Real SQLCipher, no vault mocks; calibration is
+// stubbed to the cheapest tier because it's not what's under test here.
+describe('closeVault() packs regardless of the previous queued operation (issue #61)', () => {
+  const PASSWORD = 'correct horse battery staple'
+  let vaultDir: string
+  let vaultPath: string
+
+  beforeAll(async () => {
+    vi.mocked(calibrateArgon2id).mockReturnValue({ tier: 10 })
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    vaultPath = join(vaultDir, 'test.nvx')
+    await createVault(vaultPath, PASSWORD)
+    await closeVault()
+  }, 60_000)
+
+  // A failed assertion would otherwise leave the vault open for the next case.
+  afterEach(async () => {
+    await closeVault()
+  })
+
+  afterAll(() => {
+    vi.mocked(calibrateArgon2id).mockReset()
+    rmSync(vaultDir, { recursive: true, force: true })
+  })
+
+  it('keeps an edit when the operation before the close resolved with a value (notes:list)', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const note = await createNote(getDb(), { title: 'Draft', content: 'before' }, getMasterKey())
+    await updateNote(getDb(), note.id, { content: 'after' }, getMasterKey())
+
+    void withVaultLock(() => listNotes(getDb(), getMasterKey()))
+    await closeVault()
+
+    await openVault(vaultPath, PASSWORD)
+    expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('after')
+  }, 60_000)
+
+  // Characterization: on main a rejection already reached fn as undefined
+  // (vaultOpLock swallows it), which hit the skipPack default, so this case
+  // never lost data. It guards the rejection path going forward.
+  it('keeps an edit when the operation before the close rejected', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const note = await createNote(getDb(), { title: 'Draft', content: 'before' }, getMasterKey())
+    await updateNote(getDb(), note.id, { content: 'after' }, getMasterKey())
+
+    withVaultLock(() => Promise.reject(new Error('boom'))).catch(() => undefined)
+    await closeVault()
+
+    await openVault(vaultPath, PASSWORD)
+    expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('after')
+  }, 60_000)
+
+  it('reports a successful close as packFailed: false', async () => {
+    await openVault(vaultPath, PASSWORD)
+
+    await expect(closeVault()).resolves.toEqual({ packFailed: false })
+  }, 60_000)
+
+  it('reports a failed pack on close and logs only the error code, never the vault path', async () => {
+    await openVault(vaultPath, PASSWORD)
+    // atomicWrite() writes <vault>.tmp first; a directory there makes the pack fail
+    // without touching the .nvx itself.
+    const blocker = vaultPath + '.tmp'
+    mkdirSync(blocker)
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(closeVault()).resolves.toEqual({ packFailed: true })
+
+      expect(log).toHaveBeenCalledExactlyOnceWith('[close] pack failed:', expect.any(String))
+      for (const arg of log.mock.calls[0]) expect(String(arg)).not.toContain(vaultDir)
+      expect(isVaultOpen()).toBe(false)
+    } finally {
+      log.mockRestore()
+      rmSync(blocker, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  it('leaves the last packed .nvx intact and reopenable after a failed pack', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const note = await createNote(getDb(), { title: 'Draft', content: 'packed' }, getMasterKey())
+    await closeVault()
+    await openVault(vaultPath, PASSWORD)
+    await updateNote(getDb(), note.id, { content: 'lost' }, getMasterKey())
+    const blocker = vaultPath + '.tmp'
+    mkdirSync(blocker)
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(closeVault()).resolves.toEqual({ packFailed: true })
+    } finally {
+      log.mockRestore()
+      rmSync(blocker, { recursive: true, force: true })
+    }
+
+    // Reopening also proves the lock was released on the failure path
+    await openVault(vaultPath, PASSWORD)
+    expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('packed')
+  }, 60_000)
+
+  // The catch block is the only thing between a failed pack and the key wipe
+  // and lock release below it; logging must not be able to throw out of it.
+  it('still closes, wipes and unlocks when the pack rejects with something that is not an Error', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const notAnError: unknown = null
+    vi.mocked(getArgon2Params).mockImplementationOnce(() => {
+      throw notAnError
+    })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(closeVault()).resolves.toEqual({ packFailed: true })
+      expect(log).toHaveBeenCalledExactlyOnceWith('[close] pack failed:', 'object')
+      expect(isVaultOpen()).toBe(false)
+    } finally {
+      log.mockRestore()
+    }
+
+    await expect(openVault(vaultPath, PASSWORD)).resolves.not.toBeNull()
+  }, 60_000)
+})
+
 // Pure ordering test — no vault/crypto involved, deliberately fast and
 // deterministic. Proving a race is closed needs controlled timing, which
 // real Argon2id/SQLCipher calls can't reliably provide; the existing tests
@@ -1636,6 +1773,29 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
     await second
 
     expect(order).toEqual(['first', 'second'])
+  })
+
+  // closeVault() hands doCloseVault(skipPack = false) to the queue by
+  // reference, so a forwarded predecessor value lands in skipPack and skips
+  // the pack on close (#61).
+  it('calls fn with no arguments after a predecessor that resolves with a value', async () => {
+    void withVaultLock(async () => ['truthy'])
+    const fn = vi.fn(async () => undefined)
+
+    await withVaultLock(fn)
+
+    expect(fn).toHaveBeenCalledWith()
+  })
+
+  it('calls fn with no arguments after a predecessor that rejects', async () => {
+    withVaultLock(async () => {
+      throw new Error('boom')
+    }).catch(() => undefined)
+    const fn = vi.fn(async () => undefined)
+
+    await withVaultLock(fn)
+
+    expect(fn).toHaveBeenCalledWith()
   })
 
   it('deadlocks permanently on a reentrant call — this is why closeVault()s catch-block fallbacks call doCloseVault() directly, never closeVault()', async () => {

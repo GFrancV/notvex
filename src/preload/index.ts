@@ -191,6 +191,13 @@ const api: NotvexAPI = {
       ipcRenderer.off('vault:auto-locked', listener)
     }
   },
+  onPackFailed: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('vault:pack-failed', listener)
+    return (): void => {
+      ipcRenderer.off('vault:pack-failed', listener)
+    }
+  },
   onOpenFile: (callback) => {
     const listener = (_e: unknown, filePath: string): void => callback(filePath)
     ipcRenderer.on('vault:open-file', listener)
