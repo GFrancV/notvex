@@ -74,15 +74,13 @@ interface RawNote {
 // caller's result. Exported only so the test suite can verify the ordering
 // directly and fast, without real Argon2id/SQLCipher timing.
 //
-// fn is wrapped, never passed to .then() directly: .then(fn, fn) calls it
-// with the predecessor's result, which landed in doCloseVault's skipPack and
-// silently skipped the pack on close (#61).
+// fn is wrapped, never passed to .then() directly: that calls it with the
+// predecessor's result, which landed in doCloseVault's skipPack and silently
+// skipped the pack on close (#61). No rejection handler: vaultOpLock never
+// rejects, the .catch() below sees to that.
 let vaultOpLock: Promise<unknown> = Promise.resolve()
 export function withVaultLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = vaultOpLock.then(
-    () => fn(),
-    () => fn()
-  )
+  const run = vaultOpLock.then(() => fn())
   vaultOpLock = run.catch(() => undefined)
   return run
 }
