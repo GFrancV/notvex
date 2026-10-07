@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NotvexAPI } from '@shared/types'
 
 // The main process sends 'vault:pack-failed' (asserted in close-paths.test.ts);
-// a typo on this side would leave the toast silently dead (#61).
+// a typo on this side would leave the toast silently dead.
 
 const on = vi.fn()
 const off = vi.fn()

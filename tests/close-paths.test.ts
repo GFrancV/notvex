@@ -10,8 +10,8 @@ import { rendererIndexPath } from '../src/main/url-guard'
 import { closeVault, createVault, isVaultOpen, openVault } from '../src/main/vault/vault'
 
 // Every path that closes the vault routes through closeVaultDrained() →
-// closeVault(). The editor's autosave ends with a notes:list, which used to
-// reach doCloseVault() as skipPack and close without packing (#61). This
+// closeVault(). The editor's autosave ends with a notes:list, which must never
+// reach doCloseVault() as skipPack and close without packing. This
 // drives each path through the real IPC handlers and the real vault module;
 // only Electron and the main-process modules around it are stubbed.
 

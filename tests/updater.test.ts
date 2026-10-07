@@ -4,7 +4,7 @@ import type { BrowserWindow } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // autoUpdater is app-wide, but createWindow() calls initAutoUpdater() once per
-// window — and macOS `activate` creates more than one (issue #36).
+// window — and macOS `activate` creates more than one.
 
 vi.mock('electron', () => ({ app: { isPackaged: true } }))
 

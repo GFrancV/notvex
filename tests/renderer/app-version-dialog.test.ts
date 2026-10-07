@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // A plain <a href> starts a main-frame navigation, which will-navigate blocks,
 // so the links did nothing. They must go through shell.openExternal like every
-// other external link in the renderer (#60).
+// other external link in the renderer.
 
 const openExternal = vi.hoisted(() => vi.fn().mockResolvedValue({ success: true, data: null }))
 
