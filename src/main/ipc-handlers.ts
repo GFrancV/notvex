@@ -114,7 +114,9 @@ function touchActivity(): void {
 // through this instead of calling closeVault() directly, so none of them can
 // silently regress back to discarding a pending edit (#19).
 // A failed pack on close loses every write since the last sync, so the
-// window is told; with no window (quit) the log in doCloseVault is all (#61).
+// window is told (#61). Where the window is gone or about to be (renderer
+// reload, quit: app.quit() follows before the toast can show), the log in
+// doCloseVault is all that records it.
 export async function closeVaultDrained(win: BrowserWindow | null): Promise<void> {
   if (!isVaultOpen()) return
   if (win) await drainRenderer(win)
