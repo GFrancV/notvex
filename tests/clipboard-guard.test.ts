@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Electron 44 made clipboard.readText() async (#74). Compared synchronously,
+// Electron 44 made clipboard.readText() async. Compared synchronously,
 // the Promise never equals the copied string and the clipboard is never cleared.
 
 const clipboard = {
