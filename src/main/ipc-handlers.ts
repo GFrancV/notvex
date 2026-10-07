@@ -7,6 +7,7 @@ import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs } from '@shared/types'
 import { scheduleClipboardClear } from './clipboard-guard'
+import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
@@ -744,6 +745,7 @@ export function registerIpcHandlers(
       })
 
       if (canceled || !filePath) return ok(null)
+      rememberDialogDir(filePath)
 
       copyFileSync(vaultPath, filePath)
       return ok(filePath)
@@ -768,10 +770,11 @@ export function registerIpcHandlers(
     try {
       const result = await dialog.showSaveDialog(requireWin(), {
         title: 'Save key file',
-        defaultPath: 'notvex.nvxkey',
+        defaultPath: dialogDefaultPath('notvex.nvxkey'),
         filters: [{ name: 'Notvex Key File', extensions: ['nvxkey'] }]
       })
       if (result.canceled || !result.filePath) return ok(null)
+      rememberDialogDir(result.filePath)
       const bytes = randomBytes(32)
       writeFileSync(result.filePath, bytes)
       const filename = basename(result.filePath)
@@ -785,6 +788,7 @@ export function registerIpcHandlers(
     try {
       const result = await dialog.showOpenDialog(requireWin(), {
         title: 'Select key file',
+        defaultPath: dialogDefaultPath(),
         properties: ['openFile'],
         filters: [
           { name: 'Notvex Key File', extensions: ['nvxkey'] },
@@ -793,6 +797,7 @@ export function registerIpcHandlers(
       })
       if (result.canceled || !result.filePaths[0]) return ok(null)
       const filePath = result.filePaths[0]
+      rememberDialogDir(filePath)
       const filename = basename(filePath)
       const raw = readFileSync(filePath)
       const sizeBytes = raw.length
@@ -851,17 +856,22 @@ export function registerIpcHandlers(
       if (mode === 'new') {
         const result = await dialog.showSaveDialog(requireWin(), {
           title: 'Create new vault',
-          defaultPath: 'vault.nvx',
+          defaultPath: dialogDefaultPath('vault.nvx'),
           filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }]
         })
-        return ok(result.canceled ? null : result.filePath)
+        if (result.canceled) return ok(null)
+        rememberDialogDir(result.filePath)
+        return ok(result.filePath)
       } else {
         const result = await dialog.showOpenDialog(requireWin(), {
           title: 'Open existing vault',
+          defaultPath: dialogDefaultPath(),
           properties: ['openFile'],
           filters: [{ name: 'Notvex Vault', extensions: ['nvx'] }]
         })
-        return ok(result.canceled ? null : result.filePaths[0])
+        if (result.canceled) return ok(null)
+        rememberDialogDir(result.filePaths[0])
+        return ok(result.filePaths[0])
       }
     } catch (e) {
       return fail(e)
