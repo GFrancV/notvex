@@ -81,7 +81,7 @@ function fail(error: unknown): IpcResult<never> {
 }
 
 // Every handler registers through this so a call from any frame other than the
-// app's own page is refused before it runs (#57). ipcMain.handle has no
+// app's own page is refused before it runs. ipcMain.handle has no
 // middleware, and a guard line per handler is easy to forget on a new channel.
 function handle(
   channel: string,
@@ -112,9 +112,9 @@ function touchActivity(): void {
 // flush pending autosaves — every caller that can close the vault (manual
 // lock, vault switch, opening a different .nvx, quitting, auto-lock) routes
 // through this instead of calling closeVault() directly, so none of them can
-// silently regress back to discarding a pending edit (#19).
+// discard a pending edit.
 // A failed pack on close loses every write since the last sync, so the
-// window is told (#61). Where the window is gone or about to be (renderer
+// window is told. Where the window is gone or about to be (renderer
 // reload, quit: app.quit() follows before the toast can show), the log in
 // doCloseVault is all that records it.
 export async function closeVaultDrained(win: BrowserWindow | null): Promise<void> {
@@ -134,7 +134,7 @@ export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<voi
 // On macOS the app outlives its last window and `activate` builds a new one,
 // so createWindow() calls registerIpcHandlers() more than once. ipcMain.handle
 // throws on a second registration, so handlers are registered once and read
-// the window through liveWin() instead of capturing the first one (#36).
+// the window through liveWin() instead of capturing the first one.
 
 let currentWin: BrowserWindow | null = null
 let handlersRegistered = false
@@ -145,7 +145,7 @@ function liveWin(): BrowserWindow | null {
 
 // Whether the renderer that made a call is still the window the user sees. On
 // macOS `activate` can replace it mid-unlock with a window that never asked for
-// the unlock, so long-running handlers check this instead of liveWin() (#50).
+// the unlock, so long-running handlers check this instead of liveWin().
 function isLiveSender(sender: WebContents): boolean {
   return !sender.isDestroyed() && sender === liveWin()?.webContents
 }
@@ -200,7 +200,7 @@ let isUnlocking = false
 
 // Bumped when the renderer is replaced while its window stays alive (reload,
 // crash). An unlock started under an older renderer has nobody left to show
-// the vault to, and isLiveSender() can't tell: the webContents is the same (#51).
+// the vault to, and isLiveSender() can't tell: the webContents is the same.
 let rendererGeneration = 0
 
 export function markRendererReplaced(): void {
@@ -240,7 +240,7 @@ let migrationResolver: ((result: { confirmed: boolean; createBackup: boolean }) 
 let migrationBackupTimestamp: number | null = null
 
 // The renderer the pending gate was sent to — the only one whose answer counts,
-// so a window that never got the prompt can't confirm or cancel it (#50). Never
+// so a window that never got the prompt can't confirm or cancel it. Never
 // reset: it is only read while a resolver is pending, and every gate assigns it
 // before parking, so a stale value is always overwritten first.
 let gateRequester: WebContents | null = null
@@ -252,7 +252,7 @@ type MigrationPayload =
 // Sends 'vault:migration-required' to the renderer that requested the unlock and waits
 // for the user's response. Shared by the header-version and schema-version gates in
 // vault:open and vault:open-with-recovery. If that renderer is gone nobody can answer,
-// so it counts as cancelled — never re-routed to another window (#50).
+// so it counts as cancelled — never re-routed to another window.
 async function confirmMigrationAndBackup(
   sender: WebContents,
   filePath: string,
@@ -288,7 +288,7 @@ let devBuildWarningResolver: ((confirmed: boolean) => void) | null = null
 // unlock and waits for the user's response. Shared by vault:open and
 // vault:open-with-recovery, gated on shouldWarnOpeningInDevBuild() — see its
 // docstring in container.ts. If that renderer is gone nobody can answer, so it
-// counts as cancelled (#50).
+// counts as cancelled.
 async function confirmDevBuildWarning(sender: WebContents, filePath: string): Promise<boolean> {
   if (devBuildWarningResolver !== null) {
     throw new Error('A dev-build warning dialog is already open. Complete or cancel it first.')
@@ -306,7 +306,7 @@ async function confirmDevBuildWarning(sender: WebContents, filePath: string): Pr
 // vault:open-with-recovery unwind through its own cleanup (the finally that
 // resets isUnlocking, openVault's temp-file catch) instead of hanging forever.
 // Called by the renderer's -cancelled handlers and by the window's 'closed'
-// event, since a destroyed window can never answer (#36). The gates run in
+// event, since a destroyed window can never answer. The gates run in
 // sequence, so at most one is ever pending.
 export function cancelPendingConfirmations(): void {
   migrationResolver?.({ confirmed: false, createBackup: false })
@@ -318,11 +318,11 @@ export function cancelPendingConfirmations(): void {
 // An unlock that finishes after its window closed (macOS: the window closed
 // mid-key-derivation, so window-all-closed found nothing to lock yet and
 // stopped auto-lock) must not leave an unlocked vault with no UI — the next
-// `activate` window would open straight into the notes (#36). The same holds
+// `activate` window would open straight into the notes. The same holds
 // when that `activate` window already exists: it never asked for the unlock and
-// is sitting on its own unlock view, out of sync with an open vault (#50). And
+// is sitting on its own unlock view, out of sync with an open vault. And
 // when the renderer was reloaded or crashed mid-unlock: the window survives, but
-// the page that asked is gone and the new one would boot into the notes (#51).
+// the page that asked is gone and the new one would boot into the notes.
 function isUnlockOrphaned(sender: WebContents, generation: number): boolean {
   return !isLiveSender(sender) || generation !== rendererGeneration
 }
@@ -467,7 +467,7 @@ export function registerIpcHandlers(
         }
 
         // await, not return: the finally that clears isUnlocking must wait for
-        // the close, or a retry from the reloaded page races it (#51).
+        // the close, or a retry from the reloaded page races it.
         if (vaultVersion !== null && isUnlockOrphaned(event.sender, generation)) {
           return await relockOrphanedVault()
         }
@@ -491,7 +491,7 @@ export function registerIpcHandlers(
     }
   )
 
-  // The four gate answers below are no-ops unless they come from gateRequester (#50).
+  // The four gate answers below are no-ops unless they come from gateRequester.
   handle('vault:migration-confirmed', (event, createBackup: boolean) => {
     try {
       if (event.sender !== gateRequester) return ok(null)
@@ -719,13 +719,9 @@ export function registerIpcHandlers(
       const vaultPath = getVaultPath()
       if (!vaultPath) return fail('No vault open')
 
-      // Unlike syncContainer() (used by the periodic timer, which must never
-      // throw), this is a deliberate user-initiated backup — a failed sync
-      // here must surface as a failed backup, not silently copy stale data.
-      // Caught separately (generic message, real error logged here only)
-      // because packContainer() can throw fs errors (ENOENT/EACCES/etc.)
-      // whose message embeds local filesystem paths — those shouldn't cross
-      // the IPC boundary to the renderer.
+      // packContainer(), not syncContainer(): a failed sync must surface as a
+      // failed backup, not silently copy stale data. Its fs errors embed local
+      // paths, so they're logged here and the renderer gets a generic message.
       try {
         await packContainer()
       } catch (e) {
@@ -836,7 +832,7 @@ export function registerIpcHandlers(
     try {
       // closeVault() packs the container before it clears the path, so queue
       // behind any in-flight close: a renderer reloaded mid-close must not
-      // read "open" and boot into the notes over a closing vault (#51).
+      // read "open" and boot into the notes over a closing vault.
       const path = await withVaultLock(async () => getVaultPath())
       return ok(
         path !== null ? { isOpen: true as const, vaultPath: path } : { isOpen: false as const }

@@ -11,7 +11,7 @@ let nextRequestId = 0
 
 /**
  * Give the renderer a brief window to persist anything still sitting in its
- * autosave debounce, while the database is still open (#19).
+ * autosave debounce, while the database is still open.
  *
  * Bounded by construction: a renderer that is hung, crashed or simply not
  * listening must never keep an unlocked vault on screen, so the wait is a race
