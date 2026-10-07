@@ -8,3 +8,8 @@ allowBuilds:
   phantomjs-prebuilt: false
   sharp: false
   unrs-resolver: false
+overrides:
+  # node-pre-gyp 1.x pins tar 6 (path traversal advisories); 2.x uses tar 7
+  '@journeyapps/sqlcipher>@mapbox/node-pre-gyp': ^2.0.3
+  # icon-gen 5 (latest) still asks for sharp 0.33; only used by gen:icon
+  'icon-gen>sharp': ^0.35.5
