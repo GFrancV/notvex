@@ -37,7 +37,7 @@ let startupDone = false
 function openMainWindow(): void {
   const win = createWindow(takePendingOpenFilePath)
   // On macOS the app outlives its last window; open-file / second-instance
-  // must not reuse the destroyed one (#49).
+  // must not reuse the destroyed one.
   win.on('closed', (): void => {
     if (mainWindow === win) mainWindow = null
   })
@@ -75,7 +75,7 @@ app.on('window-all-closed', (): void => {
 // On macOS, Cmd+Q / app.quit() fires before-quit *before* any window's
 // 'close' event, so this is the primary drain path for that gesture — the
 // window-level intercept in window.ts only ever sees an already-closed
-// vault by the time it runs (#19).
+// vault by the time it runs.
 app.on('before-quit', (event): void => {
   if (readyToQuit) return // our own re-entrant app.quit(): let it through
   event.preventDefault() // synchronous, before any await
