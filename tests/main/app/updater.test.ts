@@ -31,7 +31,7 @@ function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void
 
 describe('initAutoUpdater across windows (issue #36)', () => {
   let autoUpdater: EventEmitter
-  let initAutoUpdater: typeof import('../src/main/updater').initAutoUpdater
+  let initAutoUpdater: typeof import('@main/updater').initAutoUpdater
 
   beforeEach(async () => {
     vi.resetModules()
@@ -39,7 +39,7 @@ describe('initAutoUpdater across windows (issue #36)', () => {
       autoUpdater: EventEmitter
     })
     autoUpdater.removeAllListeners()
-    ;({ initAutoUpdater } = await import('../src/main/updater'))
+    ;({ initAutoUpdater } = await import('@main/updater'))
   })
 
   it('registers each autoUpdater listener only once', () => {

@@ -29,7 +29,7 @@ vi.mock('electron', async () => {
   }
 })
 
-vi.mock('../src/main/ipc-handlers', () => ({
+vi.mock('@main/ipc-handlers', () => ({
   cancelPendingConfirmations: vi.fn(),
   closeVaultDrained: vi.fn(async () => undefined),
   lockVaultAndNotify: vi.fn(async () => undefined),
@@ -37,22 +37,22 @@ vi.mock('../src/main/ipc-handlers', () => ({
   registerIpcHandlers: vi.fn()
 }))
 
-vi.mock('../src/main/prefs', () => ({ getPref: vi.fn(() => false) }))
-vi.mock('../src/main/updater', () => ({ initAutoUpdater: vi.fn() }))
-vi.mock('../src/main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
+vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => false) }))
+vi.mock('@main/updater', () => ({ initAutoUpdater: vi.fn() }))
+vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 
 const POWER_EVENTS = ['suspend', 'lock-screen', 'user-did-resign-active'] as const
 
 describe('createWindow: powerMonitor listeners (issue #36)', () => {
   let powerMonitor: EventEmitter
-  let createWindow: typeof import('../src/main/window').createWindow
+  let createWindow: typeof import('@main/window').createWindow
 
   beforeEach(async () => {
     vi.clearAllMocks()
     const electron = await import('electron')
     powerMonitor = electron.powerMonitor as unknown as EventEmitter
     powerMonitor.removeAllListeners()
-    ;({ createWindow } = await import('../src/main/window'))
+    ;({ createWindow } = await import('@main/window'))
   })
 
   it('removes its powerMonitor listeners when the window closes', () => {
@@ -63,7 +63,7 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
   })
 
   it('settles any pending confirmation prompt when the window closes', async () => {
-    const { cancelPendingConfirmations } = await import('../src/main/ipc-handlers')
+    const { cancelPendingConfirmations } = await import('@main/ipc-handlers')
     const win = createWindow(() => null)
 
     win.emit('closed')
@@ -72,7 +72,7 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
   })
 
   it('locks through the reopened window, not the closed one, on every lock event', async () => {
-    const { lockVaultAndNotify } = await import('../src/main/ipc-handlers')
+    const { lockVaultAndNotify } = await import('@main/ipc-handlers')
     createWindow(() => null).emit('closed')
     const second = createWindow(() => null)
 
@@ -94,16 +94,16 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
 // fires, yet the prompt was sent to a renderer that no longer exists — and the
 // new renderer starts with no vault UI, so the key must not stay in memory.
 describe('createWindow: renderer reload / crash (issue #51)', () => {
-  let createWindow: typeof import('../src/main/window').createWindow
+  let createWindow: typeof import('@main/window').createWindow
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    ;({ createWindow } = await import('../src/main/window'))
+    ;({ createWindow } = await import('@main/window'))
   })
 
   it('settles the pending prompt and closes the vault when the renderer crashes', async () => {
     const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
-      await import('../src/main/ipc-handlers')
+      await import('@main/ipc-handlers')
     const win = createWindow(() => null)
 
     win.webContents.emit('render-process-gone')
@@ -115,7 +115,7 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
 
   it('settles the pending prompt and closes the vault once a reload commits', async () => {
     const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
-      await import('../src/main/ipc-handlers')
+      await import('@main/ipc-handlers')
     const win = createWindow(() => null)
 
     win.webContents.emit('did-navigate')
@@ -130,7 +130,7 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
   // closing the vault there would drop unsaved edits under a live UI.
   it('leaves the vault alone when a navigation only starts', async () => {
     const { cancelPendingConfirmations, closeVaultDrained, markRendererReplaced } =
-      await import('../src/main/ipc-handlers')
+      await import('@main/ipc-handlers')
     const win = createWindow(() => null)
 
     win.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
@@ -144,11 +144,11 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
 // The renderer is a SPA that never navigates and any loaded page gets window.notvex, so every
 // navigation is blocked, lookalike hosts and dropped files included.
 describe('createWindow: navigation (issue #57)', () => {
-  let createWindow: typeof import('../src/main/window').createWindow
+  let createWindow: typeof import('@main/window').createWindow
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    ;({ createWindow } = await import('../src/main/window'))
+    ;({ createWindow } = await import('@main/window'))
   })
 
   it.each([
@@ -171,13 +171,13 @@ describe('createWindow: navigation (issue #57)', () => {
 // launched with it set would load that (remote) page with the preload. Only a
 // dev build may load from the dev server.
 describe('createWindow: dev server url (issue #57)', () => {
-  let createWindow: typeof import('../src/main/window').createWindow
+  let createWindow: typeof import('@main/window').createWindow
   let app: { isPackaged: boolean }
 
   beforeEach(async () => {
     vi.clearAllMocks()
     app = (await import('electron')).app as unknown as { isPackaged: boolean }
-    ;({ createWindow } = await import('../src/main/window'))
+    ;({ createWindow } = await import('@main/window'))
   })
 
   afterEach(() => {
@@ -186,7 +186,7 @@ describe('createWindow: dev server url (issue #57)', () => {
   })
 
   it('ignores ELECTRON_RENDERER_URL in a packaged build', async () => {
-    const { rendererIndexPath } = await import('../src/main/url-guard')
+    const { rendererIndexPath } = await import('@main/url-guard')
     vi.stubEnv('ELECTRON_RENDERER_URL', 'https://attacker.example/')
 
     const win = createWindow(() => null)
@@ -198,7 +198,7 @@ describe('createWindow: dev server url (issue #57)', () => {
   })
 
   it('loads the built renderer in a dev build with no dev server', async () => {
-    const { rendererIndexPath } = await import('../src/main/url-guard')
+    const { rendererIndexPath } = await import('@main/url-guard')
     app.isPackaged = false
 
     const win = createWindow(() => null)
@@ -224,14 +224,14 @@ describe('createWindow: dev server url (issue #57)', () => {
 // filter as shell:open-external — file:, ms-msdt:, search-ms: etc. are the
 // usual path from "click a link" to code execution on Windows.
 describe('createWindow: window-open handler (issue #56)', () => {
-  let createWindow: typeof import('../src/main/window').createWindow
+  let createWindow: typeof import('@main/window').createWindow
   let openExternal: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
     vi.clearAllMocks()
     const electron = await import('electron')
     openExternal = vi.mocked(electron.shell.openExternal)
-    ;({ createWindow } = await import('../src/main/window'))
+    ;({ createWindow } = await import('@main/window'))
   })
 
   function openWindow(url: string): unknown {

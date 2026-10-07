@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createPendingSave, flushAllPending } from '../src/renderer/src/lib/pending-save'
+import { createPendingSave, flushAllPending } from '@/lib/pending-save'
 
 const DELAY = 500
 

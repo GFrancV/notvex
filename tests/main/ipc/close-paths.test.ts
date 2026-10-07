@@ -6,8 +6,8 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type { Note } from '@shared/types'
-import { rendererIndexPath } from '../src/main/url-guard'
-import { closeVault, createVault, isVaultOpen, openVault } from '../src/main/vault/vault'
+import { rendererIndexPath } from '@main/url-guard'
+import { closeVault, createVault, isVaultOpen, openVault } from '@main/vault/vault'
 
 // Drives each close path through the real IPC handlers and vault module: an edit followed by
 // the autosave's notes:list must still be packed, never reach doCloseVault() as skipPack.
@@ -31,7 +31,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('../src/main/prefs', () => ({
+vi.mock('@main/prefs', () => ({
   getCurrentVaultPath: vi.fn(),
   getPref: vi.fn(() => 0),
   getPrefs: vi.fn(),
@@ -39,13 +39,13 @@ vi.mock('../src/main/prefs', () => ({
   recordVaultUsed: vi.fn(),
   setPref: vi.fn()
 }))
-vi.mock('../src/main/vault/backups', () => ({}))
-vi.mock('../src/main/clipboard-guard', () => ({}))
-vi.mock('../src/main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
+vi.mock('@main/vault/backups', () => ({}))
+vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 // Real Argon2id, cheapest tier: calibration is not what's under test.
-vi.mock('../src/main/vault/crypto', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
+vi.mock('@main/vault/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@main/vault/crypto')>()
   return { ...actual, calibrateArgon2id: vi.fn(() => ({ tier: 10 })) }
 })
 
@@ -62,14 +62,14 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 }
 
 describe('every close path packs the latest edit (issue #61)', () => {
-  let ipc: typeof import('../src/main/ipc-handlers')
+  let ipc: typeof import('@main/ipc-handlers')
   let vaultDir: string
   let vaultPath: string
   let otherVaultPath: string
   const win = { isDestroyed: () => false, webContents: { send: vi.fn() } }
 
   beforeAll(async () => {
-    ipc = await import('../src/main/ipc-handlers')
+    ipc = await import('@main/ipc-handlers')
     ipc.registerIpcHandlers(win as never, () => null)
 
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))

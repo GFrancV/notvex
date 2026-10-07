@@ -9,17 +9,17 @@ const clipboard = {
 }
 
 vi.mock('electron', () => ({ clipboard }))
-vi.mock('../src/main/prefs', () => ({ getPrefs: () => ({ clipboardClearSeconds: 10 }) }))
+vi.mock('@main/prefs', () => ({ getPrefs: () => ({ clipboardClearSeconds: 10 }) }))
 
 describe('scheduleClipboardClear', () => {
-  let scheduleClipboardClear: typeof import('../src/main/clipboard-guard').scheduleClipboardClear
+  let scheduleClipboardClear: typeof import('@main/clipboard-guard').scheduleClipboardClear
 
   beforeEach(async () => {
     vi.useFakeTimers()
     vi.resetModules()
     clipboard.readText.mockReset()
     clipboard.clear.mockReset()
-    ;({ scheduleClipboardClear } = await import('../src/main/clipboard-guard'))
+    ;({ scheduleClipboardClear } = await import('@main/clipboard-guard'))
   })
 
   afterEach(() => {
