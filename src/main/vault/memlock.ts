@@ -1,13 +1,6 @@
 /**
- * memlock.ts — Prevents the masterKey from being paged to disk by the OS.
- *
- * Allocates key material outside V8's GC heap (Buffer.allocUnsafeSlow) and
- * pins the memory page with VirtualLock (Windows) / mlock (Linux, macOS).
- * Gracefully degrades to plain zeroing if koffi is unavailable.
- *
- * Why this matters: on a system under memory pressure the OS can swap any
- * unlocked page to disk. A locked page stays in RAM — an attacker with
- * physical access to the drive cannot find the key in the pagefile/swapfile.
+ * Key buffers outside V8's heap, page-locked with VirtualLock / mlock so the OS can't swap the
+ * key to disk. Best effort: if koffi is missing or a lock call fails, only zeroing remains.
  */
 
 import koffi from 'koffi'
@@ -46,10 +39,7 @@ try {
   // koffi unavailable — memory locking disabled, app still works normally
 }
 
-/**
- * Allocates a Buffer in native heap (outside V8 GC) and locks the page in RAM.
- * Use for key material that must never reach disk.
- */
+/** Use for key material that must never reach disk. */
 export function allocSecure(size: number): Buffer {
   // allocUnsafeSlow: dedicated allocation, not drawn from the shared 8-KB pool.
   // This gives us a stable, uniquely-owned address — required for VirtualLock.

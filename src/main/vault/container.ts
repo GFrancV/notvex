@@ -7,6 +7,8 @@ import { join } from 'path'
 import { CURRENT_VERSION_MAJ, CURRENT_VERSION_MIN } from '@shared/types'
 import { computeHeaderHmac, isValidKdfTier, KdfInputV1 } from './crypto'
 
+// Layout: [4B "NVX\0"][u16le maj][u16le min][TLV: u8 id, u32le len, data]...[0x00][DB bytes]
+// The header HMAC covers every byte before the HeaderHmac field (computeHeaderHmac()).
 const MAGIC_NVX = Buffer.from('NVX\0')
 
 const FieldId = {
@@ -26,10 +28,8 @@ export interface ContainerMetadata {
   storedHmac: Buffer
   hmacCoveredBytes: Buffer
   dbOffset: number
-  // True only if the vault was created (or last had its header rewritten) by a
-  // development build. Absent on disk — and therefore false here — for every
-  // vault written before this field existed, which keeps old vaults reading as
-  // "production" without any migration.
+  // Set when a development build wrote the header. Absent on disk (so false) for vaults written
+  // before the field existed, which therefore need no migration.
   devBuild: boolean
 }
 
@@ -64,9 +64,7 @@ export function writeContainer(params: {
   const saltField = tlvField(FieldId.ArgonSalt, params.salt)
   const tierField = tlvField(FieldId.KdfTier, Buffer.from([params.kdfTier]))
   const recoveryField = tlvField(FieldId.RecoveryBlob, params.recoveryBlob)
-  // Omitted (not written as a zero byte) when false, so old vaults and vaults
-  // created by production builds stay byte-for-byte what they'd have been
-  // without this field.
+  // Omitted, not written as 0, so production headers stay byte-identical to pre-field ones.
   const devBuildField = params.devBuild
     ? tlvField(FieldId.DevBuild, Buffer.from([0x01]))
     : Buffer.alloc(0)
@@ -174,11 +172,9 @@ export function verifyHeaderHmac(
   return valid
 }
 
-// A real vault (no devBuild field — production, or predating this field) opened
-// by a development build can be corrupted by an in-progress bug or migration,
-// with no server backup. The reverse (packaged build opening a devBuild vault)
-// is out of scope: VERSION_TOO_NEW already guards schema incompatibility there,
-// and devBuild vaults are inherently disposable. See SPEC.md.
+// A real vault (no devBuild field) opened by a dev build risks corruption by in-progress code
+// with no backup to fall back on. The reverse is out of scope: devBuild vaults are disposable,
+// and VERSION_TOO_NEW already guards schema incompatibility.
 export function shouldWarnOpeningInDevBuild(
   isPackaged: boolean,
   header: Pick<ContainerMetadata, 'devBuild'>

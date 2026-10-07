@@ -1,20 +1,8 @@
 /**
- * vault.ts — SQLCipher vault lifecycle
- *
- * The vault is stored as a single opaque .nvx file (see container.ts):
- *   [4B magic "NVX\0"][2B VERSION_MAJ][2B VERSION_MIN][TLV fields...][0x00][SQLCipher DB bytes]
- *
- * At runtime the DB bytes are extracted to a temporary file and opened with
- * SQLCipher. On close the temp file is repacked into the .nvx container then
- * deleted. The TLV header holds the Argon2id salt (raw bytes), KDF tier, and the
- * recovery-wrapped master key — all as opaque binary fields with no labels.
- * An HMAC (BLAKE2b-256 keyed with the master key) covers the entire header and
- * serves as the first authentication gate before SQLCipher is opened.
- *
- * Memory security:
- * - masterKey lives in a native Buffer (outside V8 GC heap) locked with
- *   VirtualLock/mlock so the OS cannot page it to disk.
- * - All intermediate key copies are zeroed immediately after use.
+ * SQLCipher vault lifecycle. The .nvx container (layout: container.ts) is unpacked to a temp
+ * DB in os.tmpdir() for the session and repacked on sync and close. masterKey lives in a
+ * page-locked native Buffer (memlock.ts). Every keyFileContents argument has already been
+ * validated by readKeyFileContents() in the IPC handler.
  */
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 
@@ -50,7 +38,6 @@ import {
 import { allocSecure, freeSecure } from './memlock'
 import { generateMnemonic, mnemonicToMasterKey, validateMnemonic } from './recovery'
 
-// Raw note row from the DB (used only in reencryptNotes and its callers).
 interface RawNote {
   id: string
   title: Buffer
@@ -61,25 +48,17 @@ interface RawNote {
 
 // ─── Concurrency lock ────────────────────────────────────────────────────────
 
-// Serializes packContainer() against itself and against every credential-
-// rotation function (changePassword, rotateVaultCredentials, configureKeyFile,
-// removeKeyFile). Those PRAGMA rekey the on-disk temp DB several awaits before
-// reassigning the in-memory masterKey, so an interleaved repack could write a
-// .nvx header encrypted under the stale key over a body already re-keyed to
-// the new one, bricking the vault. A plain FIFO queue, not coalescing: two
-// calls can carry different arguments (e.g. two changePassword() calls), so
-// each must run its own body rather than reuse the first caller's result.
+// Serializes every operation on the open vault: packs, closes, credential rotations and the
+// note/tag IPC handlers. A rotation rekeys the temp DB several awaits before it swaps
+// masterKey; a pack or note write interleaved there would use the stale key and brick the
+// vault or the note. FIFO, not coalescing: queued calls may carry different arguments.
 //
-// Not reentrant. A call made from code already running inside the lock waits
-// for the outer call to settle, which is itself waiting on the inner call: a
-// permanent deadlock that wedges every later queued operation (including the
-// sync timer) and leaves masterKey un-zeroed. Code inside the lock calls the
-// unlocked do*() bodies (doPackContainer, doCloseVault) directly.
+// Not reentrant: a call from inside the lock waits on its own caller and wedges the queue
+// for good, leaving masterKey un-zeroed. Code already inside calls the unlocked do*() bodies
+// (doPackContainer, doCloseVault) directly.
 //
-// fn is wrapped, never passed to .then() directly: .then() would call it with
-// the predecessor's result, which doCloseVault would read as skipPack. No
-// rejection handler: vaultOpLock never rejects, the .catch() below sees to
-// that. Exported so tests can verify the ordering without real Argon2id timing.
+// fn is wrapped, not passed to .then(): .then() would hand it the predecessor's result,
+// which doCloseVault would read as skipPack.
 let vaultOpLock: Promise<unknown> = Promise.resolve()
 export function withVaultLock<T>(fn: () => Promise<T>): Promise<T> {
   const run = vaultOpLock.then(() => fn())
@@ -101,9 +80,8 @@ let pendingKeyFileContents: Uint8Array | null = null
 
 let currentLockPath: string | null = null
 
-// Acquires an exclusive lock on a vault file using a sidecar .lock file.
-// Reads the PID from an existing lock to detect stale locks from crashed processes.
-// Throws with a user-facing message if another live process holds the lock.
+// Exclusive per-vault lock via a sidecar .lock holding our PID. A lock whose PID is dead,
+// or whose file is unreadable, is stale and taken over.
 function acquireLock(vaultPath: string): void {
   const lockPath = vaultPath + '.lock'
 
@@ -151,10 +129,8 @@ function releaseLock(): void {
   }
 }
 
-// Removes a leftover .tmp file from a previous re-keying crash.
-// A .bak is deliberately NOT cleaned up here: credential rotations no longer
-// create one, but a version before that left one behind only when a re-key
-// rollback also failed, as the user's only recovery copy.
+// Removes a <vault>.tmp left by a crash mid-atomicWrite(). Never deletes <vault>.bak: older
+// versions could leave one behind as the user's only recovery copy.
 function cleanupOrphanedTempFiles(vaultPath: string): void {
   const p = vaultPath + '.tmp'
   if (existsSync(p)) {
@@ -184,10 +160,8 @@ function closeDatabase(database: sqlite3.Database): Promise<void> {
 }
 
 async function applyKey(database: sqlite3.Database, key: Uint8Array): Promise<void> {
-  // NOTE: toString('hex') creates an immutable JS string with the key material.
-  // This is an unavoidable limitation of the SQLCipher Node.js binding — there is
-  // no binary PRAGMA path. The string is unreachable after this function returns
-  // and will be collected by the GC on its next pass.
+  // SQLCipher's Node binding has no binary PRAGMA path, so the key passes through an immutable
+  // JS hex string that can't be zeroed. Same limitation for every PRAGMA rekey below.
   const hex = Buffer.isBuffer(key) ? key.toString('hex') : Buffer.from(key).toString('hex')
   await new Promise<void>((resolve, reject) => {
     database.serialize(() => {
@@ -214,12 +188,8 @@ function atomicWrite(filePath: string, bytes: Buffer): void {
   renameSync(tmp, filePath)
 }
 
-// Flushes the -wal into tempDbPath, then repacks the .nvx container from it.
-// Safe to call while the DB is idle (not mid-transaction). Does nothing if
-// state is incomplete. The checkpoint is required: WAL-mode commits live in
-// tempDbPath + '-wal' until an auto-checkpoint (every ~1000 pages) flushes
-// them into the main file, which small-note sessions can go an entire run
-// without hitting — packContainer only ever reads the main file.
+// Checkpoints the WAL into tempDbPath, then repacks the .nvx from it. The checkpoint is
+// required: packing reads only the main file, and small sessions may never auto-checkpoint.
 export function packContainer(): Promise<void> {
   return withVaultLock(doPackContainer)
 }
@@ -227,11 +197,8 @@ export function packContainer(): Promise<void> {
 async function doPackContainer(): Promise<void> {
   if (!currentVaultPath || !currentMetadata || !tempDbPath || !masterKey) return
   if (db) {
-    // wal_checkpoint(TRUNCATE) reports (busy, log, checkpointed) rather than
-    // throwing when it can only partially complete (busy=1, e.g. a reader
-    // holding a lock) — dbRun() discards that row, so a partial checkpoint
-    // would otherwise look identical to a full one. Treat busy as a hard
-    // failure rather than silently reading a possibly under-flushed file.
+    // A partial checkpoint reports busy=1 instead of throwing; refuse to pack rather than read a
+    // possibly under-flushed file.
     const checkpoint = await dbGet<{ busy: number; log: number; checkpointed: number }>(
       db,
       'PRAGMA wal_checkpoint(TRUNCATE)'
@@ -257,8 +224,6 @@ async function doPackContainer(): Promise<void> {
 // Derives a candidate key from credentials, verifies the header HMAC (before
 // touching SQLCipher), then confirms the key opens the DB. Returns the key on
 // success, zeros it on failure. The temp DB at dbPath is always closed on return.
-//
-// Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
 async function authenticateVaultKey(params: {
   dbPath: string
   password: string
@@ -268,9 +233,9 @@ async function authenticateVaultKey(params: {
   const kfHash = params.keyFileContents
     ? hashKeyFile(Buffer.from(params.keyFileContents))
     : undefined
-  // Convert WASM-backed Uint8Array to a native Buffer, then zero the WASM copy.
   const { salt: kdfSalt, params: kdfParams } = getArgon2Params(params.metadata.kdfInput)
   const rawDerived = deriveKey(params.password, kdfSalt, kdfParams, kfHash)
+  // Native Buffer copy; the WASM-backed original is zeroed right away.
   const candidateKey = Buffer.from(rawDerived)
   memzero(rawDerived)
 
@@ -416,7 +381,6 @@ export async function openVault(
   preReadBytes?: Buffer,
   onSchemaMigrationNeeded?: SchemaMigrationGate
 ): Promise<VaultVersion | null> {
-  // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
 
   if (!existsSync(filePath)) throw new Error('Vault not found at the specified location.')
@@ -492,7 +456,6 @@ export async function openVaultWithRecovery(
   keyFileContents?: Uint8Array,
   onSchemaMigrationNeeded?: SchemaMigrationGate
 ): Promise<VaultVersion | null> {
-  // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   await initSodium()
 
   if (!existsSync(filePath)) throw new Error('Vault not found at the specified location.')
@@ -504,10 +467,8 @@ export async function openVaultWithRecovery(
   cleanupOrphanedTempFiles(filePath)
   acquireLock(filePath)
 
-  // Derive the wrap key that was used to encrypt the recovery blob.
-  // When a key file was configured, the wrap key binds both factors:
-  // wrapKey = BLAKE2b(mnemonicKey || BLAKE2b(keyFileContents))
-  // If either factor is wrong the XChaCha20-Poly1305 MAC fails and decryption throws.
+  // The wrap key also binds the key file when one is configured (deriveRecoveryWrapKey()); a
+  // wrong mnemonic or key file fails the AEAD tag and returns null.
   const mnemonicKey = mnemonicToMasterKey(mnemonic)
   const wrapKey = deriveRecoveryWrapKey(mnemonicKey, keyFileContents)
   memzero(mnemonicKey)
@@ -583,24 +544,12 @@ export async function openVaultWithRecovery(
   }
 }
 
-// Shared by the 4 credential-rotation functions' failure paths, so they
-// can't diverge here.
-//
-// Precondition: nothing has been written to vaultPath yet. Each caller
-// guarantees it by keeping commitRotatedContainer() as the last statement
-// inside its rollback try — the PRAGMA rekey to the new key sits inside that
-// try, and commitRotatedContainer() can't throw once it has written
-// anything. So the vault on disk is always intact here,
-// and no backup copy of it is needed.
-//
-// The session's temp DB is not: past reencryptNotes()'s COMMIT it holds
-// note content encrypted under the new key, which is about to be discarded.
-// Keeping that session — and packing it on close — made every note
-// permanently undecryptable. So the session is closed without packing and
-// the user unlocks again from the intact container; callers pack pending
-// writes before mutating anything, so none are lost.
-//
-// doCloseVault(), not closeVault(): this already runs inside withVaultLock.
+// Failure path shared by the 4 credential rotations. Precondition: vaultPath hasn't been
+// written yet (commitRotatedContainer() is the last statement of each rollback try), so the
+// container on disk is intact. The temp DB isn't: past reencryptNotes()'s COMMIT its notes
+// are under the discarded new key. So the session closes WITHOUT packing and the user unlocks
+// again; callers pack pending writes before mutating, so nothing is lost.
+// doCloseVault(), not closeVault(): this runs inside withVaultLock.
 async function rollbackCredentialRotation(vaultPath: string): Promise<void> {
   try {
     unlinkSync(vaultPath + '.tmp')
@@ -620,18 +569,11 @@ function freeSecureOrWipe(buf: Buffer): void {
   }
 }
 
-// The point of no return of all 4 credential-rotation functions, shared so
-// they can't diverge here. Must be the last statement inside
-// each caller's rollback try: everything that can fail — parsing the new
-// container, allocating the new secure key, writing it to vaultPath — runs
-// before anything is written, so a failure still meets
-// rollbackCredentialRotation()'s precondition. Once atomicWrite succeeds
-// nothing below can throw: rolling back then would discard a session whose
-// new-keyed container is already on disk.
-//
-// Re-derives metadata from containerBytes itself rather than patching fields,
-// so hmacCoveredBytes/storedHmac match the header just written and a second
-// rotation in the same session authenticates against the new HMAC.
+// The rotations' point of no return. Everything that can fail (parsing the new container,
+// allocating the new secure key, the write itself) runs before vaultPath changes, so a failure
+// still meets rollbackCredentialRotation()'s precondition; after atomicWrite nothing throws.
+// Metadata is re-read from containerBytes, not patched, so a second rotation in the same
+// session authenticates against the new header HMAC.
 function commitRotatedContainer(
   vaultPath: string,
   containerBytes: Buffer,
@@ -695,8 +637,6 @@ async function doChangePassword(
   const { params: newKdfParams } = getArgon2Params(newKdfInput)
   const newRawKey = deriveKey(newPassword, newSalt, newKdfParams, kfHash)
 
-  // NOTE: hex strings are immutable in V8 and cannot be explicitly zeroed.
-  // Unavoidable limitation of the SQLCipher Node.js binding.
   const newHexBuf = Buffer.from(newRawKey)
   const newHex = newHexBuf.toString('hex')
   memzero(newHexBuf)
@@ -869,23 +809,17 @@ export async function syncContainer(): Promise<void> {
   }
 }
 
-// Never throws on a failed pack: it resolves with packFailed so the caller
-// can tell the user their latest changes weren't saved. Code already inside
-// withVaultLock (the rotation rollbacks) calls doCloseVault() instead.
+// Never throws on a failed pack: resolves { packFailed } so the caller can warn the user.
 export function closeVault(): Promise<{ packFailed: boolean }> {
   return withVaultLock(doCloseVault)
 }
 
-// skipPack=true is used by rollbackCredentialRotation(): at that point
-// masterKey/currentMetadata still hold the OLD key material while
-// tempDbPath may be keyed, and its notes re-encrypted, with the discarded
-// NEW key, so packing now would atomicWrite an unreadable container over the
-// intact currentVaultPath, destroying it. Every other cleanup step still runs.
+// skipPack: only rollbackCredentialRotation() passes true; packing then would overwrite the
+// intact container with an unreadable one (see its comment).
 async function doCloseVault(skipPack = false): Promise<{ packFailed: boolean }> {
   let packFailed = false
-  // Packs before the connection closes below: the checkpoint runs via `db`,
-  // rather than relying on SQLite's implicit checkpoint on last close.
-  // doPackContainer(), not packContainer(): this already runs inside withVaultLock.
+  // Pack while db is still open so the checkpoint runs through it. doPackContainer(), not
+  // packContainer(): already inside withVaultLock.
   if (!skipPack && tempDbPath && currentVaultPath && currentMetadata) {
     try {
       await doPackContainer()
@@ -976,7 +910,6 @@ async function doConfigureKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
-  // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
@@ -1080,7 +1013,6 @@ async function doRemoveKeyFile(
   password: string,
   keyFileContents: Uint8Array
 ): Promise<{ mnemonic: string }> {
-  // Precondition: keyFileContents already validated by readKeyFileContents() in the IPC handler.
   if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
