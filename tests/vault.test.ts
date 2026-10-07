@@ -43,10 +43,10 @@ import {
 } from '../src/main/vault/vault'
 
 // Partial-mocks crypto.ts so `memzero`/`deriveKey` become observable spies
-// while still running their real behavior (via `importOriginal`) — used by
-// the issue #24 tests below to capture the exact `newRawKey` buffer
-// instance a credential-rotation function derives, and prove that specific
-// instance is wiped, not just that some zeroing call happened somewhere.
+// while still running their real behavior (via `importOriginal`) — so the
+// newRawKey-zeroing tests below can capture the exact buffer instance a
+// credential-rotation function derives, and prove that specific instance is
+// wiped, not just that some zeroing call happened somewhere.
 vi.mock('../src/main/vault/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
   return {
@@ -58,7 +58,7 @@ vi.mock('../src/main/vault/crypto', async (importOriginal) => {
   }
 })
 
-// Same pass-through partial mock for memlock.ts, so the issue #23 tests
+// Same pass-through partial mock for memlock.ts, so the commit-path tests
 // below can force exactly one allocSecure()/freeSecure() call to throw via
 // mockImplementationOnce(). Inside a credential rotation those are only
 // storeKey(newRawKey) and freeSecure() of the old masterKey respectively.
@@ -117,7 +117,7 @@ async function readNoteTitlesFromPackedContainer(
   }
 }
 
-// Shared by the issue #39/#23 rollback tests below: one entry per
+// Shared by the rollback tests below: one entry per
 // credential-rotation function. `prepare` creates a vault at `vaultPath`
 // (plus whatever precondition the function needs) and returns the rotation
 // to run and how to reopen the vault with its pre- and post-rotation
@@ -192,14 +192,11 @@ const ROTATION_CASES: RotationCase[] = [
   }
 ]
 
-// Shared by the issue #24 newRawKey-zeroing tests below: forces the next
-// `times` liveDb.run() calls matching `matchSql` to fail with
-// `errorMessage`, every other call passing through to the real
-// implementation. Caller is responsible for `runSpy.mockRestore()` once its
-// action under test settles. One-shot by default (issue #39): once the
-// PRAGMA rekey to the new key routes into rollbackCredentialRotation(),
-// failing *every* rekey would also fail the rollback's own rekey back to
-// the old key and turn a single-failure test into a double-failure one.
+// Shared by the rotation-failure tests below: forces the next `times`
+// liveDb.run() calls matching `matchSql` to fail with `errorMessage`, every
+// other call passing through to the real implementation. Caller is
+// responsible for `runSpy.mockRestore()` once its action under test settles.
+// One-shot by default, so only the targeted statement fails.
 function forceNextDbRunToFail(
   matchSql: (sql: string) => boolean,
   errorMessage: string,
@@ -219,22 +216,19 @@ function forceNextDbRunToFail(
   })
 }
 
-// Shared by the issue #24 newRawKey-zeroing tests below: asserts that the
+// Shared by the newRawKey-zeroing tests below: asserts that the
 // `expectedDeriveCalls`-th deriveKey() call in this test (1-indexed) — the
 // one that produced newRawKey — returned a buffer that is now all zero,
 // and that memzero() was actually called with that exact instance (not
 // just that some memzero call happened, which authenticateVaultKey()'s
 // own unrelated verification buffer would also satisfy).
 //
-// Known coupling (flagged by /agent-skills:ship's fan-out, not yet worth
-// the extra complexity to remove): newRawKey is identified purely by call
-// ordinal, not by which arguments produced it. If a future change reorders
-// or adds a deriveKey() call ahead of newRawKey's in one of these 4
-// functions, `expectedDeriveCalls` would silently point at the wrong
-// buffer — and since authenticateVaultKey()'s buffer is *also* always
-// memzero()'d, the assertion would keep passing without actually testing
-// newRawKey anymore. Re-check this indexing by hand if vault.ts's
-// deriveKey() call sites in these 4 functions ever change.
+// Known coupling: newRawKey is identified purely by call ordinal, not by
+// which arguments produced it. If a deriveKey() call is added or reordered
+// ahead of newRawKey's in one of the 4 rotation functions,
+// `expectedDeriveCalls` would silently point at authenticateVaultKey()'s
+// buffer — also always memzero()'d — and keep passing without testing
+// newRawKey. Re-check the ordinals if those deriveKey() call sites change.
 function expectNewRawKeyZeroed(
   deriveKeySpy: Mock<typeof deriveKey>,
   memzeroSpy: Mock<typeof memzero>,
@@ -247,7 +241,7 @@ function expectNewRawKeyZeroed(
   expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
 }
 
-// Shared by the issue #38 tests below: identifies the two Buffer.from(newRawKey)
+// Shared by the success-path tests below: identifies the two Buffer.from(newRawKey)
 // copies (the newHex-derivation buffer and the writeContainer masterKey
 // argument) among every Buffer.from() call made during the test, by
 // reference equality to `newRawKeyRef` — the same discriminator technique
@@ -269,7 +263,7 @@ function expectNewRawKeyCopiesZeroed(
   }
 }
 
-// Issue #40: on the success path newRawKey is zeroed twice — once by
+// On the success path newRawKey is zeroed twice — once by
 // storeKey() inside commitRotatedContainer(), once by the outer finally —
 // proving the finally's memzero() is a harmless no-op there rather than
 // missing or throwing.
@@ -281,7 +275,7 @@ function expectNewRawKeyZeroedTwice(
   expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
 }
 
-// Issue #40: authenticateVaultKey()'s candidateKey (returned as
+// authenticateVaultKey()'s candidateKey (returned as
 // auth.masterKey on success) must go through memzero(), not a plain
 // fill(0). candidateKey is the Buffer.from() copy of the verification
 // derive, identified by reference like expectNewRawKeyCopiesZeroed() does.
@@ -301,7 +295,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   let vaultDir: string | undefined
 
   afterEach(async () => {
-    // Drop any mockImplementationOnce() an issue #23 test armed but never
+    // Drop any mockImplementationOnce() a test armed but never
     // consumed (e.g. it failed earlier), so it can't leak into closeVault()
     // below or the next test. Vitest 4's mockReset() restores the
     // pass-through implementation given to vi.fn().
@@ -330,9 +324,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       expectedTitles.set(note.id, title)
     }
 
-    // The bug: packContainer() used to read only the main temp DB file,
-    // never the -wal file, so this sync alone (no close) would produce a
-    // container missing every note above.
+    // Without packContainer()'s checkpoint, the main temp DB file alone
+    // holds none of these WAL-mode commits, so this sync (no close) would
+    // produce a container missing every note above.
     await syncContainer()
 
     const persisted = await readNoteTitlesFromPackedContainer(vaultPath, getMasterKey())
@@ -357,16 +351,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       expectedTitles.set(note.id, title)
     }
 
-    // Characterization test, not a negative-control regression test:
-    // verified by hand that this still passes even if closeVault() closes
-    // `db` before calling packContainer() (packContainer()'s internal
-    // checkpoint then silently no-ops on the null connection). SQLite
-    // performs an implicit WAL checkpoint when the last connection to a
-    // database closes, so closeDatabase() alone already flushes -wal into
-    // the main file here. closeVault() still calls packContainer() before
-    // closing — explicit over implicit, and it stops depending on that
-    // SQLite behavior if a second connection is ever introduced — but
-    // that ordering isn't what this test is proving.
+    // Characterization, not a negative control: SQLite implicitly
+    // checkpoints WAL when the last connection closes, so this would pass
+    // even if closeVault() closed `db` before packing. It proves the end
+    // result, not closeVault()'s pack-then-close ordering.
     const masterKeyCopy = Buffer.from(getMasterKey())
     await closeVault()
 
@@ -380,11 +368,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it('closeVault() is idempotent — a second call once nothing is open resolves without throwing', async () => {
-    // closeVaultDrained() (#19) added several call sites that can now race a
-    // caller who already closed the vault — e.g. the auto-lock timer firing
-    // right as the user manually locks. doCloseVault() guards every step
-    // (`if (db)`, `if (masterKey)`, ...), so a second call must be a safe
-    // no-op, never a throw or a hang.
+    // Several close paths can race a caller who already closed the vault —
+    // e.g. the auto-lock timer firing right as the user manually locks.
+    // doCloseVault() guards every step (`if (db)`, `if (masterKey)`, ...),
+    // so a second call must be a safe no-op, never a throw or a hang.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -431,18 +418,12 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it('serializes packContainer() against rotateVaultCredentials() so a repack can never race a rekey', async () => {
-    // Characterization test, not a reliable negative control: verified by
-    // hand that reverting withVaultLock to a passthrough does NOT
-    // reliably fail this test. rotateVaultCredentials()'s deriveKey()
-    // call is synchronous, CPU-bound Argon2id that blocks the single JS
-    // thread for well over a second before its first await — packContainer()
-    // (called on the next line, below) can't even start executing until
-    // that blocking call returns, which narrows the real race window
-    // unpredictably. A deterministic proof needs a controlled delay
-    // (e.g. mocking the checkpoint's dbGet call) rather than real timing;
-    // Task 6's withVaultLock unit tests above already prove the locking
-    // mechanism itself serializes correctly and deterministically — this
-    // test instead proves packContainer() and rotateVaultCredentials()
+    // Characterization, not a reliable negative control: a passthrough
+    // withVaultLock wouldn't reliably fail this. rotateVaultCredentials()'s
+    // synchronous Argon2id blocks the JS thread before its first await, so
+    // packContainer() can't start until it returns, narrowing the race
+    // unpredictably. The withVaultLock ordering tests at the end of this file
+    // prove the serialization deterministically; this proves both functions
     // still behave correctly end-to-end when routed through it together.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
@@ -479,13 +460,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it("doesn't deadlock when rotateVaultCredentials()'s rollback closes the vault", async () => {
-    // The rollback closes the session from inside this already-locked
-    // function. It used to call the locked closeVault() there, which
-    // deadlocked the entire withVaultLock queue permanently (verified by
-    // hand: switching rollbackCredentialRotation() to closeVault() instead of
-    // doCloseVault() makes this test time out). The bounded-time
-    // Promise.race distinguishes "rejected" from "hung" in 10s, instead of
-    // vitest's full test timeout.
+    // The rollback closes the session from inside the lock, where the locked
+    // closeVault() would deadlock the queue (withVaultLock isn't reentrant).
+    // The bounded Promise.race tells "rejected" from "hung" in 10s, instead
+    // of vitest's full test timeout.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -564,16 +542,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-    // 90_000, not 60_000: 2 real Argon2id derivations (createVault +
-    // rotateVaultCredentials) timed out at 60s on this machine.
+    // 2 real Argon2id derivations (createVault + rotateVaultCredentials)
   }, 90_000)
 
   it('rotateVaultCredentials(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
-    // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sat before the existing try/catch that the diff
-    // wraps (issue #39 later moved it inside). The approved fix wraps
-    // newRawKey's whole lifetime instead, so this failure point must zero it
-    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -605,8 +577,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('rotateVaultCredentials(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
-    // Regression coverage for the path the issue's suggested diff already
-    // covered (the existing try/catch), now proven rather than assumed.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -635,8 +605,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('rotateVaultCredentials(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
-    // Unlike #24's newRawKey itself, these two copies are made and
-    // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -665,11 +633,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('openVault() leaves a leftover .bak in place while still cleaning up a leftover .tmp (issue #17)', async () => {
-    // Simulates a fresh app start finding the leftovers of a previous,
-    // interrupted double-failure rollback (see the test above). Before the
-    // issue #17 fix, cleanupOrphanedTempFiles() swept .bak unconditionally
-    // on every open — destroying the user's only recovery copy the moment
-    // they reopened the app.
+    // Simulates a fresh app start finding leftovers of an older version's
+    // failed rollback. That .bak may be the user's only recovery copy, so
+    // cleanupOrphanedTempFiles() must leave it in place.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -777,11 +743,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it('changePassword(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
-    // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sat before the existing try/catch that the diff
-    // wraps (issue #39 later moved it inside). The approved fix wraps
-    // newRawKey's whole lifetime instead, so this failure point must zero it
-    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -793,10 +754,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       'simulated rekey failure'
     )
 
-    // authenticateVaultKey() (step 1, verifying the CURRENT password) also
-    // calls deriveKey() and memzero()'s its own candidate buffer — capturing
-    // by reference (not just counting calls) is what tells newRawKey's
-    // buffer apart from that unrelated one.
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
@@ -815,8 +772,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('changePassword(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
-    // Regression coverage for the path the issue's suggested diff already
-    // covered (the existing try/catch), now proven rather than assumed.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -845,8 +800,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('changePassword(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
-    // Unlike #24's newRawKey itself, these two copies are made and
-    // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -875,11 +828,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('configureKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
-    // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sat before the existing try/catch that the diff
-    // wraps (issue #39 later moved it inside). The approved fix wraps
-    // newRawKey's whole lifetime instead, so this failure point must zero it
-    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -891,9 +839,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       'simulated rekey failure'
     )
 
-    // authenticateVaultKey() (verifying the CURRENT password) also calls
-    // deriveKey() — capturing by reference (not just counting calls) is
-    // what tells newRawKey's buffer apart from that unrelated one.
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
@@ -913,8 +858,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('configureKeyFile(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
-    // Regression coverage for the path the issue's suggested diff already
-    // covered (the existing try/catch), now proven rather than assumed.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -944,8 +887,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('configureKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
-    // Unlike #24's newRawKey itself, these two copies are made and
-    // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -975,11 +916,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('removeKeyFile(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
-    // Failure point the issue's literal suggested diff did NOT cover: the
-    // PRAGMA rekey call sat before the existing try/catch that the diff
-    // wraps (issue #39 later moved it inside). The approved fix wraps
-    // newRawKey's whole lifetime instead, so this failure point must zero it
-    // too.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -995,9 +931,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       'simulated rekey failure'
     )
 
-    // authenticateVaultKey() (verifying the CURRENT password + key file)
-    // also calls deriveKey() — capturing by reference (not just counting
-    // calls) is what tells newRawKey's buffer apart from that unrelated one.
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
@@ -1016,8 +949,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('removeKeyFile(): zeroes newRawKey when the transaction fails and rollback runs (issue #24)', async () => {
-    // Regression coverage for the path the issue's suggested diff already
-    // covered (the existing try/catch), now proven rather than assumed.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -1049,8 +980,6 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('removeKeyFile(): zeroes the newHex and writeContainer Buffer.from(newRawKey) copies on the success path (issues #38, #40)', async () => {
-    // Unlike #24's newRawKey itself, these two copies are made and
-    // discarded on every SUCCESSFUL rotation, not just on failure.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const originalPassword = 'correct horse battery staple'
@@ -1082,8 +1011,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('changePassword(): rejects a wrong current password and zeroes the verify key via memzero (issue #40)', async () => {
-    // Covers authenticateVaultKey()'s HMAC-mismatch branch, which used to
-    // wipe candidateKey with a plain fill(0).
+    // Covers authenticateVaultKey()'s HMAC-mismatch branch.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -1109,14 +1037,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('changePassword(): a second rotation in the same open session accepts the password the first rotation just set', async () => {
-    // Found while extending issue #17's coverage to the other 3 credential-
-    // rotation functions, not part of #17 itself: after any successful
-    // rotation, currentMetadata was patched in place rather than re-derived
-    // from the container bytes actually written, leaving
-    // hmacCoveredBytes/storedHmac pointing at the PRE-rotation header. Any
-    // later authenticateVaultKey() call in the same open session (the first
-    // step of changePassword/configureKeyFile/removeKeyFile) then verified
-    // the correct new password against that stale header and rejected it.
+    // currentMetadata must be re-derived from the container bytes actually
+    // written: patched in place, hmacCoveredBytes/storedHmac would still
+    // point at the pre-rotation header, and the next authenticateVaultKey()
+    // in the same session would reject the correct new password.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const firstPassword = 'correct horse battery staple'
@@ -1130,11 +1054,10 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     ).resolves.toMatchObject({ mnemonic: expect.any(String) })
   }, 90_000)
 
-  // Issue #39: a failed PRAGMA rekey to the new key used to propagate
-  // straight past rollbackCredentialRotation(), leaving the session open on
-  // a connection whose key state was never reconciled. isVaultOpen() is what
-  // fails against the pre-fix code — the mocked rekey never actually re-keys
-  // the connection, so the reopen check alone would pass either way.
+  // The rekey sits inside the rollback try, so its failure must close the
+  // session. isVaultOpen() is the assertion that matters: the mocked rekey
+  // never actually re-keys the connection, so the reopen check alone would
+  // pass either way.
   it.each(ROTATION_CASES)(
     '$name(): runs the rollback, closing the vault, when the PRAGMA rekey to the new key fails (issue #39)',
     async ({ prepare }) => {
@@ -1158,9 +1081,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     90_000
   )
 
-  // Issue #23: storeKey(newRawKey) used to run *after* the new container
-  // had already been written, so an allocation failure there rolled back
-  // over a new-keyed file on disk.
+  // storeKey(newRawKey) runs before the new container is written, so an
+  // allocation failure there must roll back over an intact file on disk.
   it.each(ROTATION_CASES)(
     '$name(): rolls back cleanly when allocating the new secure key fails before the new container is written (issue #23)',
     async ({ prepare, deriveKeyCalls }) => {
@@ -1186,7 +1108,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     90_000
   )
 
-  // Issue #23: once the new container is committed, the rotation has
+  // Once the new container is committed, the rotation has
   // succeeded — a failure freeing the OLD key must not trigger a rollback,
   // which would discard a session whose new-keyed container is on disk.
   it.each(ROTATION_CASES)(
@@ -1229,7 +1151,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     })
   }
 
-  // Issue #23: commitRotatedContainer() allocates the new secure key before
+  // commitRotatedContainer() allocates the new secure key before
   // writing anything, so when the write itself fails that key must be freed
   // (and thus wiped) before the rollback runs.
   it.each(ROTATION_CASES)(
@@ -1260,13 +1182,11 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     90_000
   )
 
-  // Found by /agent-skills:ship's security-auditor: a failure after
-  // reencryptNotes() has COMMITted leaves the session's temp DB holding note
-  // content encrypted under the new key, which the rollback then discards.
-  // Keeping that session (and packing it on close) made every note
-  // permanently undecryptable. The note is deliberately NOT synced first, so
-  // this also proves the rotation persists pending writes before mutating
-  // anything — closing without packing must not lose them either.
+  // A failure after reencryptNotes() has COMMITted leaves the session's temp
+  // DB holding note content encrypted under the discarded new key, so the
+  // rollback must close without packing it. The note is deliberately NOT
+  // synced first, so this also proves the rotation persists pending writes
+  // before mutating anything — closing without packing must not lose them.
   it.each(ROTATION_CASES)(
     '$name(): keeps unsynced note content intact when a failure after the notes COMMIT rolls back',
     async ({ prepare }) => {
@@ -1293,17 +1213,11 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   )
 })
 
-// Structural test, not a behavioral one: tests/vault.test.ts cannot invoke
-// ipc-handlers.ts's registered ipcMain.handle callbacks directly (no harness
-// mocks electron/electron-updater in this repo), so a test that only calls
-// getDb()/getMasterKey()/createNote() itself can never flip from red to green
-// as a result of editing ipc-handlers.ts — the test itself would be the one
-// deciding whether to wrap the call in withVaultLock, not the production
-// code. Reading the real source file and asserting each handler's block
-// contains a withVaultLock( call is the only way, without new IPC-mocking
-// infrastructure, to tie this test's pass/fail state to the actual file
-// issue #25's fix edits. See tasks/plan.md's "Nota de diseño" for the fuller
-// rationale and the alternatives considered.
+// Structural test, not a behavioral one: this file can't invoke
+// ipc-handlers.ts's registered handlers (no electron mocking here), and a
+// test that calls getDb()/getMasterKey() itself would be deciding the
+// wrapping on its own. Asserting on the real source ties pass/fail to the
+// production handlers instead.
 describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #25)', () => {
   // Every notes:*/tags:*/note-tags:* IPC channel registered in ipc-handlers.ts
   // as of this test's writing. Kept as an explicit list (not derived from the
@@ -1334,7 +1248,7 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
 
   it('each notes:*/tags:*/note-tags:* handler wraps its body in withVaultLock(...)', () => {
     const source = readFileSync(new URL('../src/main/ipc-handlers.ts', import.meta.url), 'utf-8')
-    // Handlers register through the local handle() wrapper (#57), one call per
+    // Handlers register through the local handle() wrapper, one call per
     // line at registerIpcHandlers' indentation.
     const handleCallStarts = [...source.matchAll(/^ {2}handle\(/gm)].map((m) => m.index)
     expect(handleCallStarts.length).toBeGreaterThan(NOTE_AND_TAG_CHANNELS.length)
@@ -1373,23 +1287,10 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
   })
 })
 
-// Characterization test, not a red→green gate on Task 3's fix (see the
-// structural test above and tasks/plan.md's "Nota de diseño" for why):
-// tests/vault.test.ts cannot exercise ipc-handlers.ts's registered handlers,
-// so this proves the underlying vulnerability with real data instead — the
-// exact mechanism issue #25 describes, reproduced without depending on real
-// Argon2id timing (see the note on vault.test.ts:264-277 for why a raw
-// setTimeout race wouldn't be reliable here either).
-//
-// Deliberately placed BEFORE the "withVaultLock (issue #16 follow-up)" block
-// below: that block's "deadlocks permanently on a reentrant call" test
-// intentionally leaves the module-level vaultOpLock chained onto a promise
-// that never settles (that's the whole point of the test) and never resets
-// it. Vitest shares one module instance across every it()/describe() in this
-// file, so any withVaultLock()-routed call placed after that test — like
-// changePassword() below — would hang forever waiting on a lock that can
-// never hand off its turn. Running before it sidesteps the poisoning
-// entirely without touching that pre-existing test or vault.ts itself.
+// Characterization, not a red→green gate (see the structural test above for
+// why): reproduces with real data the race that makes the note handlers
+// need withVaultLock — a write landing mid-rotation — with deterministic
+// timing instead of a real Argon2id race.
 describe('note write races a credential rotation (issue #25 — characterization)', () => {
   let vaultDir: string | undefined
 
@@ -1423,15 +1324,14 @@ describe('note write races a credential rotation (issue #25 — characterization
       releaseWindow = resolve
     })
 
-    // By the time doChangePassword() (vault.ts:657) reaches
-    // `PRAGMA wal_checkpoint(FULL)` (vault.ts:717), PRAGMA rekey has
-    // already re-keyed the live SQLCipher connection AND reencryptNotes()
-    // (vault.ts:925) has already re-encrypted every *pre-existing* note and
-    // committed — but masterKey (vault.ts:744) isn't reassigned until
-    // several steps later. Holding the real statement here, before letting
-    // it run, deterministically lands a racing write inside that exact
-    // window: late enough that reencryptNotes()'s SELECT can't sweep it up
-    // and re-encrypt it too, early enough that masterKey is still stale.
+    // By the time doChangePassword() reaches `PRAGMA wal_checkpoint(FULL)`,
+    // PRAGMA rekey has already re-keyed the live SQLCipher connection AND
+    // reencryptNotes() has already re-encrypted every *pre-existing* note
+    // and committed — but masterKey isn't reassigned until several steps
+    // later. Holding the real statement here, before letting it run,
+    // deterministically lands a racing write inside that exact window: late
+    // enough that reencryptNotes()'s SELECT can't sweep it up and re-encrypt
+    // it too, early enough that masterKey is still stale.
     const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
       if (typeof sql === 'string' && sql === 'PRAGMA wal_checkpoint(FULL)') {
         markWindowReached()
@@ -1447,9 +1347,8 @@ describe('note write races a credential rotation (issue #25 — characterization
       const rotation = changePassword(oldPassword, newPassword)
       await windowReached
 
-      // Reproduces today's ipc-handlers.ts notes:create handler exactly
-      // (ipc-handlers.ts:700-708): reads getDb()/getMasterKey() directly,
-      // with no withVaultLock wrapper around either call — issue #25's bug.
+      // An unwrapped notes:create handler: reads getDb()/getMasterKey()
+      // directly, with no withVaultLock around either call.
       const racingNote = await createNote(
         getDb(),
         { title: 'Racing note', content: 'Written mid-rotation' },
@@ -1471,17 +1370,11 @@ describe('note write races a credential rotation (issue #25 — characterization
   }, 90_000)
 })
 
-// Covers the new default behavior this fix introduces for the common case
-// (no rotation involved): before issue #25's fix, two concurrent note/tag
-// IPC operations ran fully in parallel; now they queue through the same
-// withVaultLock FIFO the rotation functions already used. The characterization
-// test above only proves the rotation-race window is closed — this proves the
-// far more common case (two ordinary writes racing each other) still works
-// correctly under the new serialization, using the exact pattern
-// ipc-handlers.ts's fixed handlers use (withVaultLock(() => op(getDb(), ...,
-// getMasterKey()))), not the abstract stub functions the issue #16 ordering
-// tests below use. Placed before that describe block for the same
-// lock-poisoning reason as the two describes above.
+// The common case, no rotation involved: note/tag operations queue through
+// the same withVaultLock FIFO as the rotations, so two ordinary writes racing
+// each other must still both land. Uses the pattern the handlers use
+// (withVaultLock(() => op(getDb(), ..., getMasterKey()))), not the stub
+// functions of the ordering tests below.
 describe('note/tag operations serialize with each other (issue #25 — concurrency)', () => {
   let vaultDir: string | undefined
 
@@ -1502,8 +1395,7 @@ describe('note/tag operations serialize with each other (issue #25 — concurren
 
     const order: string[] = []
 
-    // Reproduces ipc-handlers.ts's fixed notes:create handler exactly
-    // (ipc-handlers.ts:700-705).
+    // Same shape as the notes:create handler.
     const writeNote = (title: string): Promise<{ id: string }> =>
       withVaultLock(async () => {
         order.push(`${title}-start`)
@@ -1601,10 +1493,10 @@ describe('devBuild propagation (issue #34)', () => {
 })
 
 // The editor's autosave ends with loadNotes(), which queues a notes:list
-// that resolves with an array. withVaultLock used to forward that array to
-// doCloseVault as skipPack, so the vault closed without packing and the
-// edit was lost (#61). Real SQLCipher, no vault mocks; calibration is
-// stubbed to the cheapest tier because it's not what's under test here.
+// that resolves with an array. Forwarded to doCloseVault, that array would
+// land in skipPack: the vault would close without packing and lose the
+// edit. Real SQLCipher, no vault mocks; calibration is stubbed to the
+// cheapest tier because it's not what's under test here.
 describe('closeVault() packs regardless of the previous queued operation (issue #61)', () => {
   const PASSWORD = 'correct horse battery staple'
   let vaultDir: string
@@ -1640,9 +1532,9 @@ describe('closeVault() packs regardless of the previous queued operation (issue 
     expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('after')
   }, 60_000)
 
-  // Characterization: on main a rejection already reached fn as undefined
-  // (vaultOpLock swallows it), which hit the skipPack default, so this case
-  // never lost data. It guards the rejection path going forward.
+  // Characterization: a rejected predecessor reaches fn as undefined
+  // (vaultOpLock swallows it), which is the skipPack default. This guards
+  // the rejection path.
   it('keeps an edit when the operation before the close rejected', async () => {
     await openVault(vaultPath, PASSWORD)
     const note = await createNote(getDb(), { title: 'Draft', content: 'before' }, getMasterKey())
@@ -1725,18 +1617,9 @@ describe('closeVault() packs regardless of the previous queued operation (issue 
   }, 60_000)
 })
 
-// Pure ordering test — no vault/crypto involved, deliberately fast and
+// Pure ordering tests — no vault/crypto involved, deliberately fast and
 // deterministic. Proving a race is closed needs controlled timing, which
-// real Argon2id/SQLCipher calls can't reliably provide; the existing tests
-// above already prove packContainer()/rotateVaultCredentials() etc. are
-// individually correct.
-//
-// Placed after devBuild propagation (issue #34) deliberately: the last test
-// below intentionally wedges withVaultLock's shared module-level queue
-// forever (see its own comment) — even though it now isolates itself via a
-// fresh module import, keeping every real-vault-operation test earlier in
-// the file is the cheap, load-bearing-free way to make sure a future test
-// added at the end of this file never races that isolation.
+// real Argon2id/SQLCipher calls can't reliably provide.
 describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
   it('runs queued calls strictly after the one already in flight settles', async () => {
     const order: string[] = []
@@ -1776,8 +1659,8 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
   })
 
   // closeVault() hands doCloseVault(skipPack = false) to the queue by
-  // reference, so a forwarded predecessor value lands in skipPack and skips
-  // the pack on close (#61).
+  // reference, so a forwarded predecessor value would land in skipPack and
+  // skip the pack on close.
   it('calls fn with no arguments after a predecessor that resolves with a value', async () => {
     void withVaultLock(async () => ['truthy'])
     const fn = vi.fn(async () => undefined)
@@ -1799,27 +1682,14 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
   })
 
   it('deadlocks permanently on a reentrant call — this is why closeVault()s catch-block fallbacks call doCloseVault() directly, never closeVault()', async () => {
-    // withVaultLock is a plain FIFO queue, not a reentrant mutex: calling
-    // it again from inside a function it's already running deadlocks that
-    // call AND wedges the queue for every future caller (see #16 follow-up
-    // — security-auditor found this via an identical isolated repro when
-    // changePassword()'s double-rollback-failure catch block called the
-    // locked closeVault() from inside doChangePassword(), itself already
-    // running under withVaultLock). This test locks in that the primitive
-    // itself is inherently non-reentrant, as a permanent guardrail against
-    // ever "fixing" withVaultLock into something that silently tolerates
-    // reentrancy instead of raising the alarm that a caller is misusing it.
+    // Guardrail: withVaultLock is non-reentrant by design (see its
+    // docstring), and this pins that down so it's never "fixed" into
+    // something that silently tolerates a misused nested call.
     //
     // Runs against a freshly re-imported copy of the module (vi.resetModules()
-    // + dynamic import), not the file's shared, statically-imported one — the
-    // whole point of this test is to wedge the module-level vaultOpLock queue
-    // forever, and every other test in this file shares that same singleton
-    // via the static `import { withVaultLock } from '../src/main/vault/vault'`
-    // at the top. Without this isolation, this test permanently breaks every
-    // withVaultLock-wrapped call (changePassword, rotateVaultCredentials,
-    // configureKeyFile, removeKeyFile, closeVault, packContainer) in every
-    // test that happens to run after it later in the file — found via issue
-    // #34's devBuild-propagation tests hanging in CI for exactly this reason.
+    // + dynamic import): this test wedges its module-level vaultOpLock
+    // forever, and every other test in this file shares the statically
+    // imported one.
     vi.resetModules()
     const { withVaultLock: isolatedWithVaultLock } = await import('../src/main/vault/vault')
 
