@@ -226,8 +226,7 @@ export function NoteEditor(): ReactNode {
     [activeNoteId, titleSaver]
   )
 
-  // Blur is the fast path, no longer the only one: losing focus is an event
-  // that may never happen before a note switch, a lock or a quit.
+  // Blur is only the fast path: focus may never leave before a note switch, a lock or a quit.
   const handleTitleBlur = (): void => {
     void titleSaver.flush().catch(() => undefined)
   }
