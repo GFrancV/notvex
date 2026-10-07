@@ -1,0 +1,16 @@
+name: Redeploy site
+
+# The site (notvex.app) reads the latest release at build time, so it needs a rebuild per release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deploy hook
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: curl --fail-with-body -sS -X POST "$VERCEL_DEPLOY_HOOK"
