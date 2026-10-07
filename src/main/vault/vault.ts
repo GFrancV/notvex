@@ -923,9 +923,11 @@ async function doCloseVault(skipPack = false): Promise<{ packFailed: boolean }> 
     try {
       await doPackContainer()
     } catch (e) {
-      // Don't throw on close. Log the error code only: fs messages embed the
+      // Don't throw on close, not even from here: the key wipe and lock release
+      // below depend on it. Log the error code only: fs messages embed the
       // vault path (username, location, file name), which must not leak to stdout.
-      console.error('[close] pack failed:', (e as NodeJS.ErrnoException).code ?? (e as Error).name)
+      const tag = e instanceof Error ? ((e as NodeJS.ErrnoException).code ?? e.name) : typeof e
+      console.error('[close] pack failed:', tag)
       packFailed = true
     }
   }

@@ -17,7 +17,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi, type Mock } f
 
 import { createNote, dbAll, dbRun, getNote, listNotes, updateNote } from '../src/main/db/queries'
 import { readContainer } from '../src/main/vault/container'
-import { calibrateArgon2id, decryptField, deriveKey, memzero } from '../src/main/vault/crypto'
+import {
+  calibrateArgon2id,
+  decryptField,
+  deriveKey,
+  getArgon2Params,
+  memzero
+} from '../src/main/vault/crypto'
 import { allocSecure, freeSecure } from '../src/main/vault/memlock'
 import {
   changePassword,
@@ -47,7 +53,8 @@ vi.mock('../src/main/vault/crypto', async (importOriginal) => {
     ...actual,
     memzero: vi.fn(actual.memzero),
     deriveKey: vi.fn(actual.deriveKey),
-    calibrateArgon2id: vi.fn(actual.calibrateArgon2id)
+    calibrateArgon2id: vi.fn(actual.calibrateArgon2id),
+    getArgon2Params: vi.fn(actual.getArgon2Params)
   }
 })
 
@@ -1672,6 +1679,49 @@ describe('closeVault() packs regardless of the previous queued operation (issue 
       log.mockRestore()
       rmSync(blocker, { recursive: true, force: true })
     }
+  }, 60_000)
+
+  it('leaves the last packed .nvx intact and reopenable after a failed pack', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const note = await createNote(getDb(), { title: 'Draft', content: 'packed' }, getMasterKey())
+    await closeVault()
+    await openVault(vaultPath, PASSWORD)
+    await updateNote(getDb(), note.id, { content: 'lost' }, getMasterKey())
+    const blocker = vaultPath + '.tmp'
+    mkdirSync(blocker)
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(closeVault()).resolves.toEqual({ packFailed: true })
+    } finally {
+      log.mockRestore()
+      rmSync(blocker, { recursive: true, force: true })
+    }
+
+    // Reopening also proves the lock was released on the failure path
+    await openVault(vaultPath, PASSWORD)
+    expect((await getNote(getDb(), note.id, getMasterKey()))?.content).toBe('packed')
+  }, 60_000)
+
+  // The catch block is the only thing between a failed pack and the key wipe
+  // and lock release below it; logging must not be able to throw out of it.
+  it('still closes, wipes and unlocks when the pack rejects with something that is not an Error', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const notAnError: unknown = null
+    vi.mocked(getArgon2Params).mockImplementationOnce(() => {
+      throw notAnError
+    })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(closeVault()).resolves.toEqual({ packFailed: true })
+      expect(log).toHaveBeenCalledExactlyOnceWith('[close] pack failed:', 'object')
+      expect(isVaultOpen()).toBe(false)
+    } finally {
+      log.mockRestore()
+    }
+
+    await expect(openVault(vaultPath, PASSWORD)).resolves.not.toBeNull()
   }, 60_000)
 })
 
