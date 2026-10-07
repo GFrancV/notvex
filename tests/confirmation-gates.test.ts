@@ -4,10 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '../src/main/url-guard'
 
-// The confirmation gates in ipc-handlers.ts park a vault:open call on a
-// module-level resolver until the renderer answers. If the window is destroyed
-// first, nothing answers — these tests cover the cancel path that unwedges them
-//. Only what vault:open touches before/at the gates is mocked.
+// The gates in ipc-handlers.ts park vault:open on a module-level resolver until the renderer
+// answers; these cover the cancel paths that unwedge it. Only what vault:open touches up to the
+// gates is mocked.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -458,10 +457,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     expect(vault.closeVault).not.toHaveBeenCalled()
   })
 
-  // closeVault() packs the whole container before clearing the vault path, so
-  // a renderer reloaded mid-close would read "open" and boot into the notes
-  // over a vault about to close. Reading through the vault lock queues the
-  // status behind any in-flight close instead.
+  // Reading through the vault lock queues vault:status behind an in-flight close.
   it('vault:status waits for an in-flight close before reading the vault path', async () => {
     ipc.registerIpcHandlers(fakeWindow().win, () => null)
     let releaseClose = (): void => undefined

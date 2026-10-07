@@ -9,11 +9,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { dbGet, dbRun } from '../src/main/db/queries'
 
 /**
- * Pins the ordering guarantee db.serialize() makes on one Database handle.
- * The app doesn't depend on the driver for write/checkpoint ordering — note
- * and tag handlers share withVaultLock() with packContainer() — and the
- * driver's implicit default mode (no serialize()) is not reliable under CPU
- * load on Linux, so the pair below is wrapped explicitly.
+ * Pins db.serialize()'s same-handle ordering. The app doesn't rely on it for write/checkpoint
+ * ordering (withVaultLock does), and the driver's default mode is unreliable under load, so
+ * the pair below is wrapped explicitly.
  */
 describe('sqlite3 driver ordering', () => {
   let dir: string | undefined
@@ -35,11 +33,8 @@ describe('sqlite3 driver ordering', () => {
 
     await dbRun(db, 'CREATE TABLE t (id INTEGER)')
 
-    // No await between these two — the write is only *issued*, not settled,
-    // before the read right after it. db.serialize()'s callback runs
-    // synchronously, so both calls are queued before either settles; if
-    // db.serialize() ever interleaved commands on the same handle, the read
-    // could see the table before the row actually lands in it.
+    // Both calls are queued inside serialize() before either settles; interleaving would let the
+    // read run before the row lands.
     let write!: Promise<void>
     let read!: Promise<{ count: number } | undefined>
     db.serialize(() => {

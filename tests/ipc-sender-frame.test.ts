@@ -4,10 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '../src/main/url-guard'
 
-// Any page the window ends up loading gets the preload's window.notvex, and a
-// navigation keeps the same WebContents, so a sender-identity check can't tell
-// the app's page from a foreign one. Every handler must check the calling
-// frame's URL instead, and refuse before doing anything.
+// Every handler must check the calling frame's URL (isTrustedFrame()) and refuse before doing
+// anything.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 

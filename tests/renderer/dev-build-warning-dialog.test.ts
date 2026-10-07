@@ -30,10 +30,8 @@ const { DevBuildWarningDialog } = await import('@/components/dialogs/DevBuildWar
 const TEST_VAULT_PATH = '/vaults/real-notes.nvx'
 const DIALOG_TITLE = /Opening a real vault in a development build/i
 
-// Captures the callback the component registers, so tests can fire it
-// directly instead of going through a real IPC round-trip. Renders and
-// triggers the warning in one step since every test needs the dialog open
-// before it can act.
+// Captures the registered callback so tests can fire it directly, and opens the dialog, which
+// every test needs first.
 async function renderOpenDialog(): Promise<void> {
   let trigger: RequiredCallback | undefined
   ipc.onDevBuildWarningRequired.mockImplementation((cb) => {

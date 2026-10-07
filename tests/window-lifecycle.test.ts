@@ -141,10 +141,8 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
   })
 })
 
-// The renderer is a SPA and never navigates, and any page the window loads
-// gets the preload's window.notvex. A prefix filter let through
-// http://localhost.attacker.example and every file:// (a dropped .html file
-// navigates there by default), so every navigation is blocked.
+// The renderer is a SPA that never navigates and any loaded page gets window.notvex, so every
+// navigation is blocked, lookalike hosts and dropped files included.
 describe('createWindow: navigation (issue #57)', () => {
   let createWindow: typeof import('../src/main/window').createWindow
 
