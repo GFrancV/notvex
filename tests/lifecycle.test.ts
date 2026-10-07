@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Electron's real `app` isn't available outside a running Electron process,
 // so it's replaced with a minimal EventEmitter double: `index.ts` only
 // needs `on`/`emit`/`quit`/`whenReady`/`requestSingleInstanceLock`/`isPackaged`.
-// `whenReady()` never resolves by default, so the shutdown tests (issue #18)
-// never reach startup; the issue #49 block resolves it once per test to get a
+// `whenReady()` never resolves by default, so the shutdown tests never reach
+// startup; the no-window block below resolves it once per test to get a
 // started app with a window. The dynamic `import('events')` (instead of a
 // top-level import) avoids vi.mock's hoisting running before that binding
 // is initialized.
@@ -47,7 +47,7 @@ vi.mock('../src/main/window', () => ({
 }))
 
 // Startup side effects: the real cleanupOrphanedTempDbs() deletes files in
-// os.tmpdir(), so neither may run once whenReady() resolves (issue #49 block).
+// os.tmpdir(), so neither may run once whenReady() resolves (the no-window block below).
 vi.mock('../src/main/vault/crypto', () => ({
   initSodium: vi.fn().mockResolvedValue(undefined)
 }))
@@ -199,7 +199,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
       return win as unknown as BrowserWindow
     })
     fileOpener = await import('../src/main/file-opener')
-    // Once, so the #18 block above keeps its never-resolving whenReady().
+    // Once, so the shutdown block above keeps its never-resolving whenReady().
     vi.mocked(app.whenReady).mockResolvedValueOnce(undefined)
   })
 

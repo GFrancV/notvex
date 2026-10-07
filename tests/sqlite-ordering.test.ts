@@ -9,23 +9,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { dbGet, dbRun } from '../src/main/db/queries'
 
 /**
- * Historical note: this test originally pinned the sqlite3 driver's
- * *implicit default* queuing mode (no explicit db.serialize() call),
- * because doPackContainer()'s WAL checkpoint used to run shortly after a
- * note write with no app-level lock between them. Since issue #25, every
- * notes: and tags: IPC handler is routed through the same withVaultLock()
- * queue packContainer() uses (see ipc-handlers.ts, vault.ts), so that
- * ordering is now guaranteed at the app level regardless of what the
- * driver does internally — this test is no longer production-load-bearing
- * in the way it originally was.
- *
- * It failed intermittently in CI (issue #43): reproduced on native Linux
- * under artificial CPU load (1/20 runs), never on Windows under equivalent
- * load. Wrapping the same write/read pair in an explicit db.serialize()
- * block instead of relying on the implicit default mode closed it
- * (100/100 passes under the same load that produced the 1/20 failure
- * without it) — so this now pins the guarantee db.serialize() itself
- * makes, which is the one still worth having a regression test for.
+ * Pins the ordering guarantee db.serialize() makes on one Database handle.
+ * The app doesn't depend on the driver for write/checkpoint ordering — note
+ * and tag handlers share withVaultLock() with packContainer() — and the
+ * driver's implicit default mode (no serialize()) is not reliable under CPU
+ * load on Linux, so the pair below is wrapped explicitly.
  */
 describe('sqlite3 driver ordering', () => {
   let dir: string | undefined
