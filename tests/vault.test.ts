@@ -42,11 +42,8 @@ import {
   withVaultLock
 } from '../src/main/vault/vault'
 
-// Partial-mocks crypto.ts so `memzero`/`deriveKey` become observable spies
-// while still running their real behavior (via `importOriginal`) — so the
-// newRawKey-zeroing tests below can capture the exact buffer instance a
-// credential-rotation function derives, and prove that specific instance is
-// wiped, not just that some zeroing call happened somewhere.
+// Pass-through spies: tests capture the exact buffer a rotation derives and prove that
+// instance is wiped, not merely that some memzero() ran.
 vi.mock('../src/main/vault/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/vault/crypto')>()
   return {
@@ -58,10 +55,8 @@ vi.mock('../src/main/vault/crypto', async (importOriginal) => {
   }
 })
 
-// Same pass-through partial mock for memlock.ts, so the commit-path tests
-// below can force exactly one allocSecure()/freeSecure() call to throw via
-// mockImplementationOnce(). Inside a credential rotation those are only
-// storeKey(newRawKey) and freeSecure() of the old masterKey respectively.
+// Pass-through spies so a test can make one allocSecure()/freeSecure() throw. In a rotation
+// those are storeKey(newRawKey) and the free of the old masterKey.
 vi.mock('../src/main/vault/memlock', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/vault/memlock')>()
   return { allocSecure: vi.fn(actual.allocSecure), freeSecure: vi.fn(actual.freeSecure) }
@@ -73,11 +68,8 @@ interface RawNoteRow {
   title_iv: Buffer
 }
 
-// Opens a throwaway connection directly on the .nvx container's packed DB
-// bytes and decrypts every note title. Simulates a fresh process reading
-// the file from disk right now — independent of the live in-memory
-// session, which would trivially "see" notes even if they never made it
-// to disk.
+// Reads note titles straight from the packed .nvx on disk, independent of the live session
+// (which would see notes that never reached the file).
 async function readNoteTitlesFromPackedContainer(
   vaultPath: string,
   masterKey: Uint8Array
@@ -117,14 +109,11 @@ async function readNoteTitlesFromPackedContainer(
   }
 }
 
-// Shared by the rollback tests below: one entry per
-// credential-rotation function. `prepare` creates a vault at `vaultPath`
-// (plus whatever precondition the function needs) and returns the rotation
-// to run and how to reopen the vault with its pre- and post-rotation
-// credentials.
 const ORIGINAL_PASSWORD = 'correct horse battery staple'
 const NEW_PASSWORD = 'a different correct horse battery staple'
 
+// One entry per credential rotation. prepare() creates the vault (plus any precondition) and
+// returns the rotation and how to reopen with the pre- and post-rotation credentials.
 interface RotationCase {
   name: string
   // deriveKey() calls the rotation itself makes; the last one is newRawKey
@@ -192,11 +181,8 @@ const ROTATION_CASES: RotationCase[] = [
   }
 ]
 
-// Shared by the rotation-failure tests below: forces the next `times`
-// liveDb.run() calls matching `matchSql` to fail with `errorMessage`, every
-// other call passing through to the real implementation. Caller is
-// responsible for `runSpy.mockRestore()` once its action under test settles.
-// One-shot by default, so only the targeted statement fails.
+// Fails the next `times` liveDb.run() calls matching matchSql; all others pass through.
+// The caller restores the spy.
 function forceNextDbRunToFail(
   matchSql: (sql: string) => boolean,
   errorMessage: string,
@@ -216,19 +202,10 @@ function forceNextDbRunToFail(
   })
 }
 
-// Shared by the newRawKey-zeroing tests below: asserts that the
-// `expectedDeriveCalls`-th deriveKey() call in this test (1-indexed) — the
-// one that produced newRawKey — returned a buffer that is now all zero,
-// and that memzero() was actually called with that exact instance (not
-// just that some memzero call happened, which authenticateVaultKey()'s
-// own unrelated verification buffer would also satisfy).
-//
-// Known coupling: newRawKey is identified purely by call ordinal, not by
-// which arguments produced it. If a deriveKey() call is added or reordered
-// ahead of newRawKey's in one of the 4 rotation functions,
-// `expectedDeriveCalls` would silently point at authenticateVaultKey()'s
-// buffer — also always memzero()'d — and keep passing without testing
-// newRawKey. Re-check the ordinals if those deriveKey() call sites change.
+// Asserts the `expectedDeriveCalls`-th deriveKey() result (newRawKey) is all zero and went
+// through memzero() by reference. Coupling: newRawKey is picked by call ordinal, so a deriveKey()
+// call added or reordered ahead of it makes this silently check authenticateVaultKey()'s
+// buffer instead. Re-check the ordinals when those call sites change.
 function expectNewRawKeyZeroed(
   deriveKeySpy: Mock<typeof deriveKey>,
   memzeroSpy: Mock<typeof memzero>,
@@ -241,12 +218,8 @@ function expectNewRawKeyZeroed(
   expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
 }
 
-// Shared by the success-path tests below: identifies the two Buffer.from(newRawKey)
-// copies (the newHex-derivation buffer and the writeContainer masterKey
-// argument) among every Buffer.from() call made during the test, by
-// reference equality to `newRawKeyRef` — the same discriminator technique
-// expectNewRawKeyZeroed() uses for memzero(). Asserts there are exactly 2
-// such copies and both are now all-zero bytes.
+// Finds the two Buffer.from(newRawKey) copies (newHex source, writeContainer masterKey) by
+// reference and asserts both are zeroed.
 function expectNewRawKeyCopiesZeroed(
   bufferFromSpy: ReturnType<typeof vi.spyOn>,
   newRawKeyRef: Uint8Array
@@ -263,10 +236,7 @@ function expectNewRawKeyCopiesZeroed(
   }
 }
 
-// On the success path newRawKey is zeroed twice — once by
-// storeKey() inside commitRotatedContainer(), once by the outer finally —
-// proving the finally's memzero() is a harmless no-op there rather than
-// missing or throwing.
+// Success path: storeKey() and the outer finally both zero newRawKey; the second is a no-op.
 function expectNewRawKeyZeroedTwice(
   memzeroSpy: Mock<typeof memzero>,
   newRawKeyRef: Uint8Array
@@ -275,10 +245,7 @@ function expectNewRawKeyZeroedTwice(
   expect(Array.from(newRawKeyRef).every((byte) => byte === 0)).toBe(true)
 }
 
-// authenticateVaultKey()'s candidateKey (returned as
-// auth.masterKey on success) must go through memzero(), not a plain
-// fill(0). candidateKey is the Buffer.from() copy of the verification
-// derive, identified by reference like expectNewRawKeyCopiesZeroed() does.
+// The verify derive's Buffer copy (candidateKey) must go through memzero(), not fill(0).
 function expectVerifyKeyMemzeroed(
   bufferFromSpy: ReturnType<typeof vi.spyOn>,
   verifyDerivedRef: Uint8Array,
@@ -295,10 +262,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   let vaultDir: string | undefined
 
   afterEach(async () => {
-    // Drop any mockImplementationOnce() a test armed but never
-    // consumed (e.g. it failed earlier), so it can't leak into closeVault()
-    // below or the next test. Vitest 4's mockReset() restores the
-    // pass-through implementation given to vi.fn().
+    // Drop any unconsumed mockImplementationOnce() so it can't leak into closeVault() or the next
+    // test; Vitest 4's mockReset() restores the vi.fn() pass-through.
     vi.mocked(allocSecure).mockReset()
     vi.mocked(freeSecure).mockReset()
     try {
@@ -335,7 +300,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000) // real Argon2id calibration + KDF run on vault creation; observed ~25-35s
+  }, 60_000) // real Argon2id calibration + KDF on vault creation
 
   it('persists notes written just before closeVault(), even without an explicit syncContainer() call', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -368,10 +333,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it('closeVault() is idempotent — a second call once nothing is open resolves without throwing', async () => {
-    // Several close paths can race a caller who already closed the vault —
-    // e.g. the auto-lock timer firing right as the user manually locks.
-    // doCloseVault() guards every step (`if (db)`, `if (masterKey)`, ...),
-    // so a second call must be a safe no-op, never a throw or a hang.
+    // A second close happens in practice, e.g. the auto-lock timer firing as the user locks.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -402,10 +364,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it('packContainer() rejects on the same write failure syncContainer() swallows (vault directory removed)', async () => {
-    // vault:save-copy-as calls packContainer() directly rather than
-    // syncContainer(), specifically so a failed sync surfaces as a failed
-    // backup instead of silently copying stale data. This proves the
-    // rejection it depends on actually happens.
+    // vault:save-copy-as relies on this rejection (see its handler).
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -418,13 +377,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it('serializes packContainer() against rotateVaultCredentials() so a repack can never race a rekey', async () => {
-    // Characterization, not a reliable negative control: a passthrough
-    // withVaultLock wouldn't reliably fail this. rotateVaultCredentials()'s
-    // synchronous Argon2id blocks the JS thread before its first await, so
-    // packContainer() can't start until it returns, narrowing the race
-    // unpredictably. The withVaultLock ordering tests at the end of this file
-    // prove the serialization deterministically; this proves both functions
-    // still behave correctly end-to-end when routed through it together.
+    // Characterization only: rotateVaultCredentials()'s synchronous Argon2id blocks the thread
+    // before its first await, so a passthrough lock wouldn't reliably fail this. The withVaultLock
+    // ordering tests at the end of this file prove serialization deterministically.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -445,10 +400,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
 
     await closeVault()
 
-    // The strongest proof against "bricked vault": actually unlock with
-    // the new password. If the final .nvx header was built from a stale
-    // key, the HMAC check inside openVault() fails and this returns null
-    // rather than throwing — assert success, not just "didn't throw".
+    // Unlocking proves the header wasn't built from a stale key (HMAC mismatch → null).
     const reopened = await openVault(vaultPath, newPassword)
     expect(reopened).not.toBeNull()
 
@@ -460,10 +412,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 60_000)
 
   it("doesn't deadlock when rotateVaultCredentials()'s rollback closes the vault", async () => {
-    // The rollback closes the session from inside the lock, where the locked
-    // closeVault() would deadlock the queue (withVaultLock isn't reentrant).
-    // The bounded Promise.race tells "rejected" from "hung" in 10s, instead
-    // of vitest's full test timeout.
+    // The rollback closes from inside the (non-reentrant) lock. The race tells "rejected" from
+    // "hung" in 10s instead of the full test timeout.
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
 
@@ -489,9 +439,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       await expect(rotation).rejects.toThrow('simulated transaction failure')
       expect(isVaultOpen()).toBe(false)
 
-      // The queue must still be usable afterward — proves doCloseVault()
-      // actually ran to completion (including releasing the lock) rather
-      // than leaving withVaultLock permanently wedged.
+      // The queue is still usable, so doCloseVault() ran to completion.
       const pingOrder: string[] = []
       await withVaultLock(async () => {
         pingOrder.push('ping')
@@ -557,9 +505,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
       'simulated rekey failure'
     )
 
-    // Unlike changePassword()/configureKeyFile()/removeKeyFile(),
-    // rotateVaultCredentials() has no authenticateVaultKey() step, so
-    // deriveKey() is called exactly once here — for newRawKey itself.
+    // No authenticateVaultKey() step here: the only deriveKey() call is newRawKey.
     const deriveKeySpy = vi.mocked(deriveKey)
     const memzeroSpy = vi.mocked(memzero)
     deriveKeySpy.mockClear()
@@ -622,8 +568,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
         rotateVaultCredentials('a different correct horse battery staple')
       ).resolves.toMatchObject({ mnemonic: expect.any(String) })
 
-      // rotateVaultCredentials() has no authenticateVaultKey() step, so the
-      // only deriveKey() call is the one that produces newRawKey.
+      // No authenticateVaultKey() step here: the only deriveKey() call is newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
       expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
@@ -664,12 +609,9 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     await dbRun(getDb(), 'DELETE FROM vault_meta')
     await closeVault() // repacks the container, persisting the deletion
 
-    // On Linux/macOS unlink succeeds on an open file, so the temp-file check
-    // alone can't prove the connection was closed. Database.prototype.close
-    // is non-configurable (vi.spyOn can't wrap it), but vault.ts looks up
-    // sqlcipher.Database on every call, so a subclass swapped in for this one
-    // call can record each connection it opens, its file, and whether it was
-    // closed.
+    // On Linux/macOS unlink succeeds on an open file, so the temp-file check can't prove the close.
+    // Database.prototype.close is non-configurable (vi.spyOn can't wrap it), but vault.ts reads
+    // sqlcipher.Database on every call, so a swapped-in subclass can track each connection.
     const RealDatabase = sqlcipher.Database
     const connections: { path: string; closed: boolean }[] = []
     class TrackedDatabase extends RealDatabase {
@@ -1037,10 +979,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   }, 90_000)
 
   it('changePassword(): a second rotation in the same open session accepts the password the first rotation just set', async () => {
-    // currentMetadata must be re-derived from the container bytes actually
-    // written: patched in place, hmacCoveredBytes/storedHmac would still
-    // point at the pre-rotation header, and the next authenticateVaultKey()
-    // in the same session would reject the correct new password.
+    // Guards commitRotatedContainer()'s metadata re-read (see its comment).
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     const vaultPath = join(vaultDir, 'test.nvx')
     const firstPassword = 'correct horse battery staple'
@@ -1182,11 +1121,8 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     90_000
   )
 
-  // A failure after reencryptNotes() has COMMITted leaves the session's temp
-  // DB holding note content encrypted under the discarded new key, so the
-  // rollback must close without packing it. The note is deliberately NOT
-  // synced first, so this also proves the rotation persists pending writes
-  // before mutating anything — closing without packing must not lose them.
+  // The note is deliberately NOT synced first: the rollback closes without packing (see
+  // rollbackCredentialRotation()), so this proves the rotation packed pending writes first.
   it.each(ROTATION_CASES)(
     '$name(): keeps unsynced note content intact when a failure after the notes COMMIT rolls back',
     async ({ prepare }) => {
@@ -1213,17 +1149,11 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
   )
 })
 
-// Structural test, not a behavioral one: this file can't invoke
-// ipc-handlers.ts's registered handlers (no electron mocking here), and a
-// test that calls getDb()/getMasterKey() itself would be deciding the
-// wrapping on its own. Asserting on the real source ties pass/fail to the
-// production handlers instead.
+// Structural, not behavioral: there's no electron mocking here to invoke the real handlers, so
+// this asserts on ipc-handlers.ts's source instead.
 describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #25)', () => {
-  // Every notes:*/tags:*/note-tags:* IPC channel registered in ipc-handlers.ts
-  // as of this test's writing. Kept as an explicit list (not derived from the
-  // source file itself) so a channel silently renamed or removed fails this
-  // test with a clear "not found" message instead of quietly shrinking the
-  // set of channels checked.
+  // Explicit list, not derived from the source, so a renamed or removed channel fails loudly
+  // instead of quietly shrinking the checked set.
   const NOTE_AND_TAG_CHANNELS = [
     'notes:create',
     'notes:get',
@@ -1257,10 +1187,7 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
       const channelIdx = source.indexOf(`'${channel}'`)
       expect(channelIdx, `channel '${channel}' not found in ipc-handlers.ts`).toBeGreaterThan(-1)
 
-      // The block for this channel runs from its own handle( call up
-      // to the next one (or EOF for the last channel in the file) — no
-      // paren-balancing needed, every handler's own handle( starts
-      // strictly before its channel-name string literal.
+      // A channel's block runs from its own handle( call to the next one (or EOF).
       const blockStart = handleCallStarts.filter((i) => i <= channelIdx).pop()
       const blockEnd = handleCallStarts.find((i) => i > channelIdx) ?? source.length
       const block = source.slice(blockStart, blockEnd)
@@ -1271,12 +1198,8 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
         `'${channel}' handler must call withVaultLock(...) — see issue #25`
       ).toBeGreaterThan(-1)
 
-      // Not just "withVaultLock( appears somewhere in the block" — every
-      // getDb()/getMasterKey() call in the block must come AFTER
-      // withVaultLock(, i.e. inside the closure passed to it. Catches a
-      // handler that calls withVaultLock() decoratively while still
-      // reading live state outside it, which the plain substring check
-      // above would miss.
+      // Every getDb()/getMasterKey() must come after withVaultLock(, i.e. inside its closure, not
+      // merely somewhere in the block.
       for (const match of block.matchAll(/\b(?:getDb|getMasterKey)\(/g)) {
         expect(
           match.index,
@@ -1287,10 +1210,8 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
   })
 })
 
-// Characterization, not a red→green gate (see the structural test above for
-// why): reproduces with real data the race that makes the note handlers
-// need withVaultLock — a write landing mid-rotation — with deterministic
-// timing instead of a real Argon2id race.
+// Characterization: reproduces with real data the race that makes note handlers need
+// withVaultLock (a write landing mid-rotation), with deterministic timing.
 describe('note write races a credential rotation (issue #25 — characterization)', () => {
   let vaultDir: string | undefined
 
@@ -1324,14 +1245,8 @@ describe('note write races a credential rotation (issue #25 — characterization
       releaseWindow = resolve
     })
 
-    // By the time doChangePassword() reaches `PRAGMA wal_checkpoint(FULL)`,
-    // PRAGMA rekey has already re-keyed the live SQLCipher connection AND
-    // reencryptNotes() has already re-encrypted every *pre-existing* note
-    // and committed — but masterKey isn't reassigned until several steps
-    // later. Holding the real statement here, before letting it run,
-    // deterministically lands a racing write inside that exact window: late
-    // enough that reencryptNotes()'s SELECT can't sweep it up and re-encrypt
-    // it too, early enough that masterKey is still stale.
+    // Held at wal_checkpoint(FULL): the rekey and reencryptNotes()'s COMMIT are done but masterKey
+    // is still the old key, so a write here is too late to be re-encrypted and uses the stale key.
     const runSpy = vi.spyOn(liveDb, 'run').mockImplementation((sql: string, ...rest: unknown[]) => {
       if (typeof sql === 'string' && sql === 'PRAGMA wal_checkpoint(FULL)') {
         markWindowReached()
@@ -1358,11 +1273,8 @@ describe('note write races a credential rotation (issue #25 — characterization
       releaseWindow()
       await rotation
 
-      // The rotation succeeded and masterKey is now the NEW key — but the
-      // racing note's fields were encrypted with the OLD key, and
-      // reencryptNotes() never saw it (it was inserted after that
-      // function's SELECT already ran and committed). Decrypting it with
-      // the key the rest of the vault now assumes fails.
+      // masterKey is now the new key, but this note was encrypted under the old one after
+      // reencryptNotes()'s SELECT, so it can't be decrypted.
       await expect(getNote(getDb(), racingNote.id, getMasterKey())).rejects.toThrow()
     } finally {
       runSpy.mockRestore()
@@ -1370,11 +1282,8 @@ describe('note write races a credential rotation (issue #25 — characterization
   }, 90_000)
 })
 
-// The common case, no rotation involved: note/tag operations queue through
-// the same withVaultLock FIFO as the rotations, so two ordinary writes racing
-// each other must still both land. Uses the pattern the handlers use
-// (withVaultLock(() => op(getDb(), ..., getMasterKey()))), not the stub
-// functions of the ordering tests below.
+// No rotation involved: two ordinary writes through the shared FIFO must both land, using the
+// handlers' withVaultLock(() => op(getDb(), ..., getMasterKey())) shape.
 describe('note/tag operations serialize with each other (issue #25 — concurrency)', () => {
   let vaultDir: string | undefined
 
@@ -1452,10 +1361,8 @@ describe('devBuild propagation (issue #34)', () => {
     expect(readContainer(readFileSync(vaultPath)).devBuild).toBe(true)
   }, 120_000)
 
-  // The 3 cases below exist because rotateVaultCredentials/configureKeyFile/
-  // removeKeyFile each duplicate changePassword's writeContainer() call
-  // (see vault.ts) rather than sharing it — a future edit to any one of
-  // them that drops its `devBuild:` argument would otherwise go unnoticed.
+  // rotateVaultCredentials/configureKeyFile/removeKeyFile each have their own writeContainer()
+  // call, so each needs its own check that it still passes devBuild.
 
   it('rotateVaultCredentials() preserves an existing devBuild: true flag', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -1492,11 +1399,8 @@ describe('devBuild propagation (issue #34)', () => {
   }, 150_000)
 })
 
-// The editor's autosave ends with loadNotes(), which queues a notes:list
-// that resolves with an array. Forwarded to doCloseVault, that array would
-// land in skipPack: the vault would close without packing and lose the
-// edit. Real SQLCipher, no vault mocks; calibration is stubbed to the
-// cheapest tier because it's not what's under test here.
+// The editor's autosave ends with a queued notes:list resolving with an array; forwarded to
+// doCloseVault it would land in skipPack. Calibration is stubbed to the cheapest tier.
 describe('closeVault() packs regardless of the previous queued operation (issue #61)', () => {
   const PASSWORD = 'correct horse battery staple'
   let vaultDir: string
@@ -1682,14 +1586,8 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
   })
 
   it('deadlocks permanently on a reentrant call — this is why closeVault()s catch-block fallbacks call doCloseVault() directly, never closeVault()', async () => {
-    // Guardrail: withVaultLock is non-reentrant by design (see its
-    // docstring), and this pins that down so it's never "fixed" into
-    // something that silently tolerates a misused nested call.
-    //
-    // Runs against a freshly re-imported copy of the module (vi.resetModules()
-    // + dynamic import): this test wedges its module-level vaultOpLock
-    // forever, and every other test in this file shares the statically
-    // imported one.
+    // Pins non-reentrancy so it's never "fixed" into tolerating a nested call. Runs on a freshly
+    // imported module (vi.resetModules()) because this wedges its vaultOpLock forever.
     vi.resetModules()
     const { withVaultLock: isolatedWithVaultLock } = await import('../src/main/vault/vault')
 
@@ -1707,9 +1605,7 @@ describe('withVaultLock (issue #16 follow-up: concurrency hardening)', () => {
 
     expect(outcome).toBe('timeout')
 
-    // Proves the isolation actually worked: the file's shared withVaultLock
-    // (statically imported, used by every other test) is untouched and still
-    // runs normally.
+    // The statically imported lock every other test uses is untouched.
     await expect(withVaultLock(async () => 'still-fine' as const)).resolves.toBe('still-fine')
   })
 })
