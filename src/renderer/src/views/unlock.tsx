@@ -100,7 +100,7 @@ export function Unlock(): ReactNode {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshThrottleStatus, setPendingOpenVaultPath])
 
-  // React to vault:open-file push events while Unlock is already mounted (Scenario B)
+  // React to vault:open-file push events while Unlock is already mounted
   useEffect(() => {
     if (!pendingOpenVaultPath) return
     void (async (): Promise<void> => {
@@ -164,9 +164,7 @@ export function Unlock(): ReactNode {
     )
     setLoading(false)
     if (!res.success) {
-      // User declined the vault-format update prompt, or the dev-build
-      // warning — neither is a credential failure, so return to an idle
-      // unlock form instead of showing an error.
+      // A declined prompt, not a credential failure — see handleUnlockVault.
       if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
       return

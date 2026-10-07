@@ -198,7 +198,7 @@ export function NoteEditor(): ReactNode {
     window.addEventListener('keydown', onKey, true)
 
     // Drain, never discard: this cleanup also runs when the note changes, and
-    // anything still inside the debounce window would otherwise be lost (#19).
+    // anything still inside the debounce window would otherwise be lost.
     return () => {
       void contentSaver.flush().catch(() => undefined)
       void titleSaver.flush().catch(() => undefined)

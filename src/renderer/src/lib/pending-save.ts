@@ -2,7 +2,7 @@
  * Debounced save that can be *flushed* instead of cancelled.
  *
  * A plain `setTimeout` debounce keeps the pending value inside the timer, so
- * `clearTimeout` silently throws away whatever was typed last (issue #19).
+ * `clearTimeout` silently throws away whatever was typed last.
  * Here the pending value lives outside the timer, so it can always be drained.
  *
  * Live instances register themselves in a module-level set, which lets the

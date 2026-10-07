@@ -6,7 +6,7 @@ type Commit = (id: string, value: string) => Promise<void>
 
 /**
  * Component-scoped debounced saver that drains on unmount instead of dropping
- * what is still pending (issue #19).
+ * what is still pending.
  *
  * The saver is created once and outlives re-renders, so it commits through a
  * ref rather than closing over the first `commit` it ever saw. Callers still
