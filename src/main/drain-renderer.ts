@@ -10,12 +10,8 @@ export const FLUSH_ACK_TIMEOUT_MS = 200
 let nextRequestId = 0
 
 /**
- * Give the renderer a brief window to persist anything still sitting in its
- * autosave debounce, while the database is still open.
- *
- * Bounded by construction: a renderer that is hung, crashed or simply not
- * listening must never keep an unlocked vault on screen, so the wait is a race
- * against the timeout rather than a condition we hope resolves.
+ * Gives the renderer a brief window to persist pending autosaves while the DB is still open.
+ * Bounded by a timeout: a hung or crashed renderer must never keep the vault unlocked.
  */
 export async function drainRenderer(win: BrowserWindow): Promise<void> {
   if (win.isDestroyed()) return
@@ -31,18 +27,14 @@ export async function drainRenderer(win: BrowserWindow): Promise<void> {
     const onAck = (_e: unknown, ackId?: number): void => {
       if (ackId === requestId) finish()
     }
-    // The timer is what bounds the wait: it always fires, so this promise
-    // always settles even if the renderer never answers.
     const timer = setTimeout(finish, FLUSH_ACK_TIMEOUT_MS)
     ipcMain.on('vault:flush-complete', onAck)
 
     try {
       win.webContents.send('vault:will-lock', requestId)
     } catch {
-      // webContents can be gone while the window still reports alive. An
-      // unreachable renderer is just one that cannot ack, and draining is
-      // best-effort — but this must not escape, or the caller would never
-      // reach closeVault() and the vault would stay open.
+      // webContents can be gone while the window reports alive. Must not escape, or the caller
+      // would never reach closeVault().
       finish()
     }
   })

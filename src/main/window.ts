@@ -90,13 +90,8 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     }
   })
 
-  // Covers a bare win.close() (e.g. the window's own close button) — drain
-  // it first instead of relying on window-all-closed, which fires after
-  // webContents is already gone and can no longer be sent anything.
-  // The app-quit path (Cmd+Q / app.quit()) drains via before-quit instead
-  // (see index.ts), since that fires before this window's close event does;
-  // by the time it gets here the vault is already closed and this is a
-  // harmless no-op.
+  // Drains a plain win.close() while webContents can still be messaged (window-all-closed is
+  // too late). On app quit before-quit already closed the vault (see closeVaultDrained()).
   let closing = false
   win.on('close', (event) => {
     if (closing || !isVaultOpen()) return
