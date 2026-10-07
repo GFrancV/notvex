@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Same image as validate.yml: @journeyapps/sqlcipher's binding needs libssl1.1
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
 
@@ -25,7 +26,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run validations
-        run: pnpm validate
+        run: pnpm check:task
 
   create-release:
     needs: [validate]
