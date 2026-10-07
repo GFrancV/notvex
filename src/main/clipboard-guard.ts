@@ -3,7 +3,6 @@ import { clipboard } from 'electron'
 import { getPrefs } from './prefs'
 
 let timer: ReturnType<typeof setTimeout> | undefined
-let armedValue = ''
 
 export function scheduleClipboardClear(copiedValue: string): void {
   if (timer) clearTimeout(timer)
@@ -11,10 +10,13 @@ export function scheduleClipboardClear(copiedValue: string): void {
   const { clipboardClearSeconds } = getPrefs()
   if (clipboardClearSeconds <= 0) return
 
-  armedValue = copiedValue
   timer = setTimeout(() => {
-    if (clipboard.readText() === armedValue) {
-      clipboard.writeText('')
-    }
+    // readText() is async since Electron 44
+    clipboard
+      .readText()
+      .then((text) => {
+        if (text === copiedValue) clipboard.clear()
+      })
+      .catch((e: unknown) => console.error('[clipboard] auto-clear failed:', e))
   }, clipboardClearSeconds * 1000)
 }

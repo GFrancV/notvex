@@ -28,7 +28,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "preview": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "install-electron && electron-builder install-app-deps",
     "gen:icon": "icon-gen -i build/icon.png -o build --ico --ico-name icon --icns --icns-name icon",
     "build": "electron-vite build && pnpm gen:icon",
     "build:unpack": "pnpm build && electron-builder --dir",
@@ -104,7 +104,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
     "dependency-cruiser": "^18.2.0",
-    "electron": "^39.2.6",
+    "electron": "^44.6.0",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
