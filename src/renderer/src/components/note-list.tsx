@@ -31,7 +31,7 @@ export function NoteList(): ReactNode {
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  // Load all notes when trash/pinned/active-tags view changes
+  // Reload when the trash/pinned view changes
   useEffect(() => {
     void loadNotes({ trashed: showTrash })
   }, [showTrash, showPinned, loadNotes])

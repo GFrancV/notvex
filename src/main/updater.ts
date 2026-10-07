@@ -3,7 +3,7 @@ import { autoUpdater } from 'electron-updater'
 
 // autoUpdater is app-wide but createWindow() calls this once per window, and
 // macOS `activate` creates more than one. Listeners are registered once and
-// send to the latest window, skipping it while it's destroyed (#36).
+// send to the latest window, skipping it while it's destroyed.
 let currentWin: BrowserWindow | null = null
 let listenersRegistered = false
 

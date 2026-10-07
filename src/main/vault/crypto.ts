@@ -26,13 +26,13 @@ const KDF_TIERS: Readonly<Record<number, Argon2Params>> = {
   1: { memory: 512 * 1024 * 1024, iterations: 4, parallelism: 1 }, // 512 MB / 4 passes
   2: { memory: 512 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 512 MB / 3 passes
   3: { memory: 256 * 1024 * 1024, iterations: 4, parallelism: 1 }, // 256 MB / 4 passes
-  4: { memory: 256 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 256 MB / 3 passes  ← current default
+  4: { memory: 256 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 256 MB / 3 passes
   5: { memory: 128 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 128 MB / 3 passes
   6: { memory: 128 * 1024 * 1024, iterations: 2, parallelism: 1 }, // 128 MB / 2 passes
   7: { memory: 64 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 64 MB / 3 passes
   8: { memory: 64 * 1024 * 1024, iterations: 2, parallelism: 1 }, //  64 MB / 2 passes
   9: { memory: 32 * 1024 * 1024, iterations: 3, parallelism: 1 }, // 32 MB / 3 passes
-  10: { memory: 32 * 1024 * 1024, iterations: 2, parallelism: 1 } // 64 MB / 2 passes
+  10: { memory: 32 * 1024 * 1024, iterations: 2, parallelism: 1 } // 32 MB / 2 passes
 }
 
 export function isValidKdfTier(tier: number): boolean {

@@ -198,7 +198,7 @@ export function NoteEditor(): ReactNode {
     window.addEventListener('keydown', onKey, true)
 
     // Drain, never discard: this cleanup also runs when the note changes, and
-    // anything still inside the debounce window would otherwise be lost (#19).
+    // anything still inside the debounce window would otherwise be lost.
     return () => {
       void contentSaver.flush().catch(() => undefined)
       void titleSaver.flush().catch(() => undefined)
@@ -226,8 +226,7 @@ export function NoteEditor(): ReactNode {
     [activeNoteId, titleSaver]
   )
 
-  // Blur is the fast path, no longer the only one: losing focus is an event
-  // that may never happen before a note switch, a lock or a quit.
+  // Blur is only the fast path: focus may never leave before a note switch, a lock or a quit.
   const handleTitleBlur = (): void => {
     void titleSaver.flush().catch(() => undefined)
   }

@@ -37,7 +37,7 @@ let startupDone = false
 function openMainWindow(): void {
   const win = createWindow(takePendingOpenFilePath)
   // On macOS the app outlives its last window; open-file / second-instance
-  // must not reuse the destroyed one (#49).
+  // must not reuse the destroyed one.
   win.on('closed', (): void => {
     if (mainWindow === win) mainWindow = null
   })
@@ -57,25 +57,16 @@ void app.whenReady().then(async (): Promise<void> => {
 
 app.on('window-all-closed', (): void => {
   if (process.platform === 'darwin') {
-    // Closing the last window doesn't quit the app on macOS (dock
-    // convention), so the vault still needs to lock here. This call can
-    // also fire mid-shutdown (e.g. during autoUpdater.quitAndInstall(),
-    // which closes windows before before-quit) — safe either way because
-    // closeVault() is serialized (withVaultLock) and idempotent, not
-    // because no quit could be in progress.
+    // macOS keeps the app alive with no window, so lock here (see closeVaultDrained()).
     stopAutoLockTimer()
-    // The window that just closed already drained via its own 'close'
-    // handler (window.ts) — this is a safety net, not the primary drain path.
     void closeVaultDrained(null)
     return
   }
   app.quit() // before-quit does the real shutdown
 })
 
-// On macOS, Cmd+Q / app.quit() fires before-quit *before* any window's
-// 'close' event, so this is the primary drain path for that gesture — the
-// window-level intercept in window.ts only ever sees an already-closed
-// vault by the time it runs (#19).
+// Primary drain for Cmd+Q / app.quit(): before-quit fires before any window's 'close'
+// (see closeVaultDrained()).
 app.on('before-quit', (event): void => {
   if (readyToQuit) return // our own re-entrant app.quit(): let it through
   event.preventDefault() // synchronous, before any await

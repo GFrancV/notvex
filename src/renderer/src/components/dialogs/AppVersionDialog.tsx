@@ -15,7 +15,7 @@ interface Props {
   onClose: () => void
 }
 
-// A plain <a href> would navigate the window, which main blocks (#60).
+// A plain <a href> would navigate the window, which main blocks.
 function ExternalLink({ url, children }: { url: string; children: ReactNode }): ReactNode {
   return (
     <Button

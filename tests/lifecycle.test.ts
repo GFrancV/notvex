@@ -3,14 +3,9 @@ import { EventEmitter } from 'events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Electron's real `app` isn't available outside a running Electron process,
-// so it's replaced with a minimal EventEmitter double: `index.ts` only
-// needs `on`/`emit`/`quit`/`whenReady`/`requestSingleInstanceLock`/`isPackaged`.
-// `whenReady()` never resolves by default, so the shutdown tests (issue #18)
-// never reach startup; the issue #49 block resolves it once per test to get a
-// started app with a window. The dynamic `import('events')` (instead of a
-// top-level import) avoids vi.mock's hoisting running before that binding
-// is initialized.
+// Minimal EventEmitter stand-in for `app`. whenReady() never resolves by default, so the
+// shutdown tests never start the app; the no-window block resolves it per test. events is
+// imported dynamically because vi.mock is hoisted above top-level imports.
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('events')
   class MockApp extends EventEmitter {
@@ -47,7 +42,7 @@ vi.mock('../src/main/window', () => ({
 }))
 
 // Startup side effects: the real cleanupOrphanedTempDbs() deletes files in
-// os.tmpdir(), so neither may run once whenReady() resolves (issue #49 block).
+// os.tmpdir(), so neither may run once whenReady() resolves (the no-window block below).
 vi.mock('../src/main/vault/crypto', () => ({
   initSodium: vi.fn().mockResolvedValue(undefined)
 }))
@@ -138,10 +133,8 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     const firstEvent = { preventDefault: vi.fn() }
     app.emit('before-quit', firstEvent)
 
-    // closeVault() is still pending here — simulates a second, external
-    // quit signal (e.g. a duplicate Cmd+Q) arriving before the first close
-    // has settled, as opposed to the internal re-entrant app.quit() the
-    // finally block calls once it has.
+    // A second external quit (e.g. a repeated Cmd+Q) before the first close settles, not the
+    // re-entrant app.quit() from the finally.
     const secondEvent = { preventDefault: vi.fn() }
     app.emit('before-quit', secondEvent)
 
@@ -199,7 +192,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
       return win as unknown as BrowserWindow
     })
     fileOpener = await import('../src/main/file-opener')
-    // Once, so the #18 block above keeps its never-resolving whenReady().
+    // Once, so the shutdown block above keeps its never-resolving whenReady().
     vi.mocked(app.whenReady).mockResolvedValueOnce(undefined)
   })
 

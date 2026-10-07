@@ -44,8 +44,6 @@ describe('drainRenderer', () => {
   })
 
   it('1 · locks anyway when the renderer never acks', async () => {
-    // The security property: a hung, crashed or non-listening renderer must
-    // never keep an unlocked vault on screen.
     const { win, sent } = fakeWindow()
 
     let settled = false
@@ -104,9 +102,7 @@ describe('drainRenderer', () => {
       settled = true
     })
 
-    // The second drain must wait for its own ack, not inherit the stale one
-    // — the request ids are also distinct, so the late emit above couldn't
-    // have resolved it even while it was still listening.
+    // Must wait for its own ack; distinct request ids mean the stale one couldn't resolve it anyway.
     await vi.advanceTimersByTimeAsync(FLUSH_ACK_TIMEOUT_MS - 1)
     expect(settled).toBe(false)
 
@@ -146,9 +142,7 @@ describe('drainRenderer', () => {
   })
 
   it('6 · survives an unreachable renderer instead of blocking the lock', async () => {
-    // webContents can be gone while the window itself still reports alive. If
-    // that throw escaped, lockVaultAndNotify would never reach closeVault() —
-    // the drain meant to protect data would be leaving the vault open.
+    // The throw must not escape, or lockVaultAndNotify would never reach closeVault().
     const win = {
       isDestroyed: () => false,
       webContents: {

@@ -9,23 +9,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { dbGet, dbRun } from '../src/main/db/queries'
 
 /**
- * Historical note: this test originally pinned the sqlite3 driver's
- * *implicit default* queuing mode (no explicit db.serialize() call),
- * because doPackContainer()'s WAL checkpoint used to run shortly after a
- * note write with no app-level lock between them. Since issue #25, every
- * notes: and tags: IPC handler is routed through the same withVaultLock()
- * queue packContainer() uses (see ipc-handlers.ts, vault.ts), so that
- * ordering is now guaranteed at the app level regardless of what the
- * driver does internally — this test is no longer production-load-bearing
- * in the way it originally was.
- *
- * It failed intermittently in CI (issue #43): reproduced on native Linux
- * under artificial CPU load (1/20 runs), never on Windows under equivalent
- * load. Wrapping the same write/read pair in an explicit db.serialize()
- * block instead of relying on the implicit default mode closed it
- * (100/100 passes under the same load that produced the 1/20 failure
- * without it) — so this now pins the guarantee db.serialize() itself
- * makes, which is the one still worth having a regression test for.
+ * Pins db.serialize()'s same-handle ordering. The app doesn't rely on it for write/checkpoint
+ * ordering (withVaultLock does), and the driver's default mode is unreliable under load, so
+ * the pair below is wrapped explicitly.
  */
 describe('sqlite3 driver ordering', () => {
   let dir: string | undefined
@@ -47,11 +33,8 @@ describe('sqlite3 driver ordering', () => {
 
     await dbRun(db, 'CREATE TABLE t (id INTEGER)')
 
-    // No await between these two — the write is only *issued*, not settled,
-    // before the read right after it. db.serialize()'s callback runs
-    // synchronously, so both calls are queued before either settles; if
-    // db.serialize() ever interleaved commands on the same handle, the read
-    // could see the table before the row actually lands in it.
+    // Both calls are queued inside serialize() before either settles; interleaving would let the
+    // read run before the row lands.
     let write!: Promise<void>
     let read!: Promise<{ count: number } | undefined>
     db.serialize(() => {

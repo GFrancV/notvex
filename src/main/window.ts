@@ -54,11 +54,11 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
 
   // The renderer is a SPA and never navigates; any page this window loads
   // would get the preload's window.notvex, so block every navigation —
-  // including a dropped file, which navigates to file:// by default (#57).
+  // including a dropped file, which navigates to file:// by default.
   // Reloads (Vite HMR, Ctrl+R) don't fire will-navigate.
   win.webContents.on('will-navigate', (event) => event.preventDefault())
 
-  // Open external links in system browser, not in-app — http(s) only (#56)
+  // Open external links in system browser, not in-app — http(s) only
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
@@ -90,13 +90,8 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     }
   })
 
-  // Covers a bare win.close() (e.g. the window's own close button) — drain
-  // it first instead of relying on window-all-closed, which fires after
-  // webContents is already gone and can no longer be sent anything (#19).
-  // The app-quit path (Cmd+Q / app.quit()) drains via before-quit instead
-  // (see index.ts), since that fires before this window's close event does;
-  // by the time it gets here the vault is already closed and this is a
-  // harmless no-op.
+  // Drains a plain win.close() while webContents can still be messaged (window-all-closed is
+  // too late). On app quit before-quit already closed the vault (see closeVaultDrained()).
   let closing = false
   win.on('close', (event) => {
     if (closing || !isVaultOpen()) return
@@ -115,7 +110,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
   // A reloaded or crashed renderer can never answer a prompt sent to the old
   // one, so settle it like a closed window would or unlock stays wedged. The
   // new renderer starts with no vault UI, so drop the key too — null skips the
-  // drain, since there is no renderer left with pending edits (#51).
+  // drain, since there is no renderer left with pending edits.
   const onRendererGone = (): void => {
     markRendererReplaced()
     cancelPendingConfirmations()
@@ -129,10 +124,10 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
 
   win.on('closed', () => {
     // A destroyed window can never answer a pending migration / dev-build
-    // prompt, so settle it here or the next unlock stays wedged (#36).
+    // prompt, so settle it here or the next unlock stays wedged.
     cancelPendingConfirmations()
     // powerMonitor outlives this window (macOS `activate` builds another),
-    // so its listeners must not keep pointing at a dead one (#36).
+    // so its listeners must not keep pointing at a dead one.
     powerMonitor.off('suspend', lockOnSuspend)
     powerMonitor.off('lock-screen', lockOnSuspend)
     powerMonitor.off('user-did-resign-active', lockOnSuspend)

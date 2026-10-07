@@ -4,10 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '../src/main/url-guard'
 
-// The confirmation gates in ipc-handlers.ts park a vault:open call on a
-// module-level resolver until the renderer answers. If the window is destroyed
-// first, nothing answers — these tests cover the cancel path that unwedges them
-// (issue #36). Only what vault:open touches before/at the gates is mocked.
+// The gates in ipc-handlers.ts park vault:open on a module-level resolver until the renderer
+// answers; these cover the cancel paths that unwedge it. Only what vault:open touches up to the
+// gates is mocked.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -104,7 +103,7 @@ function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void
   return { win, sent, destroy: () => (destroyed = true) }
 }
 
-// The app's own page, which every handler requires as the calling frame (#57).
+// The app's own page, which every handler requires as the calling frame.
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
 
 // Calls a handler the way ipcMain does: with an event carrying the calling renderer.
@@ -366,7 +365,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
   // A reload or renderer crash keeps the window alive, so liveWin() can't tell
   // — but the unlock that finishes afterwards has no renderer left to show it
-  // to, and the reloaded one would boot straight into the notes (#51).
+  // to, and the reloaded one would boot straight into the notes.
   it('re-locks a vault whose vault:open finished after the renderer was replaced', async () => {
     ipc.registerIpcHandlers(fakeWindow().win, () => null)
     vi.mocked(vault.openVault).mockImplementationOnce(async () => {
@@ -458,10 +457,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     expect(vault.closeVault).not.toHaveBeenCalled()
   })
 
-  // closeVault() packs the whole container before clearing the vault path, so
-  // a renderer reloaded mid-close would read "open" and boot into the notes
-  // over a vault about to close. Reading through the vault lock queues the
-  // status behind any in-flight close instead (#51).
+  // Reading through the vault lock queues vault:status behind an in-flight close.
   it('vault:status waits for an in-flight close before reading the vault path', async () => {
     ipc.registerIpcHandlers(fakeWindow().win, () => null)
     let releaseClose = (): void => undefined
@@ -493,7 +489,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     expect(vault.closeVault).toHaveBeenCalled()
   })
 
-  // macOS, issue #50: window A starts the unlock, the user closes A and clicks
+  // macOS: window A starts the unlock, the user closes A and clicks
   // the dock icon mid-Argon2id, and `activate` builds window B. B never asked
   // to unlock, so a gate firing now must not prompt it.
   describe('when another window replaces the requester mid-unlock (issue #50)', () => {
@@ -606,8 +602,9 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     })
   })
 
-  // The other half of #50: a window that never got the prompt must not be able
-  // to answer it either. `other` stands in for any renderer but the requester.
+  // The other half of the requester check: a window that never got the prompt
+  // must not be able to answer it either. `other` stands in for any renderer
+  // but the requester.
   describe('gate answers from a renderer other than the requester (issue #50)', () => {
     let requester: WebContents
     let requesterSent: string[]
@@ -621,7 +618,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
       other = fakeWindow().win.webContents
     })
 
-    // The real #50 shape: B is the window the user now sees, so a check on
+    // The macOS `activate` case: B is the window the user now sees, so a check on
     // "is the sender live?" instead of "is it the requester?" would let it answer.
     it('ignores an answer from the window that replaced the requester', async () => {
       const { createVaultBackup } = await import('../src/main/vault/backups')

@@ -41,7 +41,7 @@ export async function resolveOpenFilePath(
 ): Promise<void> {
   if (!existsSync(filePath) || !isValidNotvexFile(filePath)) return
 
-  // Scenario C: same vault already unlocked → just focus the window
+  // Same vault already unlocked → just focus the window
   const currentPath = getVaultPath()
   if (isVaultOpen() && currentPath !== null && samePath(currentPath, filePath)) {
     if (win) {
@@ -51,8 +51,8 @@ export async function resolveOpenFilePath(
     return
   }
 
-  // Scenario D: a different vault is open → close it first, draining any
-  // pending autosave in the window we're about to repurpose (#19)
+  // A different vault is open → close it first, draining any
+  // pending autosave in the window we're about to repurpose
   if (isVaultOpen()) {
     await closeVaultDrained(win)
   }

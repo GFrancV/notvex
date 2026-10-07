@@ -81,6 +81,18 @@ All renderer↔main communication goes through IPC:
 - **No `any` in TypeScript** — use `unknown` with narrowing or proper types
 - **File naming:** React components in PascalCase (`NoteEditor.tsx`), everything else in kebab-case (`ipc-handlers.ts`, `vault.store.ts`)
 - **Commits:** Conventional Commits format (`feat:`, `fix:`, `chore:`, etc.), lowercase subject, max 72 chars
+- **Comments explain *why*, never history.** A comment states a constraint the code can't
+  express, in the present tense, for a reader who has never seen the issue tracker.
+  - Never in a comment: issue/PR numbers (`#36`), task/phase numbers, "found by"/"flagged by
+    <skill>", "verified by hand", line references (`vault.ts:657`), pointers to `tasks/*.md`.
+    That history goes in the **commit body or PR description** — don't copy the PR text into code.
+  - One canonical explanation per concept (e.g. `withVaultLock` reentrancy lives in its
+    docstring); elsewhere a one-line pointer at most. Never paste the same block twice.
+  - If the code already says it, don't comment it.
+  - ✅ `// rekey succeeded but the checkpoint threw: newRawKey must still be zeroed`
+  - ❌ `// Failure point the issue's literal suggested diff did NOT cover (#24)…`
+  - Enforced by `pnpm lint` (`local/no-history-comments`); narrative and duplication aren't
+    machine-checkable, so they're on you.
 
 ---
 
@@ -181,4 +193,5 @@ through Tailwind classes using the tokens above.
 4. **Use semantic color tokens** — no hardcoded colors (see UI Rules above)
 5. **Optimistic updates:** UI updates immediately, IPC call follows, revert + toast on error
 6. **`sodium.memzero`** on any sensitive buffer when done with it
-7. **Run `pnpm check:task`** before considering any feature complete
+7. **Comments: why only** — history goes in the commit/PR, not the code (see Code Style)
+8. **Run `pnpm check:task`** before considering any feature complete

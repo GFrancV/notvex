@@ -9,11 +9,9 @@ import type { Note } from '@shared/types'
 import { rendererIndexPath } from '../src/main/url-guard'
 import { closeVault, createVault, isVaultOpen, openVault } from '../src/main/vault/vault'
 
-// Every path that closes the vault routes through closeVaultDrained() →
-// closeVault(). The editor's autosave ends with a notes:list, which used to
-// reach doCloseVault() as skipPack and close without packing (#61). This
-// drives each path through the real IPC handlers and the real vault module;
-// only Electron and the main-process modules around it are stubbed.
+// Drives each close path through the real IPC handlers and vault module: an edit followed by
+// the autosave's notes:list must still be packed, never reach doCloseVault() as skipPack.
+// Only Electron and the surrounding main-process modules are stubbed.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 

@@ -1,13 +1,7 @@
 /**
- * Debounced save that can be *flushed* instead of cancelled.
- *
- * A plain `setTimeout` debounce keeps the pending value inside the timer, so
- * `clearTimeout` silently throws away whatever was typed last (issue #19).
- * Here the pending value lives outside the timer, so it can always be drained.
- *
- * Live instances register themselves in a module-level set, which lets the
- * main process drain every editor on `vault:will-lock` without threading refs
- * through the component tree.
+ * Debounced save that can be flushed instead of cancelled: the pending value lives outside the
+ * timer, so clearTimeout can't drop it. Live instances sit in a module-level set so the
+ * vault:will-lock handler (views/main.tsx) can drain every editor via flushAllPending().
  */
 
 type Commit = (id: string, value: string) => Promise<void>

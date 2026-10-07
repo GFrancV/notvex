@@ -167,10 +167,7 @@ describe('pending-save', () => {
   })
 
   it('9 · scheduling after dispose() re-registers the instance', async () => {
-    // React StrictMode double-mounts in dev: the unmount cleanup disposes the
-    // saver, then the component mounts again and keeps using that same
-    // instance. A saver holding unsaved work must always be reachable by
-    // flushAllPending(), whatever the mount choreography.
+    // StrictMode disposes the saver and then reuses the same instance; it must stay reachable.
     const { commit, calls } = recorder()
     const saver = createPendingSave(commit, DELAY)
 

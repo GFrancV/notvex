@@ -48,8 +48,7 @@ describe('usePendingSave', () => {
     // disposes the saver, and the remounted component keeps the same
     // instance — which must not become invisible to the lock handshake.
     const { commit, calls } = recorder()
-    // reactStrictMode is what actually re-runs the effects — wrapping the tree
-    // in <StrictMode> by hand does not, as a probe confirmed.
+    // reactStrictMode is what re-runs the effects; a hand-written <StrictMode> wrapper doesn't.
     const { result } = renderHook(() => usePendingSave(commit, DELAY), {
       reactStrictMode: true
     })

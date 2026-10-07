@@ -6,6 +6,8 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 import unicorn from 'eslint-plugin-unicorn'
 import { defineConfig } from 'eslint/config'
 
+import noHistoryComments from './eslint-rules/no-history-comments.mjs'
+
 export default defineConfig(
   { ignores: ['**/node_modules', '**/dist', '**/out'] },
   tseslint.configs.recommended,
@@ -38,6 +40,12 @@ export default defineConfig(
         }
       ]
     }
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    ignores: ['src/renderer/src/components/ui/**'],
+    plugins: { local: { rules: { 'no-history-comments': noHistoryComments } } },
+    rules: { 'local/no-history-comments': 'error' }
   },
   eslintConfigPrettier
 )

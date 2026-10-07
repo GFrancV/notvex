@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // createWindow() runs once per window, and on macOS `activate` can run it many
 // times in one process. Anything it hangs on an app-wide emitter must come off
 // again when the window closes, or listeners pile up still pointing at dead
-// windows (issue #36).
+// windows.
 
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
@@ -92,7 +92,7 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
 
 // A reload or renderer crash leaves the BrowserWindow alive, so 'closed' never
 // fires, yet the prompt was sent to a renderer that no longer exists — and the
-// new renderer starts with no vault UI, so the key must not stay in memory (#51).
+// new renderer starts with no vault UI, so the key must not stay in memory.
 describe('createWindow: renderer reload / crash (issue #51)', () => {
   let createWindow: typeof import('../src/main/window').createWindow
 
@@ -141,10 +141,8 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
   })
 })
 
-// The renderer is a SPA and never navigates, and any page the window loads
-// gets the preload's window.notvex. A prefix filter let through
-// http://localhost.attacker.example and every file:// (a dropped .html file
-// navigates there by default), so every navigation is blocked (#57).
+// The renderer is a SPA that never navigates and any loaded page gets window.notvex, so every
+// navigation is blocked, lookalike hosts and dropped files included.
 describe('createWindow: navigation (issue #57)', () => {
   let createWindow: typeof import('../src/main/window').createWindow
 
@@ -171,7 +169,7 @@ describe('createWindow: navigation (issue #57)', () => {
 
 // The bundle still reads ELECTRON_RENDERER_URL at runtime, so an installed app
 // launched with it set would load that (remote) page with the preload. Only a
-// dev build may load from the dev server (#57).
+// dev build may load from the dev server.
 describe('createWindow: dev server url (issue #57)', () => {
   let createWindow: typeof import('../src/main/window').createWindow
   let app: { isPackaged: boolean }
@@ -224,7 +222,7 @@ describe('createWindow: dev server url (issue #57)', () => {
 // target="_blank" links (note live preview, release notes) and window.open
 // reach the OS through setWindowOpenHandler, so it must apply the same scheme
 // filter as shell:open-external — file:, ms-msdt:, search-ms: etc. are the
-// usual path from "click a link" to code execution on Windows (#56).
+// usual path from "click a link" to code execution on Windows.
 describe('createWindow: window-open handler (issue #56)', () => {
   let createWindow: typeof import('../src/main/window').createWindow
   let openExternal: ReturnType<typeof vi.fn>

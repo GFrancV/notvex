@@ -4,10 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '../src/main/url-guard'
 
-// Any page the window ends up loading gets the preload's window.notvex, and a
-// navigation keeps the same WebContents, so a sender-identity check can't tell
-// the app's page from a foreign one. Every handler must check the calling
-// frame's URL instead, and refuse before doing anything (#57).
+// Every handler must check the calling frame's URL (isTrustedFrame()) and refuse before doing
+// anything.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -165,7 +163,7 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
   )
 
   // Even the app's own page only gets http(s) handed to the OS: shell:open-external
-  // shares isSafeExternalUrl with the window-open handler (#56).
+  // shares isSafeExternalUrl with the window-open handler.
   it.each(['file:///C:/Windows/System32/calc.exe', 'ms-msdt:/id PCWDiagnostic', 'javascript:x'])(
     'shell:open-external refuses %s from the app page',
     async (url) => {

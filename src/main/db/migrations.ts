@@ -44,9 +44,7 @@ export async function runMigrations(
     throw new Error('SCHEMA_VERSION_TOO_NEW')
   }
 
-  // currentVersion is only 0 for a brand-new DB (createVault calls this with no gate).
-  // An existing, previously-migrated vault can never be 0, so this cleanly separates
-  // "new vault, no prompt needed" from "genuinely behind, ask before migrating".
+  // Only a brand-new DB is at 0 (createVault passes no gate), so 0 never prompts.
   if (currentVersion > 0 && currentVersion < MAX_SCHEMA_VERSION) {
     if (!onMigrationNeeded) throw new Error('SCHEMA_MIGRATION_CONFIRMATION_REQUIRED')
     const proceed = await onMigrationNeeded({
@@ -89,9 +87,8 @@ async function migration_v1(db: sqlite3.Database): Promise<void> {
       created_at    INTEGER NOT NULL,
       has_key_file  INTEGER NOT NULL DEFAULT 0
     )`
-    // verify_hash removed: it stored BLAKE2b(masterKey) in the plaintext sidecar,
-    // enabling offline brute-force without the encrypted DB. Verification is now
-    // implicit via SQLCipher (wrong key → first read fails). See authenticateVaultKey.
+    // No key-verification column: a stored hash of the key would allow offline brute force. A
+    // wrong key fails SQLCipher's first read instead (authenticateVaultKey()).
   )
 
   await dbRun(
@@ -110,11 +107,8 @@ async function migration_v1(db: sqlite3.Database): Promise<void> {
     )`
   )
 
-  // DESIGN DECISION: tag names are stored as plaintext within the SQLCipher-encrypted
-  // database. SQLCipher's AES-256 page-level encryption protects them at rest. Unlike
-  // note titles/content, tags are not application-layer encrypted because they must be
-  // queryable by SQL. If the SQLCipher master key were ever extracted, tag names would
-  // be immediately readable — accepted tradeoff for query efficiency.
+  // Tag names are plaintext inside SQLCipher (no app-layer encryption) so SQL can query them;
+  // they rely on page-level AES alone. Accepted tradeoff.
   await dbRun(
     db,
     `CREATE TABLE IF NOT EXISTS tags (
