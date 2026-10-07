@@ -144,4 +144,31 @@ describe('every close path packs the latest edit (issue #61)', () => {
 
     expect(win.webContents.send).not.toHaveBeenCalled()
   }, 60_000)
+
+  // webContents.send on a destroyed window throws, which would turn a close
+  // that already finished into a rejected one (e.g. the window closing mid-lock).
+  it('does not message a destroyed window when the pack on close fails', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const blocker = vaultPath + '.tmp'
+    mkdirSync(blocker)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const destroyed = {
+      isDestroyed: () => true,
+      webContents: {
+        send: vi.fn(() => {
+          throw new Error('Object has been destroyed')
+        })
+      }
+    }
+
+    try {
+      await expect(ipc.closeVaultDrained(destroyed as never)).resolves.toBeUndefined()
+
+      expect(destroyed.webContents.send).not.toHaveBeenCalled()
+      expect(isVaultOpen()).toBe(false)
+    } finally {
+      vi.mocked(console.error).mockRestore()
+      rmSync(blocker, { recursive: true, force: true })
+    }
+  }, 60_000)
 })
