@@ -669,8 +669,7 @@ async function doChangePassword(
     throw new Error('Vault is not open')
   }
 
-  // Persist pending writes before mutating anything: a failed rotation
-  // closes the session without packing (see rollbackCredentialRotation()).
+  // Pack pending writes first: a failed rotation closes without packing.
   await doPackContainer()
 
   // Step 1 — verify current credentials. Pass key file only if the vault has one.
@@ -704,8 +703,7 @@ async function doChangePassword(
 
   try {
     try {
-      // Step 3 — re-key SQLCipher in-place. Inside the rollback try, not
-      // before it — see rollbackCredentialRotation().
+      // Step 3 — re-key in-place, inside the rollback try (see rollbackCredentialRotation()).
       await new Promise<void>((resolve, reject) => {
         db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
           err ? reject(err) : resolve()
@@ -775,8 +773,7 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
   const kfHash = pendingKeyFileContents
     ? hashKeyFile(Buffer.from(pendingKeyFileContents))
     : undefined
-  // Persist pending writes before mutating anything: a failed rotation
-  // closes the session without packing (see rollbackCredentialRotation()).
+  // Pack pending writes first: a failed rotation closes without packing.
   await doPackContainer()
 
   const newSalt = Buffer.from(generateSalt())
@@ -794,8 +791,7 @@ async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic
 
   try {
     try {
-      // Re-key SQLCipher in-place. Inside the rollback try, not before it
-      // — see rollbackCredentialRotation().
+      // Re-key in-place, inside the rollback try (see rollbackCredentialRotation()).
       await new Promise<void>((resolve, reject) => {
         db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
           err ? reject(err) : resolve()
@@ -985,8 +981,7 @@ async function doConfigureKeyFile(
     throw new Error('Vault is not open')
   }
 
-  // Persist pending writes before mutating anything: a failed rotation
-  // closes the session without packing (see rollbackCredentialRotation()).
+  // Pack pending writes first: a failed rotation closes without packing.
   await doPackContainer()
 
   // Verify current credentials. Pass current key file only if one is already configured.
@@ -1017,8 +1012,7 @@ async function doConfigureKeyFile(
 
   try {
     try {
-      // Re-key SQLCipher in-place. Inside the rollback try, not before it
-      // — see rollbackCredentialRotation().
+      // Re-key in-place, inside the rollback try (see rollbackCredentialRotation()).
       await new Promise<void>((resolve, reject) => {
         db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
           err ? reject(err) : resolve()
@@ -1094,8 +1088,7 @@ async function doRemoveKeyFile(
     throw new Error('No key file is configured for this vault')
   }
 
-  // Persist pending writes before mutating anything: a failed rotation
-  // closes the session without packing (see rollbackCredentialRotation()).
+  // Pack pending writes first: a failed rotation closes without packing.
   await doPackContainer()
 
   const auth = await authenticateVaultKey({
@@ -1124,8 +1117,7 @@ async function doRemoveKeyFile(
 
   try {
     try {
-      // Re-key SQLCipher in-place. Inside the rollback try, not before it
-      // — see rollbackCredentialRotation().
+      // Re-key in-place, inside the rollback try (see rollbackCredentialRotation()).
       await new Promise<void>((resolve, reject) => {
         db!.run(`PRAGMA rekey = "x'${newHex}'"`, (err: Error | null) =>
           err ? reject(err) : resolve()
