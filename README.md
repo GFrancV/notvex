@@ -95,7 +95,7 @@ The app is organized into three separate processes, orchestrated with **electron
 
 - **`src/main`** — Electron main process (Node.js): all vault cryptography, SQLCipher access, and the IPC handlers.
 - **`src/preload`** — `contextBridge` bridge that exposes only the `window.notvex` API to the renderer (no Node.js integration).
-- **`src/renderer`** — the React 18 + Tailwind CSS 4 + shadcn/ui interface, which never touches cryptography or SQL directly.
+- **`src/renderer`** — the React 19 + Tailwind CSS 4 + shadcn/ui interface, which never touches cryptography or SQL directly.
 - **`src/shared`** — TypeScript types shared across all three processes.
 
 This isolation is intentional: the renderer can never run encryption or SQL code on its own, only through explicitly defined IPC channels.

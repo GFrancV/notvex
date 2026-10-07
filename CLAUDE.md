@@ -11,49 +11,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-pnpm dev          # Start Electron + Vite dev server
-pnpm build        # Production build (all processes)
-pnpm build:win    # Windows installer
-pnpm build:mac    # macOS installer
-pnpm build:linux  # Linux installer
-pnpm typecheck    # Type-check main + preload + renderer
-pnpm lint         # ESLint (zero warnings allowed)
-pnpm lint:fix     # ESLint with auto-fix
-pnpm format       # Prettier format (TS, CSS, JSON)
-pnpm format:check # Check formatting without writing
-pnpm validate     # typecheck + lint + format:check (run before committing)
+pnpm dev            # Start Electron + Vite dev server
+pnpm build          # Production build (all processes)
+pnpm build:win      # Windows installer
+pnpm build:mac      # macOS installer
+pnpm build:linux    # Linux installer
+pnpm typecheck      # Type-check main + preload + renderer
+pnpm lint           # ESLint (zero warnings allowed)
+pnpm lint:fix       # ESLint with auto-fix
+pnpm format         # Prettier format (TS, CSS, JSON)
+pnpm format:check   # Check formatting without writing
+pnpm validate       # typecheck + lint + format:check
+pnpm depcruise      # IPC/vault boundary check (.dependency-cruiser.cjs)
+pnpm test:vault     # Vitest, all tests
+pnpm test:coverage  # Vitest with coverage
+pnpm doctor         # react-doctor scan (doctor:staged for staged files only)
+pnpm check:fast     # typecheck + lint — edit loop
+pnpm check:task     # validate + depcruise + test:vault — run before calling work done
+pnpm check:full     # check:task + coverage — review/CI
 ```
+
+`pnpm check:task` is the before-done gate. Gate tiers, speed budget and coverage floor are in [`CONSTRAINTS.md`](./CONSTRAINTS.md).
 
 ## Architecture
 
-The project uses electron-vite with three separate build targets:
+The project uses electron-vite with three separate build targets. Directories are described by responsibility — read the tree for their current contents.
 
 **`src/main/`** — Electron main process (Node.js backend)
-- `index.ts` — Entry point: app lifecycle (single-instance lock, `open-file`/`second-instance` handling for `.nvx` file association), delegates window creation to `window.ts`
-- `window.ts` — Creates the `BrowserWindow` (`contextIsolation`/`nodeIntegration` config lives here), applies `setContentProtection`, and triggers vault lock on suspend/lock-screen/blur/minimize
-- `vault/` — All cryptographic operations: key derivation (`crypto.ts`), memory locking (`memlock.ts`), BIP39 recovery (`recovery.ts`), key container (`container.ts`), vault orchestration (`vault.ts`)
-- `db/` — SQLite/SQLCipher queries (`queries.ts`) and schema migrations (`migrations.ts`)
+- `index.ts` — Entry point: app lifecycle (single-instance lock, `.nvx` file association), delegates window creation to `window.ts`
+- `window.ts` — Creates the `BrowserWindow` (`contextIsolation`/`nodeIntegration` config lives here), applies `setContentProtection`, triggers vault lock on suspend/lock-screen/blur/minimize
 - `ipc-handlers.ts` — Defines all IPC handlers; the only communication bridge to the renderer
-- `prefs.ts` — User preferences persisted as `prefs.json` in `app.getPath('userData')` via plain Node.js `fs` (no external library)
-- `updater.ts` — electron-updater integration (check/download/install app updates)
-- `file-opener.ts` — Resolves `.nvx` file paths passed via OS file association / second-instance argv
+- `vault/` — All cryptographic operations and vault orchestration (KDF, memory locking, BIP39 recovery, key container, backups)
+- `db/` — SQLite/SQLCipher queries and schema migrations
+- Remaining top-level modules are single-purpose main-process services (prefs, updater, file opening, clipboard, renderer/URL guards)
 
 **`src/preload/index.ts`** — Exposes `window.notvex` API surface to the renderer via `contextBridge`. Any new IPC channel must be declared here.
 
-**`src/renderer/src/`** — React 18 frontend
-- `views/` — Top-level views: `setup.tsx` (vault creation), `unlock.tsx` (vault unlock), `main.tsx` (main notes app), `post-recovery-reset.tsx` (password reset after recovery)
-- `components/` — Feature components; `components/ui/` holds shadcn/ui primitives. Standalone feature components live at the top level (`note-editor.tsx`, `note-list.tsx`, `note-reading-view.tsx`, `sidebar.tsx`, `command-palette.tsx`, `VaultSwitcher.tsx`, `security-settings-dialog.tsx`, `change-password-dialog.tsx`, `KeyFileInput.tsx`, `FeatureLockedByVersion.tsx`, `AppLogo.tsx`, `password-strength-bar.tsx`, `recovery-words-grid.tsx`, `editor-context-menu.tsx`), plus subfolders:
-  - `editor/` — `EditorToolbar.tsx` (formatting toolbar for the CodeMirror editor)
-  - `tags/` — `TagChip.tsx`, `TagCreateModal.tsx`, `TagDeleteModal.tsx`, `TagFilter.tsx`, `TagSelector.tsx`
-  - `dialogs/` — `UpdateAvailableDialog.tsx`, `AppVersionDialog.tsx`
-  - `settings/` — `KeyFileDialog.tsx`
-- `hooks/` — Custom React hooks: `use-copy-to-clipboard.ts`, `use-create-note.ts`, `use-mobile.ts`, `use-vault-capabilities.ts`, `use-pick-vault.ts`
-- `store/` — Zustand stores: `vault.store.ts` (vault state, notes, tags), `ui.store.ts` (UI state), `prefs.store.ts` (user preferences: auto-lock, key file, screen capture)
-- `lib/ipc.ts` — Typed IPC client (renderer side)
-- `lib/tag-colors.ts` — Centralized tag color definitions
-- `lib/editor/` — CodeMirror 6 markdown editor with live preview (`live-preview.ts`) and formatting helpers (`formatting.ts`)
+**`src/renderer/src/`** — React 19 frontend
+- `views/` — Top-level screens (setup, unlock, main app, post-recovery reset)
+- `components/` — Feature components, grouped into subfolders by feature; `components/ui/` holds shadcn/ui primitives (see UI Rules)
+- `hooks/` — Custom React hooks
+- `store/` — Zustand stores (vault state, UI state, preferences)
+- `lib/ipc.ts` — Typed IPC client (renderer side); the renderer's only route to main
+- `lib/` — Other renderer utilities, including the CodeMirror 6 markdown editor (`lib/editor/`)
 
 **`src/shared/types.ts`** — TypeScript types shared across all three processes.
+
+**`tests/`** — Vitest tests: `tests/*.test.ts` run in node, `tests/renderer/*.test.ts` in jsdom. Never colocate tests in `src/`. Placement and typecheck rules: [`CONSTRAINTS.md` § Test file location](./CONSTRAINTS.md#test-file-location).
 
 ### IPC Pattern
 
@@ -65,6 +69,7 @@ All renderer↔main communication goes through IPC:
 ### Vault Files on Disk
 
 - `vault.nvx` — SQLCipher-encrypted SQLite database (notes + tags) with metadata, recovery-key-encrypted master key, salt, settings
+- `userData/vault-backups/<sha256 of vault path>/` — copies of a vault taken before a header/schema migration; the newest 3 per vault are kept (`vault/backups.ts`)
 
 ---
 
@@ -87,18 +92,8 @@ Before writing any `<button>`, `<input>`, `<dialog>`, `<select>`, or any other
 interactive element, follow this order:
 
 **Step 1 — Check `src/renderer/src/components/ui/`**
-If a component exists there that covers the use case, use it. Do not reimplement it.
-
-```
-# Components currently in components/ui/:
-alert.tsx         badge.tsx         button.tsx        checkbox.tsx
-collapsible.tsx   command.tsx       context-menu.tsx  dialog.tsx
-dropdown-menu.tsx field.tsx         input.tsx         input-group.tsx
-kbd.tsx           label.tsx         popover.tsx       progress.tsx
-scroll-area.tsx   select.tsx        separator.tsx     sheet.tsx
-sidebar.tsx       skeleton.tsx      sonner.tsx        textarea.tsx
-tooltip.tsx
-```
+List the folder first — its contents change with every `shadcn add`, so don't rely on
+memory. If a component exists there that covers the use case, use it. Do not reimplement it.
 
 None of the items in this folder can be changed without the user's prior confirmation.
 
@@ -186,4 +181,4 @@ through Tailwind classes using the tokens above.
 4. **Use semantic color tokens** — no hardcoded colors (see UI Rules above)
 5. **Optimistic updates:** UI updates immediately, IPC call follows, revert + toast on error
 6. **`sodium.memzero`** on any sensitive buffer when done with it
-7. **Run `pnpm validate`** before considering any feature complete
+7. **Run `pnpm check:task`** before considering any feature complete
