@@ -42,6 +42,12 @@ describe('initAutoUpdater across windows (issue #36)', () => {
     ;({ initAutoUpdater } = await import('@main/updater'))
   })
 
+  it("turns off electron-updater's own console logger", () => {
+    initAutoUpdater(fakeWindow().win)
+
+    expect((autoUpdater as unknown as { logger: unknown }).logger).toBeNull()
+  })
+
   it('registers each autoUpdater listener only once', () => {
     initAutoUpdater(fakeWindow().win)
     initAutoUpdater(fakeWindow().win)

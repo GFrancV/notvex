@@ -18,6 +18,9 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   if (listenersRegistered) return
   listenersRegistered = true
 
+  // Its default logger is console and prints full stacks and cache paths; the
+  // 'error' listener below logs through logError instead.
+  autoUpdater.logger = null
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
 
