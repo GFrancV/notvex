@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const ipc = vi.hoisted(() => ({ get: vi.fn() }))
+const ipc = vi.hoisted(() => ({ get: vi.fn(), create: vi.fn() }))
 
 vi.mock('@/lib/ipc', () => {
   const ok = (): Promise<{ success: true; data: [] }> =>
@@ -14,7 +14,7 @@ vi.mock('@/lib/ipc', () => {
   return {
     notvex: {
       platform: 'win32',
-      notes: { get: ipc.get, update: ok, list: ok, trash: ok },
+      notes: { get: ipc.get, create: ipc.create, update: ok, list: ok, trash: ok },
       tags: { list: ok },
       noteTags: { counts: ok, all: ok },
       clipboard: { scheduleClear: ok }
@@ -36,9 +36,13 @@ vi.stubGlobal(
   }
 )
 
+// cmdk scrolls the highlighted item into view, which jsdom doesn't implement.
+Element.prototype.scrollIntoView = vi.fn()
+
 const { formattingKeymap } = await import('@/lib/editor/formatting')
 const { EditorToolbar } = await import('@/components/editor/EditorToolbar')
 const { NoteEditor } = await import('@/components/note-editor')
+const { CommandPalette } = await import('@/components/command-palette')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
 
@@ -232,5 +236,19 @@ describe('NoteEditor — focus after opening a note', () => {
     act(() => useVaultStore.getState().setActiveNoteId('a'))
     await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
     expect(editorHasFocus()).toBe(true)
+  })
+
+  it('focuses the title of a note created from the command palette', async () => {
+    ipc.create.mockResolvedValue({ success: true, data: { id: 'n', title: 'Untitled' } })
+    serve('n', 'Untitled')
+    render(createElement('div', null, createElement(CommandPalette), createElement(NoteEditor)))
+    act(() => useUiStore.setState({ commandPaletteOpen: true }))
+
+    fireEvent.click(screen.getByText('New Note'))
+
+    await waitFor(() => expect(document.activeElement).toBe(titleInput()))
+    // Outlive the dialog's unmount, so a late focus restore would show up here.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(document.activeElement).toBe(titleInput())
   })
 })
