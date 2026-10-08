@@ -1,4 +1,5 @@
-import type { EditorView } from '@codemirror/view'
+import { Prec } from '@codemirror/state'
+import { type EditorView, keymap } from '@codemirror/view'
 
 function wrapSelection(view: EditorView, before: string, after: string): void {
   const { state } = view
@@ -40,3 +41,30 @@ export const toolbarActions: Record<string, (v: EditorView) => void> = {
   h2: (v: EditorView): void => prefixLine(v, '## '),
   h3: (v: EditorView): void => prefixLine(v, '### ')
 }
+
+// Headings use Shift, not Alt: Ctrl+Alt is AltGr on Windows, so Mod-Alt-1 would be
+// unreachable on layouts that type characters with AltGr+digit.
+export const formattingShortcuts: { action: keyof typeof toolbarActions; key: string }[] = [
+  { action: 'bold', key: 'Mod-b' },
+  { action: 'italic', key: 'Mod-i' },
+  { action: 'code', key: 'Mod-e' },
+  { action: 'h1', key: 'Mod-Shift-1' },
+  { action: 'h2', key: 'Mod-Shift-2' },
+  { action: 'h3', key: 'Mod-Shift-3' },
+  { action: 'bulletList', key: 'Mod-Shift-8' },
+  { action: 'checkList', key: 'Mod-Shift-9' },
+  { action: 'quote', key: 'Mod-Shift-.' }
+]
+
+// High precedence: CodeMirror's defaultKeymap binds Mod-i to selectParentSyntax.
+export const formattingKeymap = Prec.high(
+  keymap.of(
+    formattingShortcuts.map(({ action, key }) => ({
+      key,
+      run: (v: EditorView): boolean => {
+        toolbarActions[action](v)
+        return true
+      }
+    }))
+  )
+)

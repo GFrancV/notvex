@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 
 import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
 import { usePendingSave } from '@/hooks/use-pending-save'
+import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
@@ -409,6 +410,7 @@ export function NoteEditor(): ReactNode {
               theme="dark"
               extensions={[
                 markdown({ base: markdownLanguage, codeLanguages }),
+                formattingKeymap,
                 andromeda,
                 notvexEditorTheme,
                 livePreviewPlugin,
