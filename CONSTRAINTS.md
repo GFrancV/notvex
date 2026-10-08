@@ -26,6 +26,7 @@ continuing.
 | Check | Command | Rule | Reason |
 |---|---|---|---|
 | Vault/IPC boundary | `pnpm depcruise` | 0 violations of `renderer-no-vault-crypto` (`.dependency-cruiser.cjs`) | Codifies the CLAUDE.md rule: renderer must never import `src/main/vault/**`, `src/main/db/**`, `@journeyapps/sqlcipher`, or `libsodium-wrappers-sumo` directly — everything crosses the IPC boundary. |
+| Sandboxed preload | `pnpm depcruise` | 0 violations of `preload-sandbox-compatible` (`.dependency-cruiser.cjs`) | The renderer runs sandboxed, so `src/preload/**` may only import `electron` at runtime. A Node builtin or any other package builds fine but fails at runtime, leaving `window.notvex` undefined. |
 | Secrets scan | *(pending, see Exceptions)* | 0 findings, `gitleaks detect --redact` | Vault key material / recovery phrases must never land in a commit. |
 | Dependency vulns | *(pending, see Exceptions)* | 0 high/critical, `osv-scanner scan .` | `@journeyapps/sqlcipher`, `libsodium-wrappers-sumo`, `koffi` are native-binding deps in the crypto path — a known CVE there is high-severity for this app specifically. |
 
