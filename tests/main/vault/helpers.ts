@@ -176,18 +176,19 @@ export function expectNewRawKeyZeroed(
   expect(memzeroSpy.mock.calls.some(([buf]) => buf === newRawKeyRef)).toBe(true)
 }
 
-// Finds the two Buffer.from(newRawKey) copies (newHex source, writeContainer masterKey) by
-// reference and asserts both are zeroed.
+// Finds every Buffer.from(newRawKey) copy by reference, pins how many there are (a rotation
+// makes two: newHex source, writeContainer masterKey) and asserts each is zeroed.
 export function expectNewRawKeyCopiesZeroed(
   bufferFromSpy: ReturnType<typeof vi.spyOn>,
-  newRawKeyRef: Uint8Array
+  newRawKeyRef: Uint8Array,
+  expectedCopies: number
 ): void {
   const copies: Buffer[] = []
   bufferFromSpy.mock.calls.forEach((args: unknown[], i: number) => {
     if (args[0] === newRawKeyRef) copies.push(bufferFromSpy.mock.results[i].value as Buffer)
   })
 
-  expect(copies).toHaveLength(2)
+  expect(copies).toHaveLength(expectedCopies)
   for (const copy of copies) {
     expect(copy.length).toBeGreaterThan(0)
     expect(Array.from(copy).every((byte) => byte === 0)).toBe(true)

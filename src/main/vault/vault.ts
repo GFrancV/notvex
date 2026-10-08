@@ -162,7 +162,8 @@ function closeDatabase(database: sqlite3.Database): Promise<void> {
 async function applyKey(database: sqlite3.Database, key: Uint8Array): Promise<void> {
   // SQLCipher's Node binding has no binary PRAGMA path, so the key passes through an immutable
   // JS hex string that can't be zeroed. Same limitation for every PRAGMA rekey below.
-  const hex = Buffer.isBuffer(key) ? key.toString('hex') : Buffer.from(key).toString('hex')
+  // A view, not a copy: a copied Buffer would leave the key on the heap with nothing to zero it.
+  const hex = Buffer.from(key.buffer, key.byteOffset, key.byteLength).toString('hex')
   await new Promise<void>((resolve, reject) => {
     database.serialize(() => {
       database.run(`PRAGMA key = "x'${hex}'"`, (err: Error | null) =>
@@ -348,14 +349,20 @@ export async function createVault(
   await closeDatabase(database)
   const dbBytes = readFileSync(tmp)
 
-  const containerBytes = writeContainer({
-    masterKey: Buffer.from(rawKey),
-    salt,
-    kdfTier: tier,
-    recoveryBlob,
-    dbBytes,
-    devBuild
-  })
+  const containerMasterKey = Buffer.from(rawKey)
+  let containerBytes: Buffer
+  try {
+    containerBytes = writeContainer({
+      masterKey: containerMasterKey,
+      salt,
+      kdfTier: tier,
+      recoveryBlob,
+      dbBytes,
+      devBuild
+    })
+  } finally {
+    memzero(containerMasterKey)
+  }
   atomicWrite(filePath, containerBytes)
 
   // Reopen the temp DB for the active session
