@@ -67,7 +67,7 @@ export function EditorToolbar({
     }
 
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={500}>
       <div className="bg-card text-muted-foreground flex items-center gap-0.5 border-y px-6.5 py-1.75">
         {groups.map((group, i) => (
           <Fragment key={group[0][0]}>
