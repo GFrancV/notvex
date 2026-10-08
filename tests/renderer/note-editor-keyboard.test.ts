@@ -238,6 +238,47 @@ describe('NoteEditor — focus after opening a note', () => {
     expect(editorHasFocus()).toBe(true)
   })
 
+  /** An open note with the title focused and the editor cursor parked at the end. */
+  async function titleFocusedWithCursorAtEnd(): Promise<EditorView> {
+    serve('a', 'A')
+    act(() => useVaultStore.getState().setActiveNoteId('a'))
+    render(createElement(NoteEditor))
+    await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
+    const cm = EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)!
+    act(() => cm.dispatch({ selection: { anchor: cm.state.doc.length } }))
+    titleInput().focus()
+    return cm
+  }
+
+  it.each(['Tab', 'Enter'])(
+    '%s in the title moves the cursor to the start of the content',
+    async (key) => {
+      const cm = await titleFocusedWithCursorAtEnd()
+      fireEvent.keyDown(titleInput(), { key })
+      expect(editorHasFocus()).toBe(true)
+      expect(cm.state.selection.main.head).toBe(0)
+    }
+  )
+
+  it('Shift+Tab in the title does not jump into the content', async () => {
+    await titleFocusedWithCursorAtEnd()
+    fireEvent.keyDown(titleInput(), { key: 'Tab', shiftKey: true })
+    expect(editorHasFocus()).toBe(false)
+  })
+
+  it('leaves Tab in the title to the browser in reading mode', async () => {
+    await titleFocusedWithCursorAtEnd()
+    act(() => useUiStore.setState({ editorMode: 'reading' }))
+    const notCancelled = fireEvent.keyDown(titleInput(), { key: 'Tab' })
+    expect(notCancelled).toBe(true)
+  })
+
+  it('Enter that confirms an IME composition stays in the title', async () => {
+    await titleFocusedWithCursorAtEnd()
+    fireEvent.keyDown(titleInput(), { key: 'Enter', isComposing: true })
+    expect(document.activeElement).toBe(titleInput())
+  })
+
   it('focuses the title of a note created from the command palette', async () => {
     ipc.create.mockResolvedValue({ success: true, data: { id: 'n', title: 'Untitled' } })
     serve('n', 'Untitled')

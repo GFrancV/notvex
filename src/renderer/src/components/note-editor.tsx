@@ -242,6 +242,16 @@ export function NoteEditor(): ReactNode {
     void titleSaver.flush().catch(() => undefined)
   }
 
+  // Skips the tag and toolbar buttons that sit between the title and the body in tab order.
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    const toContent = (e.key === 'Tab' && !e.shiftKey) || e.key === 'Enter'
+    // editorView outlives the editor in reading mode: it still points at the destroyed view.
+    if (!toContent || e.nativeEvent.isComposing || editorMode !== 'editing' || !editorView) return
+    e.preventDefault()
+    editorView.dispatch({ selection: { anchor: 0 } })
+    editorView.focus()
+  }
+
   const handlePin = async (): Promise<void> => {
     if (!activeNoteId || !note) return
     await notvex.notes.update(activeNoteId, { isPinned: !note.isPinned })
@@ -294,6 +304,7 @@ export function NoteEditor(): ReactNode {
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
               onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
               placeholder="Untitled"
               className="titlebar-no-drag placeholder:text-muted-foreground z-10 flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
             />
