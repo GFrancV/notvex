@@ -38,9 +38,8 @@ export function TagItem({
 }: TagItemProps): React.ReactNode {
   return (
     <SidebarMenuItem>
-      {/* A sibling, not a child: Radix Checkbox is a <button>, and nesting it inside the row
-          button would also fire the exclusive-select click. It sits over the colour dot, on
-          the opposite edge from the options action. */}
+      {/* A sibling, not a child: Radix Checkbox is a <button>, and nested inside the row
+          button its click would also fire the exclusive select. */}
       <Checkbox
         checked={active}
         onCheckedChange={onToggle}
