@@ -52,6 +52,10 @@ vi.mock('@main/vault/container', () => ({
   cleanupOrphanedTempDbs: vi.fn()
 }))
 
+vi.mock('@main/permission-guard', () => ({
+  installPermissionGuard: vi.fn()
+}))
+
 vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),

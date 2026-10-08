@@ -8,6 +8,7 @@ import {
 } from './file-opener'
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { logError } from './log'
+import { installPermissionGuard } from './permission-guard'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'
 import { createWindow } from './window'
@@ -51,6 +52,7 @@ function openMainWindow(): void {
 void app.whenReady().then(async (): Promise<void> => {
   cleanupOrphanedTempDbs()
   await initSodium()
+  installPermissionGuard()
   openMainWindow()
   startupDone = true
 
