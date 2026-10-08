@@ -212,18 +212,33 @@ export function NoteList(): ReactNode {
                         {note.title || 'Untitled'}
                       </h3>
                     </div>
-                    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                      <span>{formatTimeAgo(note.updatedAt)}</span>
+                    <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+                      <span className="shrink-0 whitespace-nowrap">
+                        {formatTimeAgo(note.updatedAt)}
+                      </span>
                       {note.tags.length > 0 && (
                         <>
-                          <span className="opacity-50">·</span>
-                          <span className="flex-inline flex items-center gap-1.5">
+                          <span className="shrink-0 opacity-50">·</span>
+                          <span className="flex min-w-0 items-center gap-1.5">
                             <span
                               className="size-1.5 shrink-0 rounded-full"
                               style={{ backgroundColor: note.tags[0].color }}
                             />
-                            {note.tags[0].name}
+                            <span className="truncate" title={note.tags[0].name}>
+                              {note.tags[0].name}
+                            </span>
                           </span>
+                          {note.tags.length > 1 && (
+                            <span
+                              className="shrink-0"
+                              title={note.tags
+                                .slice(1)
+                                .map((t) => t.name)
+                                .join(', ')}
+                            >
+                              +{note.tags.length - 1}
+                            </span>
+                          )}
                         </>
                       )}
                     </div>

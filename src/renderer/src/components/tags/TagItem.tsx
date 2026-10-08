@@ -52,7 +52,7 @@ export function TagItem({
           className="size-2 rounded-full group-focus-within/menu-item:invisible group-hover/menu-item:invisible"
           style={{ backgroundColor: tag.color }}
         />
-        {tag.name}
+        <span title={tag.name}>{tag.name}</span>
       </SidebarMenuButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
