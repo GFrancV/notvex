@@ -306,10 +306,18 @@ describe('NoteEditor — focus after opening a note', () => {
     }
   )
 
-  it('Shift+Tab in the title does not jump into the content', async () => {
+  it('leaves Shift+Tab in the title to the browser', async () => {
     await titleFocusedWithCursorAtEnd()
-    fireEvent.keyDown(titleInput(), { key: 'Tab', shiftKey: true })
+    const notCancelled = fireEvent.keyDown(titleInput(), { key: 'Tab', shiftKey: true })
+    expect(notCancelled).toBe(true)
     expect(editorHasFocus()).toBe(false)
+  })
+
+  it('applies the formatting shortcuts inside the mounted editor', async () => {
+    const cm = await titleFocusedWithCursorAtEnd()
+    act(() => cm.dispatch({ selection: { anchor: 0, head: cm.state.doc.length } }))
+    press(cm, { key: 'b', keyCode: 66, ctrlKey: true })
+    expect(cm.state.doc.toString()).toBe('**body**')
   })
 
   it('leaves Tab in the title to the browser in reading mode', async () => {
@@ -334,8 +342,9 @@ describe('NoteEditor — focus after opening a note', () => {
     fireEvent.click(screen.getByText('New Note'))
 
     await waitFor(() => expect(document.activeElement).toBe(titleInput()))
-    // Outlive the dialog's unmount, so a late focus restore would show up here.
-    await new Promise((r) => setTimeout(r, 20))
+    // Radix restores focus in a 0ms timeout queued when the dialog unmounts; let it run.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await act(() => new Promise((r) => setTimeout(r, 0)))
     expect(document.activeElement).toBe(titleInput())
   })
 })
