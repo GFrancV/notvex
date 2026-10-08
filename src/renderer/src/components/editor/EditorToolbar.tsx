@@ -14,16 +14,14 @@ import {
   QuoteIcon
 } from 'lucide-react'
 
-import { formattingShortcuts, toolbarActions } from '@/lib/editor/formatting'
+import { type FormattingAction, formattingShortcuts, toolbarActions } from '@/lib/editor/formatting'
 import { notvex } from '@/lib/ipc'
 import { Button } from '../ui/button'
 import { Kbd } from '../ui/kbd'
 import { Separator } from '../ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 
-type Action = keyof typeof toolbarActions
-
-const groups: [Action, LucideIcon][][] = [
+const groups: [FormattingAction, LucideIcon][][] = [
   [
     ['bold', BoldIcon],
     ['italic', ItalicIcon],

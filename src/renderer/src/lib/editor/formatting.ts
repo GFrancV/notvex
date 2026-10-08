@@ -30,7 +30,7 @@ function prefixLine(view: EditorView, prefix: string): void {
   view.focus()
 }
 
-export const toolbarActions: Record<string, (v: EditorView) => void> = {
+export const toolbarActions = {
   bold: (v: EditorView): void => wrapSelection(v, '**', '**'),
   italic: (v: EditorView): void => wrapSelection(v, '*', '*'),
   code: (v: EditorView): void => wrapSelection(v, '`', '`'),
@@ -42,12 +42,11 @@ export const toolbarActions: Record<string, (v: EditorView) => void> = {
   h3: (v: EditorView): void => prefixLine(v, '### ')
 }
 
+export type FormattingAction = keyof typeof toolbarActions
+
 // Headings use Shift, not Alt: Ctrl+Alt is AltGr on Windows, so Mod-Alt-1 would be
 // unreachable on layouts that type characters with AltGr+digit.
-export const formattingShortcuts: Record<
-  keyof typeof toolbarActions,
-  { label: string; key: string }
-> = {
+export const formattingShortcuts: Record<FormattingAction, { label: string; key: string }> = {
   bold: { label: 'Bold', key: 'Mod-b' },
   italic: { label: 'Italic', key: 'Mod-i' },
   code: { label: 'Inline code', key: 'Mod-e' },
@@ -62,8 +61,8 @@ export const formattingShortcuts: Record<
 // High precedence: CodeMirror's defaultKeymap binds Mod-i to selectParentSyntax.
 export const formattingKeymap = Prec.high(
   keymap.of(
-    Object.entries(formattingShortcuts).map(([action, { key }]) => ({
-      key,
+    (Object.keys(formattingShortcuts) as FormattingAction[]).map((action) => ({
+      key: formattingShortcuts[action].key,
       run: (v: EditorView): boolean => {
         toolbarActions[action](v)
         return true
