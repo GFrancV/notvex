@@ -96,9 +96,10 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
 describe('createWindow: webPreferences', () => {
   it('runs the renderer sandboxed and isolated from Node', async () => {
     const { createWindow } = await import('@main/window')
-    const win = createWindow(() => null) as unknown as {
+    const win = createWindow(() => null) as Electron.BrowserWindow & {
       options: Electron.BrowserWindowConstructorOptions
     }
+    win.emit('closed')
 
     expect(win.options.webPreferences).toMatchObject({
       sandbox: true,
