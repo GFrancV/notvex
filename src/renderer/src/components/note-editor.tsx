@@ -111,7 +111,9 @@ export function NoteEditor(): ReactNode {
   const activeIdRef = useRef<string | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
-  const lastFocusTitleRef = useRef(0)
+  // Starts at the store's count: requests made before this mount (e.g. before a lock
+  // unmounted the previous editor) were already handled and must not steal focus.
+  const lastFocusTitleRef = useRef(useUiStore.getState().focusTitleRequest)
   // Last title known to be on disk. Compared against instead of note.title,
   // which goes stale as soon as the first title save lands.
   const persistedTitleRef = useRef('')
@@ -422,7 +424,10 @@ export function NoteEditor(): ReactNode {
               onCreateEditor={(view) => {
                 editorViewRef.current = view
                 setEditorView(view)
-                view.focus()
+                // A pending title-focus request owns focus; it is served once the note loads.
+                if (useUiStore.getState().focusTitleRequest <= lastFocusTitleRef.current) {
+                  view.focus()
+                }
               }}
               basicSetup={{
                 lineNumbers: false,

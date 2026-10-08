@@ -2,11 +2,29 @@
 import { defaultKeymap } from '@codemirror/commands'
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/ipc', () => ({ notvex: { platform: 'win32' } }))
+const ipc = vi.hoisted(() => ({ get: vi.fn() }))
+
+vi.mock('@/lib/ipc', () => {
+  const ok = (): Promise<{ success: true; data: [] }> =>
+    Promise.resolve({ success: true, data: [] })
+  return {
+    notvex: {
+      platform: 'win32',
+      notes: { get: ipc.get, update: ok, list: ok, trash: ok },
+      tags: { list: ok },
+      noteTags: { counts: ok, all: ok },
+      clipboard: { scheduleClear: ok }
+    }
+  }
+})
+
+// CodeMirror measures text through Range rects, which jsdom doesn't implement.
+Range.prototype.getClientRects = (): DOMRectList => [] as unknown as DOMRectList
+Range.prototype.getBoundingClientRect = (): DOMRect => new DOMRect()
 
 // Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
 vi.stubGlobal(
@@ -20,6 +38,9 @@ vi.stubGlobal(
 
 const { formattingKeymap } = await import('@/lib/editor/formatting')
 const { EditorToolbar } = await import('@/components/editor/EditorToolbar')
+const { NoteEditor } = await import('@/components/note-editor')
+const { useVaultStore } = await import('@/store/vault.store')
+const { useUiStore } = await import('@/store/ui.store')
 
 let view: EditorView | null = null
 
@@ -130,5 +151,76 @@ describe('EditorToolbar', () => {
     render(createElement(EditorToolbar, { editorView: null }))
     fireEvent.focus(screen.getByRole('button', { name: 'Quote' }))
     expect((await screen.findByRole('tooltip')).textContent).toContain('Ctrl+M')
+  })
+})
+
+describe('NoteEditor — focus after opening a note', () => {
+  const titleInput = (): HTMLElement => screen.getByLabelText('Note title')
+  const editorHasFocus = (): boolean =>
+    document.activeElement?.classList.contains('cm-content') ?? false
+
+  function serve(id: string, title: string): void {
+    ipc.get.mockResolvedValue({
+      success: true,
+      data: {
+        id,
+        title,
+        content: 'body',
+        isPinned: false,
+        isTrashed: false,
+        createdAt: 0,
+        updatedAt: 0,
+        trashedAt: null,
+        tags: []
+      }
+    })
+  }
+
+  /** What useCreateNote does once the note exists. */
+  function createNote(id: string): void {
+    serve(id, 'Untitled')
+    act(() => {
+      useVaultStore.getState().setActiveNoteId(id)
+      useUiStore.getState().requestFocusTitle()
+    })
+  }
+
+  beforeEach(() => {
+    useVaultStore.setState({ activeNoteId: null, notes: [], tags: [], noteTagsMap: {} })
+    useUiStore.setState({ editorMode: 'editing' })
+  })
+
+  it('focuses the title of a note created from the empty state', async () => {
+    render(createElement(NoteEditor))
+    createNote('n')
+    await waitFor(() => expect(document.activeElement).toBe(titleInput()))
+  })
+
+  it('focuses the title of a note created while another note is open', async () => {
+    serve('a', 'A')
+    act(() => useVaultStore.getState().setActiveNoteId('a'))
+    render(createElement(NoteEditor))
+    await waitFor(() => expect(editorHasFocus()).toBe(true))
+
+    createNote('n')
+    await waitFor(() => expect(document.activeElement).toBe(titleInput()))
+  })
+
+  it('focuses the editor when an existing note is opened', async () => {
+    render(createElement(NoteEditor))
+    serve('a', 'A')
+    act(() => useVaultStore.getState().setActiveNoteId('a'))
+    await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
+    expect(editorHasFocus()).toBe(true)
+  })
+
+  it('ignores title-focus requests made before the editor mounted', async () => {
+    // A request already handled by a previous instance, e.g. one unmounted by a lock.
+    useUiStore.setState({ focusTitleRequest: 3 })
+    render(createElement(NoteEditor))
+    serve('a', 'A')
+    act(() => useVaultStore.getState().setActiveNoteId('a'))
+    await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
+    expect(editorHasFocus()).toBe(true)
   })
 })
