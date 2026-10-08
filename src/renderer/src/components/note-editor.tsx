@@ -284,7 +284,7 @@ export function NoteEditor(): ReactNode {
               onChange={(e) => handleTitleChange(e.target.value)}
               onBlur={handleTitleBlur}
               placeholder="Untitled"
-              className="titlebar-no-drag placeholder:text-muted-foreground z-100 flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
+              className="titlebar-no-drag placeholder:text-muted-foreground z-10 flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
             />
           )}
         </div>
