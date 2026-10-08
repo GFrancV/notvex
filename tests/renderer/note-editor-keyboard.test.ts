@@ -124,6 +124,15 @@ describe('formattingKeymap', () => {
     press(v, init)
     expect(v.state.doc.toString()).toBe(expected)
   })
+
+  it('keeps a handled shortcut from reaching window listeners', () => {
+    // The shadcn SidebarProvider toggles the sidebar on Ctrl+B from a window listener.
+    const windowListener = vi.fn()
+    window.addEventListener('keydown', windowListener)
+    press(editorWithSelection(), { key: 'b', keyCode: 66, ctrlKey: true })
+    window.removeEventListener('keydown', windowListener)
+    expect(windowListener).not.toHaveBeenCalled()
+  })
 })
 
 describe('EditorToolbar', () => {

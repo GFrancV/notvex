@@ -59,10 +59,12 @@ export const formattingShortcuts: Record<FormattingAction, { label: string; key:
 }
 
 // High precedence: CodeMirror's defaultKeymap binds Mod-i to selectParentSyntax.
+// stopPropagation: window-level shortcuts (the sidebar's Mod-b) must not also fire.
 export const formattingKeymap = Prec.high(
   keymap.of(
     (Object.keys(formattingShortcuts) as FormattingAction[]).map((action) => ({
       key: formattingShortcuts[action].key,
+      stopPropagation: true,
       run: (v: EditorView): boolean => {
         toolbarActions[action](v)
         return true
