@@ -55,7 +55,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
       success: false,
       error: 'rekey failed'
     })
-    expect(second.sent).toContain('vault:auto-locked')
+    expect(second.sent).toEqual(['vault:auto-locked'])
   })
 
   it('cancels a gate straight away when no live window can answer it', async () => {
