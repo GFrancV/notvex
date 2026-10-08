@@ -8,6 +8,15 @@ asarUnpack:
 
 compression: maximum
 
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  # No macOS signing identity in CI: the flipped arm64 binary needs a fresh ad-hoc signature to launch
+  resetAdHocDarwinSignature: true
+
 fileAssociations:
   - ext: nvx
     name: Notvex Vault
