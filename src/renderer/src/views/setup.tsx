@@ -15,14 +15,20 @@ import { Input } from '@/components/ui/input'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
+import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 
 type Step = 'location' | 'password' | 'recovery'
 
 export function Setup(): ReactNode {
   const isDev = useIsDev()
-  const { setStatus, pendingNewVaultPath, setPendingNewVaultPath, setPendingOpenVaultPath } =
-    useVaultStore()
+  const {
+    setStatus,
+    setCurrentVaultPath,
+    pendingNewVaultPath,
+    setPendingNewVaultPath,
+    setPendingOpenVaultPath
+  } = useVaultStore()
 
   const { pickExistingVault } = usePickVault()
 
@@ -73,8 +79,10 @@ export function Setup(): ReactNode {
     setStep('recovery')
   }
 
-  const handleFinish = (): void => {
+  const handleFinish = async (): Promise<void> => {
+    await usePrefsStore.getState().load()
     setPendingNewVaultPath(null)
+    setCurrentVaultPath(vaultPath)
     setStatus('unlocked')
   }
 
@@ -239,7 +247,7 @@ export function Setup(): ReactNode {
               </FieldLabel>
             </Field>
 
-            <Button className="w-full" disabled={!confirmed} onClick={handleFinish}>
+            <Button className="w-full" disabled={!confirmed} onClick={() => void handleFinish()}>
               Start using Notvex
             </Button>
           </div>
