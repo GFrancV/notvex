@@ -107,6 +107,34 @@ describe('createWindow: webPreferences', () => {
       nodeIntegration: false
     })
   })
+
+  // The default app menu's Toggle Developer Tools accelerator stays live even
+  // with the menu bar hidden, and a console reaches window.notvex directly.
+  describe('devTools', () => {
+    let app: { isPackaged: boolean }
+
+    beforeEach(async () => {
+      app = (await import('electron')).app as unknown as { isPackaged: boolean }
+    })
+
+    afterEach(() => {
+      app.isPackaged = true
+    })
+
+    it.each([
+      [true, false],
+      [false, true]
+    ])('isPackaged=%s → devTools=%s', async (isPackaged, devTools) => {
+      app.isPackaged = isPackaged
+      const { createWindow } = await import('@main/window')
+      const win = createWindow(() => null) as Electron.BrowserWindow & {
+        options: Electron.BrowserWindowConstructorOptions
+      }
+      win.emit('closed')
+
+      expect(win.options.webPreferences?.devTools).toBe(devTools)
+    })
+  })
 })
 
 // A reload or renderer crash leaves the BrowserWindow alive, so 'closed' never
