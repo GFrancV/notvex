@@ -12,6 +12,7 @@ vi.mock('electron', async () => {
     isPackaged = true
     quit = vi.fn()
     setName = vi.fn()
+    enableSandbox = vi.fn()
     requestSingleInstanceLock = vi.fn(() => true)
     whenReady = vi.fn(() => new Promise<void>(() => {}))
   }
@@ -107,6 +108,10 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
   afterEach(() => {
     setPlatform(originalPlatform)
     vi.restoreAllMocks()
+  })
+
+  it('sandboxes every renderer before the app is ready', () => {
+    expect(app.enableSandbox).toHaveBeenCalledTimes(1)
   })
 
   it('before-quit calls event.preventDefault() synchronously', () => {

@@ -20,6 +20,9 @@ if (!app.isPackaged) {
   app.setName('Notvex Dev')
 }
 
+// Must run before ready. Sandboxes every renderer regardless of its webPreferences.
+app.enableSandbox()
+
 // ─── Single-instance lock ──────────────────────────────────────────────────────
 
 if (!app.requestSingleInstanceLock()) {

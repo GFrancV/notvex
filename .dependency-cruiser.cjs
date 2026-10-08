@@ -17,6 +17,26 @@ module.exports = {
       }
     },
     {
+      name: 'preload-sandbox-compatible',
+      comment:
+        'The renderer is sandboxed, so the preload can only require electron at runtime. Node builtins or other packages build fine but leave window.notvex undefined.',
+      severity: 'error',
+      from: { path: '^src/preload' },
+      to: {
+        dependencyTypes: [
+          'core',
+          'npm',
+          'npm-dev',
+          'npm-optional',
+          'npm-peer',
+          'npm-no-pkg',
+          'npm-unknown'
+        ],
+        dependencyTypesNot: ['type-only'],
+        pathNot: '(^|/)node_modules/electron/'
+      }
+    },
+    {
       name: 'no-circular',
       comment: 'Circular imports make the IPC/vault boundary harder to reason about.',
       severity: 'warn',
@@ -26,7 +46,6 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    includeOnly: '^src',
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {
       exportsFields: ['exports'],

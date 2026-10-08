@@ -176,7 +176,7 @@ through Tailwind classes using the tokens above.
 - On vault lock: clear all decrypted content from memory before navigating to Unlock
 
 ### IPC
-- `contextIsolation: true` and `nodeIntegration: false` — never change these
+- `contextIsolation: true`, `nodeIntegration: false` and `sandbox: true` — never change these
 - Every IPC handler returns `{ success: true, data }` or `{ success: false, error: string }`
 - Never let exceptions propagate unhandled from main to renderer
 

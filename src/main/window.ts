@@ -43,7 +43,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
       nodeIntegration: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      sandbox: false // must be false for preload to work
+      sandbox: true
     }
   })
 
