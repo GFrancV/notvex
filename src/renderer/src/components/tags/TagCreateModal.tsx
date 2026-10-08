@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react'
 
 import { toast } from 'sonner'
 
-import { COLOR_NAMES, PRESET_COLORS } from '@/lib/tag-colors'
+import { COLOR_NAMES, PRESET_COLORS, TAG_NAME_MAX } from '@/lib/tag-colors'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { Button } from '../ui/button'
@@ -68,7 +68,7 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
                 if (e.key === 'Enter') void handleSubmit()
               }}
               placeholder='e.g. "Work"'
-              maxLength={32}
+              maxLength={TAG_NAME_MAX}
               className={isDuplicate ? 'border-destructive focus-visible:ring-destructive' : ''}
               autoFocus
               aria-invalid={isDuplicate}

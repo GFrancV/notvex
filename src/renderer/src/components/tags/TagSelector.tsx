@@ -3,8 +3,8 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { PRESET_COLORS } from '../../lib/tag-colors'
-import { useVaultStore } from '../../store/vault.store'
+import { PRESET_COLORS, TAG_NAME_MAX } from '@/lib/tag-colors'
+import { useVaultStore } from '@/store/vault.store'
 import { Button } from '../ui/button'
 
 interface TagSelectorProps {
@@ -80,6 +80,7 @@ export function TagSelector({ noteId, onClose }: TagSelectorProps): ReactNode {
         <input
           ref={inputRef}
           aria-label="Search tags"
+          maxLength={TAG_NAME_MAX}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {

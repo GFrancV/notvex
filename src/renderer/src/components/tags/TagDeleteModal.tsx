@@ -3,8 +3,8 @@ import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
 import type { Tag } from '@shared/types'
-import { useUiStore } from '../../store/ui.store'
-import { useVaultStore } from '../../store/vault.store'
+import { useUiStore } from '@/store/ui.store'
+import { useVaultStore } from '@/store/vault.store'
 import { Button } from '../ui/button'
 import {
   Dialog,

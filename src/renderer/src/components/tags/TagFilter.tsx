@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { Fragment, type JSX } from 'react'
 
 import { XIcon } from 'lucide-react'
 
@@ -7,26 +7,35 @@ import { useVaultStore } from '@/store/vault.store'
 import { Button } from '../ui/button'
 import { TagChip } from './TagChip'
 
-export function TagFilter(): JSX.Element | null {
-  const { activeTags, clearActiveTags } = useUiStore()
-  const { tags, notes, noteTagsMap } = useVaultStore()
+// count comes from the note list so it matches the header after the title search is applied.
+export function TagFilter({ count }: { count: number }): JSX.Element | null {
+  const { activeTags, searchQuery, clearActiveTags, toggleActiveTag } = useUiStore()
+  const tags = useVaultStore((s) => s.tags)
 
   if (activeTags.length === 0) return null
 
   const activeTagObjects = activeTags
     .map((id) => tags.find((t) => t.id === id))
     .filter((t): t is NonNullable<typeof t> => t != null)
-
-  const count = notes.filter((n) =>
-    activeTags.every((tagId) => (noteTagsMap[n.id] ?? []).includes(tagId))
-  ).length
+  const query = searchQuery.trim()
 
   return (
     <div className="flex items-center gap-1.5 px-4 py-3 text-xs">
       <div className="flex flex-1 flex-wrap items-center gap-1.5">
-        {activeTagObjects.map((tag) => (
-          <TagChip key={tag.id} tag={tag} />
+        {activeTagObjects.map((tag, i) => (
+          <Fragment key={tag.id}>
+            {i > 0 && <span className="text-muted-foreground">and</span>}
+            <TagChip tag={tag} onRemove={() => toggleActiveTag(tag.id, true)} />
+          </Fragment>
         ))}
+        {query && (
+          <>
+            <span className="text-muted-foreground">and</span>
+            <span className="max-w-full truncate" title={query}>
+              title contains &quot;{query}&quot;
+            </span>
+          </>
+        )}
         <span className="text-muted-foreground">
           ({count} note{count === 1 ? '' : 's'})
         </span>

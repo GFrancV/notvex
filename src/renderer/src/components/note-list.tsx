@@ -36,6 +36,13 @@ export function NoteList(): ReactNode {
     void loadNotes({ trashed: showTrash })
   }, [showTrash, showPinned, loadNotes])
 
+  // The tag filter works client-side on `notes`, which may still hold the results of a search
+  // made before the first tag was picked; start it from the full list.
+  const tagsActive = activeTags.length > 0
+  useEffect(() => {
+    if (tagsActive) void loadNotes({ trashed: showTrash })
+  }, [tagsActive, showTrash, loadNotes])
+
   // Debounced IPC search — only when no tag filter active (tag filter handled client-side)
   useEffect(() => {
     if (activeTags.length > 0) return
@@ -130,7 +137,7 @@ export function NoteList(): ReactNode {
   const listTitle = (): string => {
     if (showTrash) return 'Trash'
     if (showPinned) return 'Pinned notes'
-    if (activeTags.length > 0) return 'Notes by Tags'
+    if (activeTags.length > 0) return searchQuery.trim() ? 'Search in tags' : 'Notes by Tags'
     if (searchQuery) return 'Search results'
     return 'All Notes'
   }
@@ -144,7 +151,7 @@ export function NoteList(): ReactNode {
       </div>
 
       {/* Tag filter header */}
-      <TagFilter />
+      <TagFilter count={filteredNotes.length} />
 
       {/* Empty trash button */}
       {showTrash && notes.length > 0 && (
@@ -212,18 +219,33 @@ export function NoteList(): ReactNode {
                         {note.title || 'Untitled'}
                       </h3>
                     </div>
-                    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                      <span>{formatTimeAgo(note.updatedAt)}</span>
+                    <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+                      <span className="shrink-0 whitespace-nowrap">
+                        {formatTimeAgo(note.updatedAt)}
+                      </span>
                       {note.tags.length > 0 && (
                         <>
-                          <span className="opacity-50">·</span>
-                          <span className="flex-inline flex items-center gap-1.5">
+                          <span className="shrink-0 opacity-50">·</span>
+                          <span className="flex min-w-0 items-center gap-1.5">
                             <span
                               className="size-1.5 shrink-0 rounded-full"
                               style={{ backgroundColor: note.tags[0].color }}
                             />
-                            {note.tags[0].name}
+                            <span className="truncate" title={note.tags[0].name}>
+                              {note.tags[0].name}
+                            </span>
                           </span>
+                          {note.tags.length > 1 && (
+                            <span
+                              className="shrink-0"
+                              title={note.tags
+                                .slice(1)
+                                .map((t) => t.name)
+                                .join(', ')}
+                            >
+                              +{note.tags.length - 1}
+                            </span>
+                          )}
                         </>
                       )}
                     </div>
