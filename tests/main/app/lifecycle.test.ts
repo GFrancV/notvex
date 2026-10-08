@@ -145,9 +145,15 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     await vi.waitFor(() => expect(quit).toHaveBeenCalledTimes(1))
   })
 
-  it('if closeVault() rejects, it logs the error and still calls app.quit() in the finally', async () => {
+  it('if closeVault() rejects, it logs the error without its path and still calls app.quit() in the finally', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    closeVault.mockRejectedValueOnce(new Error('boom'))
+    const vaultPath = '/home/alice/Private Notes/diary.nvx'
+    closeVault.mockRejectedValueOnce(
+      Object.assign(new Error(`EACCES: permission denied, open '${vaultPath}'`), {
+        code: 'EACCES',
+        path: vaultPath
+      })
+    )
 
     app.emit('before-quit', { preventDefault: vi.fn() })
 
@@ -155,6 +161,7 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
       expect(consoleErrorSpy).toHaveBeenCalledTimes(1)
       expect(quit).toHaveBeenCalledTimes(1)
     })
+    for (const arg of consoleErrorSpy.mock.calls[0]) expect(String(arg)).not.toContain(vaultPath)
   })
 
   it('window-all-closed on Windows/Linux does not call closeVault(), only app.quit()', () => {

@@ -7,6 +7,7 @@ import {
   takePendingOpenFilePath
 } from './file-opener'
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
+import { logError } from './log'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'
 import { createWindow } from './window'
@@ -77,7 +78,7 @@ app.on('before-quit', (event): void => {
       stopAutoLockTimer()
       await closeVaultDrained(mainWindow)
     } catch (e) {
-      console.error('[quit] closeVault failed:', e)
+      logError('[quit] closeVault failed:', e)
     } finally {
       readyToQuit = true
       app.quit() // re-enters before-quit, which now lets it through
@@ -101,7 +102,7 @@ app.on('second-instance', (_event, argv): void => {
 
   if (filePath) {
     resolveOpenFilePath(mainWindow, filePath).catch((e) => {
-      console.error('[open-file] resolveOpenFilePath failed:', e)
+      logError('[open-file] resolveOpenFilePath failed:', e)
     })
   }
 })
@@ -110,7 +111,7 @@ app.on('open-file', (event, filePath): void => {
   event.preventDefault()
   if (mainWindow) {
     resolveOpenFilePath(mainWindow, filePath).catch((e) => {
-      console.error('[open-file] resolveOpenFilePath failed:', e)
+      logError('[open-file] resolveOpenFilePath failed:', e)
     })
     return
   }
