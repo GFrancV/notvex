@@ -10,6 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   class MockBrowserWindow extends EventEmitter {
+    constructor(readonly options: Electron.BrowserWindowConstructorOptions) {
+      super()
+    }
     webContents = Object.assign(new EventEmitter(), {
       setWindowOpenHandler: vi.fn(),
       openDevTools: vi.fn()
@@ -87,6 +90,21 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
     createWindow(() => null)
 
     for (const event of POWER_EVENTS) expect(powerMonitor.listenerCount(event)).toBe(1)
+  })
+})
+
+describe('createWindow: webPreferences', () => {
+  it('runs the renderer sandboxed and isolated from Node', async () => {
+    const { createWindow } = await import('@main/window')
+    const win = createWindow(() => null) as unknown as {
+      options: Electron.BrowserWindowConstructorOptions
+    }
+
+    expect(win.options.webPreferences).toMatchObject({
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
+    })
   })
 })
 
