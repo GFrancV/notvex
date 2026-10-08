@@ -114,6 +114,7 @@ export function NoteEditor(): ReactNode {
   // Starts at the store's count: requests made before this mount (e.g. before a lock
   // unmounted the previous editor) were already handled and must not steal focus.
   const lastFocusTitleRef = useRef(useUiStore.getState().focusTitleRequest)
+  const focusTitlePendingRef = useRef(false)
   // Last title known to be on disk. Compared against instead of note.title,
   // which goes stale as soon as the first title save lands.
   const persistedTitleRef = useRef('')
@@ -182,10 +183,7 @@ export function NoteEditor(): ReactNode {
         const currentRequest = useUiStore.getState().focusTitleRequest
         if (currentRequest > lastFocusTitleRef.current) {
           lastFocusTitleRef.current = currentRequest
-          requestAnimationFrame(() => {
-            titleInputRef.current?.focus()
-            titleInputRef.current?.select()
-          })
+          focusTitlePendingRef.current = true
         }
       }
     })
@@ -208,6 +206,16 @@ export function NoteEditor(): ReactNode {
       window.removeEventListener('keydown', onKey, true)
     }
   }, [activeNoteId, setActiveNoteId, contentSaver, titleSaver])
+
+  // The title input only exists once loading ends, so focus it after that commit. A frame
+  // callback can run before React commits and find no input.
+  useEffect(() => {
+    const input = titleInputRef.current
+    if (isLoading || !focusTitlePendingRef.current || !input) return
+    focusTitlePendingRef.current = false
+    input.focus()
+    input.select()
+  }, [isLoading])
 
   const handleContentChange = useCallback(
     (value: string): void => {

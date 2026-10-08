@@ -188,6 +188,16 @@ describe('NoteEditor — focus after opening a note', () => {
   beforeEach(() => {
     useVaultStore.setState({ activeNoteId: null, notes: [], tags: [], noteTagsMap: {} })
     useUiStore.setState({ editorMode: 'editing' })
+    // In Electron the next frame can fire before React commits the loaded note; jsdom's
+    // 16ms frame always loses that race, so run frames as microtasks to match the app.
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      queueMicrotask(() => cb(0))
+      return 0
+    })
+  })
+
+  afterEach(() => {
+    vi.mocked(window.requestAnimationFrame).mockRestore()
   })
 
   it('focuses the title of a note created from the empty state', async () => {
