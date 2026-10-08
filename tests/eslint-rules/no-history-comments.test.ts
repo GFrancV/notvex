@@ -1,7 +1,7 @@
 import { RuleTester } from 'eslint'
 import { describe, it } from 'vitest'
 
-import rule from '../eslint-rules/no-history-comments.mjs'
+import rule from '../../eslint-rules/no-history-comments.mjs'
 
 // RuleTester registers its own describe/it; vitest globals are off.
 RuleTester.describe = describe

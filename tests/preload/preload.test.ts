@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type { NotvexAPI } from '@shared/types'
 
-// The main process sends 'vault:pack-failed' (asserted in close-paths.test.ts);
+// The main process sends 'vault:pack-failed' (asserted in tests/main/ipc/close-paths.test.ts);
 // a typo on this side would leave the toast silently dead.
 
 const on = vi.fn()
@@ -20,7 +20,7 @@ vi.mock('electron', () => ({
 
 describe('preload: onPackFailed (issue #61)', () => {
   beforeAll(async () => {
-    await import('../src/preload/index')
+    await import('../../src/preload/index')
   })
 
   it('calls back when the main process sends vault:pack-failed', () => {

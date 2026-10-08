@@ -6,7 +6,7 @@ import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { dbGet, dbRun } from '../src/main/db/queries'
+import { dbGet, dbRun } from '@main/db/queries'
 
 /**
  * Pins db.serialize()'s same-handle ordering. The app doesn't rely on it for write/checkpoint

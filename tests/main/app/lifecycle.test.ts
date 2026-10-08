@@ -20,7 +20,7 @@ vi.mock('electron', async () => {
   }
 })
 
-vi.mock('../src/main/vault/vault', () => ({
+vi.mock('@main/vault/vault', () => ({
   closeVault: vi.fn().mockResolvedValue({ packFailed: false }),
   getVaultPath: vi.fn(() => null),
   isVaultOpen: vi.fn(() => false)
@@ -28,30 +28,30 @@ vi.mock('../src/main/vault/vault', () => ({
 
 // closeVaultDrained() forwards to the mocked closeVault() so the assertions
 // below keep counting real close attempts; draining itself is covered by
-// tests/drain-renderer.test.ts.
-vi.mock('../src/main/ipc-handlers', async () => {
-  const { closeVault } = await import('../src/main/vault/vault')
+// tests/main/app/drain-renderer.test.ts.
+vi.mock('@main/ipc-handlers', async () => {
+  const { closeVault } = await import('@main/vault/vault')
   return {
     stopAutoLockTimer: vi.fn(),
     closeVaultDrained: vi.fn(() => closeVault())
   }
 })
 
-vi.mock('../src/main/window', () => ({
+vi.mock('@main/window', () => ({
   createWindow: vi.fn()
 }))
 
 // Startup side effects: the real cleanupOrphanedTempDbs() deletes files in
 // os.tmpdir(), so neither may run once whenReady() resolves (the no-window block below).
-vi.mock('../src/main/vault/crypto', () => ({
+vi.mock('@main/vault/crypto', () => ({
   initSodium: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('../src/main/vault/container', () => ({
+vi.mock('@main/vault/container', () => ({
   cleanupOrphanedTempDbs: vi.fn()
 }))
 
-vi.mock('../src/main/file-opener', () => ({
+vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),
   setValidatedPending: vi.fn(),
@@ -95,13 +95,13 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     const electronMock = await import('electron')
     app = electronMock.app
     quit = vi.mocked(app.quit)
-    // The 'electron' mock module (unlike '../src/main/index') survives
+    // The 'electron' mock module (unlike '@main/index') survives
     // vi.resetModules(), so its listeners must be cleared by hand before
     // each fresh import of index.ts re-registers its handlers.
     app.removeAllListeners()
-    const vaultMock = await import('../src/main/vault/vault')
+    const vaultMock = await import('@main/vault/vault')
     closeVault = vi.mocked(vaultMock.closeVault)
-    await import('../src/main/index')
+    await import('@main/index')
   })
 
   afterEach(() => {
@@ -176,7 +176,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   const NVX = '/Users/me/vault.nvx'
   let app: Electron.App
   let createWindow: ReturnType<typeof vi.fn>
-  let fileOpener: typeof import('../src/main/file-opener')
+  let fileOpener: typeof import('@main/file-opener')
   let windows: FakeWindow[]
 
   beforeEach(async () => {
@@ -185,19 +185,19 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     app = (await import('electron')).app
     app.removeAllListeners()
     windows = []
-    createWindow = vi.mocked((await import('../src/main/window')).createWindow)
+    createWindow = vi.mocked((await import('@main/window')).createWindow)
     createWindow.mockImplementation(() => {
       const win = new FakeWindow()
       windows.push(win)
       return win as unknown as BrowserWindow
     })
-    fileOpener = await import('../src/main/file-opener')
+    fileOpener = await import('@main/file-opener')
     // Once, so the shutdown block above keeps its never-resolving whenReady().
     vi.mocked(app.whenReady).mockResolvedValueOnce(undefined)
   })
 
   async function startApp(): Promise<void> {
-    await import('../src/main/index')
+    await import('@main/index')
     await vi.waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1))
   }
 
@@ -215,13 +215,13 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
 
   it('open-file during startup only stores the path, and startup opens exactly one window', async () => {
     let finishSodium: () => void = () => {}
-    const { initSodium } = await import('../src/main/vault/crypto')
+    const { initSodium } = await import('@main/vault/crypto')
     vi.mocked(initSodium).mockReturnValueOnce(
       new Promise<void>((resolve) => {
         finishSodium = resolve
       })
     )
-    await import('../src/main/index')
+    await import('@main/index')
     await vi.waitFor(() => expect(initSodium).toHaveBeenCalled())
 
     app.emit('open-file', { preventDefault: vi.fn() }, NVX)

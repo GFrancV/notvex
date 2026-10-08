@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '../src/main/url-guard'
+import { rendererIndexPath } from '@main/url-guard'
 
 // Every handler must check the calling frame's URL (isTrustedFrame()) and refuse before doing
 // anything.
@@ -23,14 +23,14 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('../src/main/prefs', () => ({ getPref: vi.fn(() => 0) }))
-vi.mock('../src/main/vault/backups', () => ({}))
-vi.mock('../src/main/vault/container', () => ({}))
-vi.mock('../src/main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
-vi.mock('../src/main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
-vi.mock('../src/main/db/queries', () => ({}))
-vi.mock('../src/main/clipboard-guard', () => ({}))
-vi.mock('../src/main/drain-renderer', () => ({}))
+vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/vault/backups', () => ({}))
+vi.mock('@main/vault/container', () => ({}))
+vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
+vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
+vi.mock('@main/db/queries', () => ({}))
+vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/drain-renderer', () => ({}))
 
 const APP_URL = pathToFileURL(rendererIndexPath).href
 
@@ -49,7 +49,7 @@ function invokeFromFrame(
 }
 
 describe('ipc handlers: sender frame check (issue #57)', () => {
-  let ipc: typeof import('../src/main/ipc-handlers')
+  let ipc: typeof import('@main/ipc-handlers')
   let openExternal: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
@@ -57,7 +57,7 @@ describe('ipc handlers: sender frame check (issue #57)', () => {
     vi.resetModules()
     vi.clearAllMocks()
     openExternal = vi.mocked((await import('electron')).shell.openExternal)
-    ipc = await import('../src/main/ipc-handlers')
+    ipc = await import('@main/ipc-handlers')
     ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
   })
 

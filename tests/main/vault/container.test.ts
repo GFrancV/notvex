@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { initSodium } from '../src/main/vault/crypto'
+import { initSodium } from '@main/vault/crypto'
 import {
   readContainer,
   shouldWarnOpeningInDevBuild,
   verifyHeaderHmac,
   writeContainer
-} from '../src/main/vault/container'
+} from '@main/vault/container'
 
 async function baseParams(devBuild?: boolean): Promise<Parameters<typeof writeContainer>[0]> {
   await initSodium()

@@ -3,14 +3,14 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Electron 43+ opens dialogs without a defaultPath in Downloads and the OS
-// stops remembering the last folder (#74), so the main process remembers it.
+// stops remembering the last folder, so the main process remembers it.
 
 describe('dialog default path', () => {
-  let dialogDir: typeof import('../src/main/dialog-dir')
+  let dialogDir: typeof import('@main/dialog-dir')
 
   beforeEach(async () => {
     vi.resetModules()
-    dialogDir = await import('../src/main/dialog-dir')
+    dialogDir = await import('@main/dialog-dir')
   })
 
   it('falls back to the bare file name before any dialog was used', () => {

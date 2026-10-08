@@ -4,7 +4,7 @@ import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { drainRenderer, FLUSH_ACK_TIMEOUT_MS } from '../src/main/drain-renderer'
+import { drainRenderer, FLUSH_ACK_TIMEOUT_MS } from '@main/drain-renderer'
 
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')

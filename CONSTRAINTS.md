@@ -47,11 +47,26 @@ main-process config must not carry:
 
 | Location | tsconfig | Environment |
 |---|---|---|
-| `tests/*.test.ts` | `tsconfig.node.json` | node (default) |
+| `tests/main/**`, `tests/preload/**`, `tests/eslint-rules/**` | `tsconfig.node.json` | node (default) |
 | `tests/renderer/*.test.ts` | `tsconfig.web.json` | jsdom, via a `// @vitest-environment jsdom` docblock |
 
 `tsconfig.node.json` excludes `tests/renderer`; `tsconfig.web.json` includes it.
 A React test placed outside `tests/renderer/` will fail to typecheck.
+
+Folders mirror the code they test (`tests/main/vault/` tests `src/main/vault/`),
+and each `pnpm test:<area>` script runs one of them. Split a file by topic once
+it grows past a few hundred lines. Fixtures shared by several files live next to
+them in a non-`.test.ts` module (`tests/main/vault/helpers.ts`).
+
+`vi.mock` is hoisted only within its own file. A shared module can hold the
+mocks (`tests/main/ipc/confirmation-gates/harness.ts`) only when the test files
+import the mocked code dynamically, after the harness has loaded; with static
+imports, keep the `vi.mock` calls in each test file.
+
+Tests import source through the path aliases (`@main/…`, `@/…`), in `import`,
+`vi.mock` and `typeof import()` alike, so a file can move without its paths
+changing. Vitest resolves a mocked alias to the same module as the source's
+relative import of it.
 
 React tests that depend on effects re-running must pass `reactStrictMode: true`
 to `render`/`renderHook`. Wrapping the tree in `<StrictMode>` by hand does
@@ -88,7 +103,7 @@ the test count also fell, is the thing it is guarding against.
 | Tier | Commands | Target | Measured |
 |---|---|---|---|
 | Fast (edit loop) | `pnpm lint` (eslint `--cache`) | seconds | ~30s cold, faster warm |
-| Task-end | `pnpm check:task` (= validate + depcruise + test:vault) | 90s | **~2m55s — over budget** |
+| Task-end | `pnpm check:task` (= validate + depcruise + test) | 90s | **~2m55s — over budget** |
 | Full (review/CI) | `pnpm check:full` (= check:task + coverage) | unlimited | not yet run in CI |
 
 The 90s task-end target isn't met: `pnpm typecheck` alone measures **~2m13s**
@@ -110,10 +125,18 @@ save `pnpm check:task` for before marking work done, same as
 ```bash
 pnpm depcruise       # architecture/IPC-boundary check (.dependency-cruiser.cjs)
 pnpm check:fast      # typecheck + lint — edit loop
-pnpm check:task      # validate + depcruise + test:vault — before calling work done
+pnpm check:task      # validate + depcruise + test — before calling work done
 pnpm check:full      # check:task + coverage — review/CI
-pnpm test:vault      # vitest run --passWithNoTests
-pnpm test:coverage   # vitest run --coverage --passWithNoTests
+pnpm test            # vitest run — every test
+pnpm test:watch      # vitest in watch mode
+pnpm test:main       # tests/main (all main-process tests)
+pnpm test:vault      # tests/main/vault
+pnpm test:db         # tests/main/db
+pnpm test:ipc        # tests/main/ipc
+pnpm test:app        # tests/main/app (lifecycle, window, updater, guards)
+pnpm test:preload    # tests/preload
+pnpm test:renderer   # tests/renderer (jsdom)
+pnpm test:coverage   # vitest run --coverage
 ```
 
 ## Exceptions
