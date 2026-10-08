@@ -162,6 +162,12 @@ export function NoteEditor(): ReactNode {
       return
     }
     activeIdRef.current = activeNoteId
+    // A request belongs to the note opened right after it. Consuming it here rather than on
+    // load keeps a failed load or a quick switch from handing it to a different note.
+    const request = useUiStore.getState().focusTitleRequest
+    const wantsTitleFocus = request > lastFocusTitleRef.current
+    lastFocusTitleRef.current = request
+    focusTitlePendingRef.current = false
     setIsLoading(true)
     setNote(null)
     setTitle('')
@@ -180,11 +186,7 @@ export function NoteEditor(): ReactNode {
             scrollIntoView: true
           })
         }
-        const currentRequest = useUiStore.getState().focusTitleRequest
-        if (currentRequest > lastFocusTitleRef.current) {
-          lastFocusTitleRef.current = currentRequest
-          focusTitlePendingRef.current = true
-        }
+        if (wantsTitleFocus) focusTitlePendingRef.current = true
       }
     })
 
@@ -443,10 +445,7 @@ export function NoteEditor(): ReactNode {
               onCreateEditor={(view) => {
                 editorViewRef.current = view
                 setEditorView(view)
-                // A pending title-focus request owns focus; it is served once the note loads.
-                if (useUiStore.getState().focusTitleRequest <= lastFocusTitleRef.current) {
-                  view.focus()
-                }
+                view.focus()
               }}
               basicSetup={{
                 lineNumbers: false,

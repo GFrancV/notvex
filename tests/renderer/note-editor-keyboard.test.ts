@@ -190,6 +190,8 @@ describe('NoteEditor — focus after opening a note', () => {
   }
 
   beforeEach(() => {
+    ipc.get.mockReset()
+    ipc.create.mockReset()
     useVaultStore.setState({ activeNoteId: null, notes: [], tags: [], noteTagsMap: {} })
     useUiStore.setState({ editorMode: 'editing' })
     // In Electron the next frame can fire before React commits the loaded note; jsdom's
@@ -235,6 +237,41 @@ describe('NoteEditor — focus after opening a note', () => {
     serve('a', 'A')
     act(() => useVaultStore.getState().setActiveNoteId('a'))
     await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
+    expect(editorHasFocus()).toBe(true)
+  })
+
+  it('does not pass the request of a note that failed to load to the next note', async () => {
+    render(createElement(NoteEditor))
+    ipc.get.mockResolvedValueOnce({ success: false, error: 'boom' })
+    act(() => {
+      useVaultStore.getState().setActiveNoteId('n')
+      useUiStore.getState().requestFocusTitle()
+    })
+    await waitFor(() => expect(ipc.get).toHaveBeenCalledWith('n'))
+
+    serve('a', 'A')
+    act(() => useVaultStore.getState().setActiveNoteId('a'))
+    await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
+    expect(editorHasFocus()).toBe(true)
+  })
+
+  it('does not pass the request of a new note to a note opened before it loaded', async () => {
+    serve('a', 'A')
+    act(() => useVaultStore.getState().setActiveNoteId('a'))
+    render(createElement(NoteEditor))
+    await waitFor(() => expect(editorHasFocus()).toBe(true))
+
+    let resolveNew!: (v: unknown) => void
+    ipc.get.mockReturnValueOnce(new Promise((r) => (resolveNew = r)))
+    act(() => {
+      useVaultStore.getState().setActiveNoteId('n')
+      useUiStore.getState().requestFocusTitle()
+    })
+    serve('b', 'B')
+    act(() => useVaultStore.getState().setActiveNoteId('b'))
+    await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('B'))
+    resolveNew({ success: true, data: null })
+
     expect(editorHasFocus()).toBe(true)
   })
 
