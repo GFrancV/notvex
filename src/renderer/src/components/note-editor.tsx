@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 
 import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
 import { usePendingSave } from '@/hooks/use-pending-save'
+import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
@@ -110,7 +111,10 @@ export function NoteEditor(): ReactNode {
   const activeIdRef = useRef<string | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
-  const lastFocusTitleRef = useRef(0)
+  // Starts at the store's count: requests made before this mount (e.g. before a lock
+  // unmounted the previous editor) were already handled and must not steal focus.
+  const lastFocusTitleRef = useRef(useUiStore.getState().focusTitleRequest)
+  const focusTitlePendingRef = useRef(false)
   // Last title known to be on disk. Compared against instead of note.title,
   // which goes stale as soon as the first title save lands.
   const persistedTitleRef = useRef('')
@@ -158,6 +162,12 @@ export function NoteEditor(): ReactNode {
       return
     }
     activeIdRef.current = activeNoteId
+    // A request belongs to the note opened right after it. Consuming it here rather than on
+    // load keeps a failed load or a quick switch from handing it to a different note.
+    const request = useUiStore.getState().focusTitleRequest
+    const wantsTitleFocus = request > lastFocusTitleRef.current
+    lastFocusTitleRef.current = request
+    focusTitlePendingRef.current = false
     setIsLoading(true)
     setNote(null)
     setTitle('')
@@ -176,14 +186,7 @@ export function NoteEditor(): ReactNode {
             scrollIntoView: true
           })
         }
-        const currentRequest = useUiStore.getState().focusTitleRequest
-        if (currentRequest > lastFocusTitleRef.current) {
-          lastFocusTitleRef.current = currentRequest
-          requestAnimationFrame(() => {
-            titleInputRef.current?.focus()
-            titleInputRef.current?.select()
-          })
-        }
+        if (wantsTitleFocus) focusTitlePendingRef.current = true
       }
     })
 
@@ -205,6 +208,16 @@ export function NoteEditor(): ReactNode {
       window.removeEventListener('keydown', onKey, true)
     }
   }, [activeNoteId, setActiveNoteId, contentSaver, titleSaver])
+
+  // The title input only exists once loading ends, so focus it after that commit. A frame
+  // callback can run before React commits and find no input.
+  useEffect(() => {
+    const input = titleInputRef.current
+    if (isLoading || !focusTitlePendingRef.current || !input) return
+    focusTitlePendingRef.current = false
+    input.focus()
+    input.select()
+  }, [isLoading])
 
   const handleContentChange = useCallback(
     (value: string): void => {
@@ -229,6 +242,16 @@ export function NoteEditor(): ReactNode {
   // Blur is only the fast path: focus may never leave before a note switch, a lock or a quit.
   const handleTitleBlur = (): void => {
     void titleSaver.flush().catch(() => undefined)
+  }
+
+  // Skips the tag and toolbar buttons that sit between the title and the body in tab order.
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    const toContent = (e.key === 'Tab' && !e.shiftKey) || e.key === 'Enter'
+    // editorView outlives the editor in reading mode: it still points at the destroyed view.
+    if (!toContent || e.nativeEvent.isComposing || editorMode !== 'editing' || !editorView) return
+    e.preventDefault()
+    editorView.dispatch({ selection: { anchor: 0 } })
+    editorView.focus()
   }
 
   const handlePin = async (): Promise<void> => {
@@ -283,6 +306,7 @@ export function NoteEditor(): ReactNode {
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
               onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
               placeholder="Untitled"
               className="titlebar-no-drag placeholder:text-muted-foreground z-10 flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
             />
@@ -409,6 +433,7 @@ export function NoteEditor(): ReactNode {
               theme="dark"
               extensions={[
                 markdown({ base: markdownLanguage, codeLanguages }),
+                formattingKeymap,
                 andromeda,
                 notvexEditorTheme,
                 livePreviewPlugin,

@@ -152,6 +152,18 @@ Installers are output to `dist/`.
 | `Ctrl+Enter` (in search box) | New note |
 | `Esc` | Deselect note / close popovers |
 
+In the editor (use `Cmd` instead of `Ctrl` on macOS):
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+B` / `Ctrl+I` / `Ctrl+E` | Bold / italic / inline code |
+| `Ctrl+Shift+1` / `2` / `3` | Heading 1 / 2 / 3 |
+| `Ctrl+Shift+8` | Bullet list |
+| `Ctrl+Shift+9` | Checklist |
+| `Ctrl+Shift+.` | Quote |
+| `Tab` or `Enter` (in the title) | Jump to the start of the note body |
+| `Ctrl+M`, then `Shift+Tab` | Leave the editor (`Tab` indents inside it; `Shift+Option+M` on macOS) |
+
 ## Vault files
 
 Notvex stores everything in a **single file** chosen when the vault is created:
