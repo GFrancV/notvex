@@ -130,7 +130,7 @@ export function NoteList(): ReactNode {
   const listTitle = (): string => {
     if (showTrash) return 'Trash'
     if (showPinned) return 'Pinned notes'
-    if (activeTags.length > 0) return 'Notes by Tags'
+    if (activeTags.length > 0) return searchQuery.trim() ? 'Search in tags' : 'Notes by Tags'
     if (searchQuery) return 'Search results'
     return 'All Notes'
   }
@@ -144,7 +144,7 @@ export function NoteList(): ReactNode {
       </div>
 
       {/* Tag filter header */}
-      <TagFilter />
+      <TagFilter count={filteredNotes.length} />
 
       {/* Empty trash button */}
       {showTrash && notes.length > 0 && (

@@ -93,33 +93,55 @@ describe('TagFilter active chips', () => {
     createdAt: 0
   }))
 
-  beforeEach(() => useVaultStore.setState({ tags, notes: [], noteTagsMap: {} }))
+  beforeEach(() => {
+    useVaultStore.setState({ tags, notes: [], noteTagsMap: {} })
+    useUiStore.setState({ searchQuery: '' })
+  })
 
   it.each([
     [['a', 'b'], 1],
     [['a', 'b', 'c'], 2]
   ])('%j active → %i "and" separators', (activeTags, separators) => {
     useUiStore.setState({ activeTags })
-    render(createElement(TagFilter))
+    render(createElement(TagFilter, { count: 0 }))
     expect(screen.getAllByText('and')).toHaveLength(separators)
   })
 
   it('a single active tag has no separator', () => {
     useUiStore.setState({ activeTags: ['a'] })
-    render(createElement(TagFilter))
+    render(createElement(TagFilter, { count: 0 }))
     expect(screen.queryByText('and')).toBeNull()
   })
 
   it('removing a chip drops only that tag', () => {
     useUiStore.setState({ activeTags: ['a', 'b'] })
-    render(createElement(TagFilter))
+    render(createElement(TagFilter, { count: 0 }))
     fireEvent.click(screen.getByTitle('Remove tag tag-a'))
     expect(useUiStore.getState().activeTags).toEqual(['b'])
   })
 
+  it('shows the count it is given, not one recomputed without the search', () => {
+    useUiStore.setState({ activeTags: ['a'], searchQuery: 'x' })
+    render(createElement(TagFilter, { count: 1 }))
+    expect(screen.getByText('(1 note)')).toBeTruthy()
+  })
+
+  it('appends the title clause when a search is active', () => {
+    useUiStore.setState({ activeTags: ['a'], searchQuery: '  seed  ' })
+    render(createElement(TagFilter, { count: 0 }))
+    expect(screen.getByText('title contains "seed"')).toBeTruthy()
+    expect(screen.getAllByText('and')).toHaveLength(1)
+  })
+
+  it('has no title clause for a blank search', () => {
+    useUiStore.setState({ activeTags: ['a'], searchQuery: '   ' })
+    render(createElement(TagFilter, { count: 0 }))
+    expect(screen.queryByText(/title contains/)).toBeNull()
+  })
+
   it('removing the last chip clears the filter', () => {
     useUiStore.setState({ activeTags: ['a'] })
-    render(createElement(TagFilter))
+    render(createElement(TagFilter, { count: 0 }))
     fireEvent.click(screen.getByTitle('Remove tag tag-a'))
     expect(useUiStore.getState().activeTags).toEqual([])
   })
