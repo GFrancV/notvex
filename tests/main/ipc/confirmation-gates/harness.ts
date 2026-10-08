@@ -60,6 +60,7 @@ vi.mock('@main/vault/vault', () => ({
   isVaultOpen: vi.fn(() => false),
   closeVault: vi.fn(async () => ({ packFailed: false })),
   openVaultWithRecovery: vi.fn(async () => 1),
+  rotateVaultCredentials: vi.fn(),
   syncContainer: vi.fn(),
   openVault: vi.fn(
     async (

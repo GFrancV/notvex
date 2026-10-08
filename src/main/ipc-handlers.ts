@@ -644,7 +644,7 @@ export function registerIpcHandlers(
       const result = await rotateVaultCredentials(newPassword)
       return ok(result)
     } catch (e) {
-      if (!isVaultOpen()) win.webContents.send('vault:auto-locked')
+      if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
       return fail(e)
     }
   })

@@ -41,6 +41,23 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     await expect(pending).resolves.toMatchObject({ error: 'DEV_BUILD_WARNING_CANCELLED' })
   })
 
+  it('tells the newest window when a failed rotation locks the vault', async () => {
+    const first = fakeWindow()
+    ipc.registerIpcHandlers(first.win, () => null)
+    first.destroy()
+    const second = fakeWindow()
+    ipc.registerIpcHandlers(second.win, () => null)
+    // Open for requireVault(); the rollback has closed it by the time the catch runs.
+    vi.mocked(vault.isVaultOpen).mockReturnValueOnce(true)
+    vi.mocked(vault.rotateVaultCredentials).mockRejectedValueOnce(new Error('rekey failed'))
+
+    await expect(invoke('vault:rotate-credentials', 'new pw')).resolves.toEqual({
+      success: false,
+      error: 'rekey failed'
+    })
+    expect(second.sent).toContain('vault:auto-locked')
+  })
+
   it('cancels a gate straight away when no live window can answer it', async () => {
     const only = fakeWindow()
     ipc.registerIpcHandlers(only.win, () => null)
