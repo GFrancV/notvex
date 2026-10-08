@@ -63,6 +63,8 @@ describe('scheduleClipboardClear', () => {
 
     expect(clipboard.clear).not.toHaveBeenCalled()
     expect(error).toHaveBeenCalled()
+    for (const arg of error.mock.calls[0])
+      expect(String(arg)).not.toContain('clipboard unavailable')
     error.mockRestore()
   })
 })
