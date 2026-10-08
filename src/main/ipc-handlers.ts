@@ -9,6 +9,7 @@ import { CURRENT_VERSION_MIN, Prefs } from '@shared/types'
 import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
+import { logError } from './log'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
@@ -708,11 +709,11 @@ export function registerIpcHandlers(
 
       // packContainer(), not syncContainer(): a failed sync must surface as a
       // failed backup, not silently copy stale data. Its fs errors embed local
-      // paths, so they're logged here and the renderer gets a generic message.
+      // paths, so the renderer only gets a generic message.
       try {
         await packContainer()
       } catch (e) {
-        console.error('vault:save-copy-as: sync before copy failed:', e)
+        logError('vault:save-copy-as: sync before copy failed:', e)
         return fail('Failed to sync the vault before copying — try again')
       }
 

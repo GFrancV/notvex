@@ -1,6 +1,8 @@
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
+import { logError } from './log'
+
 // autoUpdater is app-wide but createWindow() calls this once per window, and
 // macOS `activate` creates more than one. Listeners are registered once and
 // send to the latest window, skipping it while it's destroyed.
@@ -16,6 +18,9 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   if (listenersRegistered) return
   listenersRegistered = true
 
+  // Its default logger is console and prints full stacks and cache paths; the
+  // 'error' listener below logs through logError instead.
+  autoUpdater.logger = null
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
 
@@ -48,7 +53,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   })
 
   autoUpdater.on('error', (err) => {
-    console.error('[updater] error:', err)
+    logError('[updater] error:', err)
     send('updater:error', {
       message: 'Update check failed. Please try again later.'
     })

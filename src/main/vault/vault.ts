@@ -10,6 +10,7 @@ import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 
 import { CURRENT_VERSION_MIN, type VaultVersion } from '@shared/types'
+import { logError } from '../log'
 import { runMigrations, type SchemaMigrationGate } from '../db/migrations'
 import { dbAll, dbGet, dbRun } from '../db/queries'
 import {
@@ -832,10 +833,8 @@ async function doCloseVault(skipPack = false): Promise<{ packFailed: boolean }> 
       await doPackContainer()
     } catch (e) {
       // Don't throw on close, not even from here: the key wipe and lock release
-      // below depend on it. Log the error code only: fs messages embed the
-      // vault path (username, location, file name), which must not leak to stdout.
-      const tag = e instanceof Error ? ((e as NodeJS.ErrnoException).code ?? e.name) : typeof e
-      console.error('[close] pack failed:', tag)
+      // below depend on it.
+      logError('[close] pack failed:', e)
       packFailed = true
     }
   }
