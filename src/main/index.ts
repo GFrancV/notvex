@@ -20,6 +20,14 @@ if (!app.isPackaged) {
   app.setName('Notvex Dev')
 }
 
+// Fuses don't cover Chromium's remote debugging, which would expose every renderer over CDP.
+// Chromium has already parsed the switch by now, so exit before any window exists.
+const remoteDebuggingSwitches = ['remote-debugging-port', 'remote-debugging-pipe']
+if (app.isPackaged && remoteDebuggingSwitches.some((s) => app.commandLine.hasSwitch(s))) {
+  app.quit()
+  process.exit(1)
+}
+
 // Must run before ready. Sandboxes every renderer regardless of its webPreferences.
 app.enableSandbox()
 
