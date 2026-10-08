@@ -44,22 +44,25 @@ export const toolbarActions: Record<string, (v: EditorView) => void> = {
 
 // Headings use Shift, not Alt: Ctrl+Alt is AltGr on Windows, so Mod-Alt-1 would be
 // unreachable on layouts that type characters with AltGr+digit.
-export const formattingShortcuts: { action: keyof typeof toolbarActions; key: string }[] = [
-  { action: 'bold', key: 'Mod-b' },
-  { action: 'italic', key: 'Mod-i' },
-  { action: 'code', key: 'Mod-e' },
-  { action: 'h1', key: 'Mod-Shift-1' },
-  { action: 'h2', key: 'Mod-Shift-2' },
-  { action: 'h3', key: 'Mod-Shift-3' },
-  { action: 'bulletList', key: 'Mod-Shift-8' },
-  { action: 'checkList', key: 'Mod-Shift-9' },
-  { action: 'quote', key: 'Mod-Shift-.' }
-]
+export const formattingShortcuts: Record<
+  keyof typeof toolbarActions,
+  { label: string; key: string }
+> = {
+  bold: { label: 'Bold', key: 'Mod-b' },
+  italic: { label: 'Italic', key: 'Mod-i' },
+  code: { label: 'Inline code', key: 'Mod-e' },
+  h1: { label: 'Heading 1', key: 'Mod-Shift-1' },
+  h2: { label: 'Heading 2', key: 'Mod-Shift-2' },
+  h3: { label: 'Heading 3', key: 'Mod-Shift-3' },
+  bulletList: { label: 'Bullet list', key: 'Mod-Shift-8' },
+  checkList: { label: 'Checklist', key: 'Mod-Shift-9' },
+  quote: { label: 'Quote', key: 'Mod-Shift-.' }
+}
 
 // High precedence: CodeMirror's defaultKeymap binds Mod-i to selectParentSyntax.
 export const formattingKeymap = Prec.high(
   keymap.of(
-    formattingShortcuts.map(({ action, key }) => ({
+    Object.entries(formattingShortcuts).map(([action, { key }]) => ({
       key,
       run: (v: EditorView): boolean => {
         toolbarActions[action](v)

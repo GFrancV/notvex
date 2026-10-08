@@ -2,13 +2,29 @@
 import { defaultKeymap } from '@codemirror/commands'
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { createElement } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { formattingKeymap } from '@/lib/editor/formatting'
+vi.mock('@/lib/ipc', () => ({ notvex: { platform: 'win32' } }))
+
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
+
+const { formattingKeymap } = await import('@/lib/editor/formatting')
+const { EditorToolbar } = await import('@/components/editor/EditorToolbar')
 
 let view: EditorView | null = null
 
 afterEach(() => {
+  cleanup()
   view?.destroy()
   view = null
 })
@@ -82,5 +98,37 @@ describe('formattingKeymap', () => {
     const v = editorWithSelection()
     press(v, init)
     expect(v.state.doc.toString()).toBe(expected)
+  })
+})
+
+describe('EditorToolbar', () => {
+  const labels = [
+    'Bold',
+    'Italic',
+    'Inline code',
+    'Heading 1',
+    'Heading 2',
+    'Heading 3',
+    'Bullet list',
+    'Checklist',
+    'Quote'
+  ]
+
+  it('gives every button an accessible name', () => {
+    render(createElement(EditorToolbar, { editorView: null }))
+    const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))
+    expect(names).toEqual(labels)
+  })
+
+  it('shows the keyboard shortcut in the tooltip', async () => {
+    render(createElement(EditorToolbar, { editorView: null }))
+    fireEvent.focus(screen.getByRole('button', { name: 'Heading 2' }))
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Heading 2 Ctrl+Shift+2')
+  })
+
+  it('tells the user how to Tab out of the editor', async () => {
+    render(createElement(EditorToolbar, { editorView: null }))
+    fireEvent.focus(screen.getByRole('button', { name: 'Quote' }))
+    expect((await screen.findByRole('tooltip')).textContent).toContain('Ctrl+M')
   })
 })
