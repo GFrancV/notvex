@@ -8,13 +8,10 @@ import {
   FileIcon,
   InfoIcon,
   LockIcon,
-  MoreHorizontalIcon,
-  PenIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
-  Trash2Icon,
   TrashIcon,
   XIcon
 } from 'lucide-react'
@@ -34,6 +31,7 @@ import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
+import { TagItem } from './tags/TagItem'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import {
@@ -56,7 +54,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -349,6 +346,7 @@ export function Sidebar(): React.ReactNode {
                   count={tagCounts[tag.id] ?? 0}
                   active={activeTags.includes(tag.id)}
                   onClick={(e) => toggleActiveTag(tag.id, e.ctrlKey || e.metaKey)}
+                  onToggle={() => toggleActiveTag(tag.id, true)}
                   onEdit={() => setEditingTag(tag)}
                   onDelete={() => setDeletingTag(tag)}
                 />
@@ -377,48 +375,5 @@ export function Sidebar(): React.ReactNode {
       />
       <TagDeleteModal open={!!deletingTag} tag={deletingTag} onClose={() => setDeletingTag(null)} />
     </ShadcnSidebar>
-  )
-}
-
-function TagItem({
-  tag,
-  count,
-  active,
-  onClick,
-  onEdit,
-  onDelete
-}: {
-  tag: Tag
-  count: number
-  active: boolean
-  onClick: (e: React.MouseEvent) => void
-  onEdit: () => void
-  onDelete: () => void
-}): React.ReactNode {
-  return (
-    <SidebarMenuItem className="group">
-      <SidebarMenuButton isActive={active} onClick={onClick}>
-        <span className="size-2 rounded-full" style={{ backgroundColor: tag.color }} />
-        {tag.name}
-      </SidebarMenuButton>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover onClick={(e) => e.stopPropagation()}>
-            <MoreHorizontalIcon />
-          </SidebarMenuAction>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem onClick={onEdit}>
-            <PenIcon className="size-4" />
-            Edit tag
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onClick={onDelete}>
-            <Trash2Icon className="size-4" />
-            Delete tag
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {count > 0 && <SidebarMenuBadge className="group-hover:hidden">{count}</SidebarMenuBadge>}
-    </SidebarMenuItem>
   )
 }
