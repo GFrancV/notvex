@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { Fragment, type JSX } from 'react'
 
 import { XIcon } from 'lucide-react'
 
@@ -8,7 +8,7 @@ import { Button } from '../ui/button'
 import { TagChip } from './TagChip'
 
 export function TagFilter(): JSX.Element | null {
-  const { activeTags, clearActiveTags } = useUiStore()
+  const { activeTags, clearActiveTags, toggleActiveTag } = useUiStore()
   const { tags, notes, noteTagsMap } = useVaultStore()
 
   if (activeTags.length === 0) return null
@@ -24,8 +24,11 @@ export function TagFilter(): JSX.Element | null {
   return (
     <div className="flex items-center gap-1.5 px-4 py-3 text-xs">
       <div className="flex flex-1 flex-wrap items-center gap-1.5">
-        {activeTagObjects.map((tag) => (
-          <TagChip key={tag.id} tag={tag} />
+        {activeTagObjects.map((tag, i) => (
+          <Fragment key={tag.id}>
+            {i > 0 && <span className="text-muted-foreground">and</span>}
+            <TagChip tag={tag} onRemove={() => toggleActiveTag(tag.id, true)} />
+          </Fragment>
         ))}
         <span className="text-muted-foreground">
           ({count} note{count === 1 ? '' : 's'})

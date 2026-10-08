@@ -10,7 +10,9 @@ vi.mock('@/lib/ipc', () => ({ notvex: {} }))
 
 const { TagItem } = await import('@/components/tags/TagItem')
 const { SidebarMenu, SidebarProvider } = await import('@/components/ui/sidebar')
+const { TagFilter } = await import('@/components/tags/TagFilter')
 const { useUiStore } = await import('@/store/ui.store')
+const { useVaultStore } = await import('@/store/vault.store')
 
 const work: Tag = { id: 't-work', name: 'work', color: '#22c55e', createdAt: 0 }
 
@@ -80,6 +82,46 @@ describe('sidebar tag row checkbox', () => {
     fireEvent.click(screen.getByRole('button', { name: 'work' }))
     expect(onClick).toHaveBeenCalledOnce()
     expect(onToggle).not.toHaveBeenCalled()
+  })
+})
+
+describe('TagFilter active chips', () => {
+  const tags: Tag[] = ['a', 'b', 'c'].map((id) => ({
+    id,
+    name: `tag-${id}`,
+    color: '#22c55e',
+    createdAt: 0
+  }))
+
+  beforeEach(() => useVaultStore.setState({ tags, notes: [], noteTagsMap: {} }))
+
+  it.each([
+    [['a', 'b'], 1],
+    [['a', 'b', 'c'], 2]
+  ])('%j active → %i "and" separators', (activeTags, separators) => {
+    useUiStore.setState({ activeTags })
+    render(createElement(TagFilter))
+    expect(screen.getAllByText('and')).toHaveLength(separators)
+  })
+
+  it('a single active tag has no separator', () => {
+    useUiStore.setState({ activeTags: ['a'] })
+    render(createElement(TagFilter))
+    expect(screen.queryByText('and')).toBeNull()
+  })
+
+  it('removing a chip drops only that tag', () => {
+    useUiStore.setState({ activeTags: ['a', 'b'] })
+    render(createElement(TagFilter))
+    fireEvent.click(screen.getByTitle('Remove tag tag-a'))
+    expect(useUiStore.getState().activeTags).toEqual(['b'])
+  })
+
+  it('removing the last chip clears the filter', () => {
+    useUiStore.setState({ activeTags: ['a'] })
+    render(createElement(TagFilter))
+    fireEvent.click(screen.getByTitle('Remove tag tag-a'))
+    expect(useUiStore.getState().activeTags).toEqual([])
   })
 })
 
