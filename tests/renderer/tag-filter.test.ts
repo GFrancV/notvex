@@ -1,16 +1,38 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Tag } from '@shared/types'
+import type { NoteListItem, Tag } from '@shared/types'
 
-vi.mock('@/lib/ipc', () => ({ notvex: {} }))
+const ipcNotes = vi.hoisted(() => {
+  const note = (id: string, title: string): NoteListItem => ({
+    id,
+    title,
+    isPinned: false,
+    isTrashed: false,
+    createdAt: 0,
+    updatedAt: 0,
+    trashedAt: null,
+    tags: []
+  })
+  const all = [note('n-seed', 'seed phrase'), note('n-plan', 'work plan')]
+  return {
+    all,
+    list: vi.fn(() => Promise.resolve({ success: true, data: all })),
+    search: vi.fn((q: string) =>
+      Promise.resolve({ success: true, data: all.filter((n) => n.title.includes(q)) })
+    )
+  }
+})
+
+vi.mock('@/lib/ipc', () => ({ notvex: { notes: ipcNotes } }))
 
 const { TagItem } = await import('@/components/tags/TagItem')
 const { SidebarMenu, SidebarProvider } = await import('@/components/ui/sidebar')
 const { TagFilter } = await import('@/components/tags/TagFilter')
+const { NoteList } = await import('@/components/note-list')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 
@@ -144,6 +166,31 @@ describe('TagFilter active chips', () => {
     render(createElement(TagFilter, { count: 0 }))
     fireEvent.click(screen.getByTitle('Remove tag tag-a'))
     expect(useUiStore.getState().activeTags).toEqual([])
+  })
+})
+
+describe('note list under a tag filter', () => {
+  beforeEach(() => {
+    useUiStore.setState({ activeTags: [], searchQuery: '', showTrash: false, showPinned: false })
+    useVaultStore.setState({
+      notes: [],
+      tags: [work],
+      noteTagsMap: { 'n-seed': ['t-work'], 'n-plan': ['t-work'] }
+    })
+  })
+
+  it('clearing a search made before picking a tag shows every note with that tag', async () => {
+    render(createElement(NoteList))
+    await waitFor(() => expect(screen.getByText('work plan')).toBeTruthy())
+
+    act(() => useUiStore.setState({ searchQuery: 'seed' }))
+    await waitFor(() => expect(screen.queryByText('work plan')).toBeNull())
+
+    act(() => useUiStore.setState({ activeTags: ['t-work'] }))
+    act(() => useUiStore.setState({ searchQuery: '' }))
+
+    await waitFor(() => expect(screen.getByText('work plan')).toBeTruthy())
+    expect(screen.getByText('seed phrase')).toBeTruthy()
   })
 })
 

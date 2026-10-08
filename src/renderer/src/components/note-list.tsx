@@ -36,6 +36,13 @@ export function NoteList(): ReactNode {
     void loadNotes({ trashed: showTrash })
   }, [showTrash, showPinned, loadNotes])
 
+  // The tag filter works client-side on `notes`, which may still hold the results of a search
+  // made before the first tag was picked; start it from the full list.
+  const tagsActive = activeTags.length > 0
+  useEffect(() => {
+    if (tagsActive) void loadNotes({ trashed: showTrash })
+  }, [tagsActive, showTrash, loadNotes])
+
   // Debounced IPC search — only when no tag filter active (tag filter handled client-side)
   useEffect(() => {
     if (activeTags.length > 0) return
