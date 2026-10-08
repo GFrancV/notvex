@@ -33,7 +33,7 @@ vi.mock('@main/vault/crypto', async (importOriginal) => {
   }
 })
 
-describe('credential rotation key zeroing (issues #24, #38, #40)', () => {
+describe('master key zeroing on vault creation and credential rotation (issues #24, #38, #40, #81)', () => {
   let vaultDir: string | undefined
 
   afterEach(async () => {
@@ -45,6 +45,26 @@ describe('credential rotation key zeroing (issues #24, #38, #40)', () => {
     if (vaultDir) rmSync(vaultDir, { recursive: true, force: true })
     vaultDir = undefined
   })
+
+  it('createVault(): zeroes every Buffer.from(rawKey) copy of the new master key (issue #81)', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    const deriveKeySpy = vi.mocked(deriveKey)
+    deriveKeySpy.mockClear()
+    const bufferFromSpy = vi.spyOn(Buffer, 'from')
+
+    try {
+      await createVault(vaultPath, 'correct horse battery staple')
+
+      expect(deriveKeySpy).toHaveBeenCalledTimes(1)
+      const rawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
+      // Only the writeContainer masterKey copy: applyKey must not copy the key at all.
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, rawKeyRef, 1)
+    } finally {
+      bufferFromSpy.mockRestore()
+    }
+  }, 60_000)
 
   it('rotateVaultCredentials(): zeroes newRawKey even when the PRAGMA rekey to the new key fails (issue #24)', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
@@ -123,7 +143,7 @@ describe('credential rotation key zeroing (issues #24, #38, #40)', () => {
 
       // No authenticateVaultKey() step here: the only deriveKey() call is newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[0].value as Uint8Array
-      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef, 2)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
     } finally {
       bufferFromSpy.mockRestore()
@@ -207,7 +227,7 @@ describe('credential rotation key zeroing (issues #24, #38, #40)', () => {
 
       // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef, 2)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
       expectVerifyKeyMemzeroed(bufferFromSpy, deriveKeySpy.mock.results[0].value, memzeroSpy)
     } finally {
@@ -295,7 +315,7 @@ describe('credential rotation key zeroing (issues #24, #38, #40)', () => {
 
       // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef, 2)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
       expectVerifyKeyMemzeroed(bufferFromSpy, deriveKeySpy.mock.results[0].value, memzeroSpy)
     } finally {
@@ -390,7 +410,7 @@ describe('credential rotation key zeroing (issues #24, #38, #40)', () => {
 
       // Call 1 = authenticateVaultKey()'s verification derive; call 2 = newRawKey.
       const newRawKeyRef = deriveKeySpy.mock.results[1].value as Uint8Array
-      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef)
+      expectNewRawKeyCopiesZeroed(bufferFromSpy, newRawKeyRef, 2)
       expectNewRawKeyZeroedTwice(memzeroSpy, newRawKeyRef)
       expectVerifyKeyMemzeroed(bufferFromSpy, deriveKeySpy.mock.results[0].value, memzeroSpy)
     } finally {
