@@ -1,4 +1,4 @@
-import { type JSX, useCallback, useEffect } from 'react'
+import { type JSX, type ReactNode, useCallback, useEffect, useState } from 'react'
 
 import { EyeIcon, FileTextIcon, LockIcon, PlusIcon, TagIcon, Trash2Icon, XIcon } from 'lucide-react'
 
@@ -17,9 +17,47 @@ import {
   CommandShortcut
 } from './ui/command'
 
+const RECENT_NOTES = 8
+const INVISIBLE = ['​', '‌', '‍', '⁠']
+
+// cmdk keys items by `value`, so notes sharing a title would highlight together. A suffix of
+// zero-width characters (which cmdk doesn't trim and nobody types) keeps each value unique while
+// matching still runs on the title alone.
+function noteValue(title: string, index: number): string {
+  let suffix = ''
+  let i = index
+  do {
+    suffix += INVISIBLE[i % INVISIBLE.length]
+    i = Math.floor(i / INVISIBLE.length)
+  } while (i > 0)
+  return title + suffix
+}
+
 export function CommandPalette(): JSX.Element | null {
+  const { commandPaletteOpen, setCommandPaletteOpen } = useUiStore()
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setCommandPaletteOpen(true)
+      }
+      if (e.key === 'Escape') setCommandPaletteOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return (): void => window.removeEventListener('keydown', onKey)
+  }, [setCommandPaletteOpen])
+
+  return (
+    <CommandDialog open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen}>
+      <PaletteContent />
+    </CommandDialog>
+  )
+}
+
+// Mounted only while the dialog is open, so the query resets on every close.
+function PaletteContent(): ReactNode {
   const {
-    commandPaletteOpen,
     setCommandPaletteOpen,
     toggleEditorMode,
     setShowTrash,
@@ -36,18 +74,7 @@ export function CommandPalette(): JSX.Element | null {
     noteTagsMap
   } = useVaultStore()
   const handleNewNote = useCreateNote()
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        setCommandPaletteOpen(true)
-      }
-      if (e.key === 'Escape') setCommandPaletteOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return (): void => window.removeEventListener('keydown', onKey)
-  }, [setCommandPaletteOpen])
+  const [query, setQuery] = useState('')
 
   const run = useCallback(
     (action: () => void | Promise<void>): void => {
@@ -65,10 +92,16 @@ export function CommandPalette(): JSX.Element | null {
   }
 
   const noteHasTags = activeNoteId ? (noteTagsMap[activeNoteId] ?? []).length > 0 : false
+  const activeNotes = notes.filter((n) => !n.isTrashed)
+  const shownNotes = query ? activeNotes : activeNotes.slice(0, RECENT_NOTES)
 
   return (
-    <CommandDialog open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen}>
-      <CommandInput placeholder="Search notes, run commands…" />
+    <>
+      <CommandInput
+        placeholder="Search notes, run commands…"
+        value={query}
+        onValueChange={setQuery}
+      />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Commands">
@@ -105,24 +138,24 @@ export function CommandPalette(): JSX.Element | null {
           )}
         </CommandGroup>
 
-        {/* Recent notes */}
-        {notes.filter((n) => !n.isTrashed).length > 0 && (
+        {shownNotes.length > 0 && (
           <>
             <CommandSeparator />
             <CommandGroup heading="Notes">
-              {notes
-                .filter((n) => !n.isTrashed)
-                .slice(0, 8)
-                .map((note) => (
-                  <CommandItem key={note.id} onSelect={() => run(() => selectNote(note.id))}>
-                    <FileTextIcon />
-                    <span>{note.title || 'Untitled'}</span>
-                  </CommandItem>
-                ))}
+              {shownNotes.map((note, i) => (
+                <CommandItem
+                  key={note.id}
+                  value={noteValue(note.title || 'Untitled', i)}
+                  onSelect={() => run(() => selectNote(note.id))}
+                >
+                  <FileTextIcon />
+                  <span>{note.title || 'Untitled'}</span>
+                </CommandItem>
+              ))}
             </CommandGroup>
           </>
         )}
       </CommandList>
-    </CommandDialog>
+    </>
   )
 }
