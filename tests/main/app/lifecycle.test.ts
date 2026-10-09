@@ -57,6 +57,10 @@ vi.mock('@main/permission-guard', () => ({
   installPermissionGuard: vi.fn()
 }))
 
+vi.mock('@main/navigation-guard', () => ({
+  installNavigationGuard: vi.fn()
+}))
+
 vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),

@@ -8,6 +8,7 @@ import {
 } from './file-opener'
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { logError } from './log'
+import { installNavigationGuard } from './navigation-guard'
 import { installPermissionGuard } from './permission-guard'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'
@@ -40,6 +41,9 @@ if (app.isPackaged && blockedSwitches.some((s) => app.commandLine.hasSwitch(s)))
 
 // Must run before ready. Sandboxes every renderer regardless of its webPreferences.
 app.enableSandbox()
+
+// Before any webContents exists, so none starts unguarded.
+installNavigationGuard()
 
 // ─── Single-instance lock ──────────────────────────────────────────────────────
 

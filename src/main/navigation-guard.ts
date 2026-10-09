@@ -1,0 +1,22 @@
+import { app, shell } from 'electron'
+
+import { isSafeExternalUrl } from './url-guard'
+
+// Any page a webContents loads gets the preload's window.notvex, and the
+// renderer is a SPA that never navigates, so no webContents may navigate,
+// attach a <webview> or open a window. Installed app-wide so a window or view
+// added later is guarded from birth instead of relying on its author.
+export function installNavigationGuard(): void {
+  app.on('web-contents-created', (_event, contents) => {
+    // Covers a dropped file too, which navigates to file:// by default.
+    // Reloads (Vite HMR, Ctrl+R) don't fire will-navigate.
+    contents.on('will-navigate', (event) => event.preventDefault())
+    contents.on('will-attach-webview', (event) => event.preventDefault())
+
+    // External links open in the system browser, not in-app — http(s) only
+    contents.setWindowOpenHandler(({ url }) => {
+      if (isSafeExternalUrl(url)) void shell.openExternal(url)
+      return { action: 'deny' }
+    })
+  })
+}
