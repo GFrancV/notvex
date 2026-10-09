@@ -52,6 +52,10 @@ vi.mock('@main/vault/container', () => ({
   cleanupOrphanedTempDbs: vi.fn()
 }))
 
+vi.mock('@main/permission-guard', () => ({
+  installPermissionGuard: vi.fn()
+}))
+
 vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),
@@ -212,6 +216,16 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     await import('@main/index')
     await vi.waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1))
   }
+
+  // The renderer can request a permission while its page is still loading.
+  it('installs the permission guard once, before the first window', async () => {
+    await startApp()
+    const guard = vi.mocked((await import('@main/permission-guard')).installPermissionGuard)
+    expect(guard).toHaveBeenCalledOnce()
+    expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
+      createWindow.mock.invocationCallOrder[0]!
+    )
+  })
 
   it('open-file after the window closed stores the path and opens a new window', async () => {
     await startApp()
