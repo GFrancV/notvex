@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 import { notvex } from '@/lib/ipc'
-import type { Prefs, RecentVault } from '@shared/types'
+import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
 type SettingKey = keyof Omit<Prefs, 'recentVaults'>
 
@@ -11,6 +11,7 @@ interface PrefsStore {
   allowScreenCapture: boolean
   lockOnMinimize: boolean
   clipboardClearSeconds: number
+  noteSort: NoteSort
   recentVaults: RecentVault[]
   load: () => Promise<void>
   setPref: <K extends SettingKey>(key: K, value: Prefs[K]) => Promise<void>
@@ -23,6 +24,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
   allowScreenCapture: false,
   lockOnMinimize: false,
   clipboardClearSeconds: 60,
+  noteSort: { field: 'updatedAt', direction: 'desc' },
   recentVaults: [],
 
   load: async () => {
@@ -35,6 +37,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
         allowScreenCapture: p.allowScreenCapture,
         lockOnMinimize: p.lockOnMinimize,
         clipboardClearSeconds: p.clipboardClearSeconds,
+        noteSort: p.noteSort,
         recentVaults: p.recentVaults
       })
     } else {

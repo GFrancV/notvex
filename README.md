@@ -32,6 +32,7 @@ Built with Electron + React + TypeScript, for anyone who wants a fast, minimal, 
 🗒️ **Notes**
 - Create, edit, and autosave markdown notes — no manual saving required.
 - Pin important notes so they always show up first.
+- Sort the note list by date modified, date created, or title, ascending or descending — the choice is remembered.
 - Trash with restore or permanent delete, plus a one-click "empty trash".
 - Full-text search across all notes.
 

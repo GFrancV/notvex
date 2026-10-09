@@ -89,12 +89,20 @@ export interface GeneratedKeyFile {
   filename: string
 }
 
+export type NoteSortField = 'updatedAt' | 'createdAt' | 'title'
+
+export interface NoteSort {
+  field: NoteSortField
+  direction: 'asc' | 'desc'
+}
+
 export interface Prefs {
   recentVaults: RecentVault[]
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
   clipboardClearSeconds: number
+  noteSort: NoteSort
 }
 
 export interface UnlockThrottleStatus {
