@@ -20,6 +20,7 @@ vi.mock('electron', async () => {
     loadURL = vi.fn(async () => undefined)
     loadFile = vi.fn(async () => undefined)
     setTitle = vi.fn()
+    setMenuBarVisibility = vi.fn()
     setContentProtection = vi.fn()
     isDestroyed = vi.fn(() => false)
     close = vi.fn()

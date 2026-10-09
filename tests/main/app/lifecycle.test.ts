@@ -57,6 +57,10 @@ vi.mock('@main/permission-guard', () => ({
   installPermissionGuard: vi.fn()
 }))
 
+vi.mock('@main/app-menu', () => ({
+  installAppMenu: vi.fn()
+}))
+
 vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),
@@ -224,6 +228,16 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     const guard = vi.mocked((await import('@main/permission-guard')).installPermissionGuard)
     expect(guard).toHaveBeenCalledOnce()
     expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
+      createWindow.mock.invocationCallOrder[0]!
+    )
+  })
+
+  // The menu is app-wide: a window must never come up with Electron's default menu.
+  it('installs the app menu once, before the first window', async () => {
+    await startApp()
+    const install = vi.mocked((await import('@main/app-menu')).installAppMenu)
+    expect(install).toHaveBeenCalledOnce()
+    expect(install.mock.invocationCallOrder[0]).toBeLessThan(
       createWindow.mock.invocationCallOrder[0]!
     )
   })
