@@ -2,9 +2,9 @@ import { type ReactNode, useState } from 'react'
 
 import { toast } from 'sonner'
 
-import { COLOR_NAMES, PRESET_COLORS, TAG_NAME_MAX } from '@/lib/tag-colors'
+import { COLOR_NAMES, PRESET_COLORS } from '@/lib/tag-colors'
 import { useVaultStore } from '@/store/vault.store'
-import type { Tag } from '@shared/types'
+import { TAG_NAME_MAX, type Tag } from '@shared/types'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Field, FieldError, FieldLabel } from '../ui/field'

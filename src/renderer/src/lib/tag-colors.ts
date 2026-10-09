@@ -1,6 +1,3 @@
-// Roughly what fits in the sidebar row before truncating.
-export const TAG_NAME_MAX = 24
-
 export const PRESET_COLORS = [
   '#10b981',
   '#3b82f6',
