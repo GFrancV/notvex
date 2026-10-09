@@ -18,7 +18,7 @@ import {
 } from './ui/command'
 
 const RECENT_NOTES = 8
-const INVISIBLE = ['​', '‌', '‍', '⁠']
+const INVISIBLE = ['\u200b', '\u200c', '\u200d', '\u2060']
 
 // cmdk keys items by `value`, so notes sharing a title would highlight together. A suffix of
 // zero-width characters (which cmdk doesn't trim and nobody types) keeps each value unique while
