@@ -81,7 +81,10 @@ vi.mock('@main/vault/vault', () => ({
 
 vi.mock('@main/db/queries', () => ({}))
 vi.mock('@main/clipboard-guard', () => ({}))
-vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
+vi.mock('@main/drain-renderer', () => ({
+  FLUSH_ACK_TIMEOUT_MS: 200,
+  drainRenderer: vi.fn(async () => undefined)
+}))
 
 // The renderer a handler call comes from by default: the most recently created
 // window, i.e. the one the user is looking at.

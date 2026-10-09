@@ -39,6 +39,18 @@ describe('app:reload-window', () => {
     expect(order).toEqual(['drain', 'close', 'reload'])
   })
 
+  // A save that misses the short lock bound fails visibly on a lock, but a reload would take
+  // the page and its error toast with it. Nobody is racing a user-requested reload.
+  it('gives the renderer longer to flush than a lock does', async () => {
+    const { drainRenderer, FLUSH_ACK_TIMEOUT_MS } = await import('@main/drain-renderer')
+    vi.mocked(vault.isVaultOpen).mockReturnValue(true)
+
+    await invoke('app:reload-window')
+
+    const [, timeoutMs] = vi.mocked(drainRenderer).mock.lastCall!
+    expect(timeoutMs).toBeGreaterThan(FLUSH_ACK_TIMEOUT_MS)
+  })
+
   it('reloads straight away when no vault is open', async () => {
     await expect(invoke('app:reload-window')).resolves.toEqual({ success: true, data: true })
 

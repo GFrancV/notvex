@@ -113,6 +113,9 @@ function validTagName(name: unknown): string {
 // ─── Auto-lock + periodic sync state ─────────────────────────────────────────
 
 const VAULT_SYNC_INTERVAL_MS = 30_000
+// A lock keeps the renderer, so a save that misses the short drain bound still fails visibly; a
+// reload takes the page and that error with it. Nobody is racing a reload the user asked for.
+const RELOAD_DRAIN_TIMEOUT_MS = 2_000
 
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
@@ -138,13 +141,15 @@ function touchActivity(): void {
 // - macOS window-all-closed (the app stays alive): index.ts, a safety net with win = null.
 //   It can fire mid-quitAndInstall(); harmless, closeVault() is serialized and idempotent.
 // - renderer reloaded or crashed: window.ts, with win = null.
+// - Reload Window (app:reload-window): before reloading, with a longer drain bound.
 // relockOrphanedVault() is the exception: the renderer that asked for the unlock is gone, so
 // there's nothing to drain and it calls closeVault() directly.
 export async function closeVaultDrained(
-  win: BrowserWindow | null
+  win: BrowserWindow | null,
+  drainTimeoutMs?: number
 ): Promise<{ packFailed: boolean }> {
   if (!isVaultOpen()) return { packFailed: false }
-  if (win) await drainRenderer(win)
+  if (win) await drainRenderer(win, drainTimeoutMs)
   const { packFailed } = await closeVault()
   if (packFailed && win && !win.isDestroyed()) win.webContents.send('vault:pack-failed')
   return { packFailed }
@@ -1201,7 +1206,7 @@ export function registerIpcHandlers(
       if (isCreating) return fail('A vault is being created. Try again once it is ready.')
       const win = requireWin()
       cancelPendingConfirmations()
-      const { packFailed } = await closeVaultDrained(win)
+      const { packFailed } = await closeVaultDrained(win, RELOAD_DRAIN_TIMEOUT_MS)
       if (packFailed) {
         // a reload would discard the pack-failed toast, the only notice of the lost changes
         win.webContents.send('vault:auto-locked')

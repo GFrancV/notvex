@@ -13,7 +13,10 @@ let nextRequestId = 0
  * Gives the renderer a brief window to persist pending autosaves while the DB is still open.
  * Bounded by a timeout: a hung or crashed renderer must never keep the vault unlocked.
  */
-export async function drainRenderer(win: BrowserWindow): Promise<void> {
+export async function drainRenderer(
+  win: BrowserWindow,
+  timeoutMs = FLUSH_ACK_TIMEOUT_MS
+): Promise<void> {
   if (win.isDestroyed()) return
 
   const requestId = ++nextRequestId
@@ -27,7 +30,7 @@ export async function drainRenderer(win: BrowserWindow): Promise<void> {
     const onAck = (_e: unknown, ackId?: number): void => {
       if (ackId === requestId) finish()
     }
-    const timer = setTimeout(finish, FLUSH_ACK_TIMEOUT_MS)
+    const timer = setTimeout(finish, timeoutMs)
     ipcMain.on('vault:flush-complete', onAck)
 
     try {
