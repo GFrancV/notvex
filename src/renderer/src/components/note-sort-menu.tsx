@@ -38,7 +38,7 @@ export function NoteSortMenu(): ReactNode {
           size="icon-xs"
           aria-label="Sort notes"
           title="Sort notes"
-          className="text-muted-foreground"
+          className="titlebar-no-drag text-muted-foreground z-50"
         >
           <ArrowUpDownIcon />
         </Button>
