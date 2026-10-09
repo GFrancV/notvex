@@ -37,11 +37,15 @@ describe('buildMenuTemplate', () => {
     expect(found).not.toContain('forceReload')
   })
 
-  it.each(PLATFORMS)('%s keeps editing, zoom and fullscreen shortcuts', (platform) => {
-    const found = roles(buildMenuTemplate(true, platform))
-    expect(found).toEqual(
-      expect.arrayContaining(['editMenu', 'zoomIn', 'zoomOut', 'resetZoom', 'togglefullscreen'])
-    )
+  // An exact list, not "contains": a composite role such as viewMenu would bring back Electron's
+  // own reload / forceReload / toggleDevTools without naming them here.
+  const VIEW = ['resetZoom', 'zoomIn', 'zoomOut', 'togglefullscreen']
+  it.each([
+    ['darwin', ['appMenu', 'fileMenu', 'editMenu', ...VIEW, 'windowMenu']],
+    ['win32', ['editMenu', ...VIEW, 'windowMenu']],
+    ['linux', ['editMenu', ...VIEW, 'windowMenu']]
+  ] as const)('packaged %s has exactly the default menu roles minus reload', (platform, want) => {
+    expect(roles(buildMenuTemplate(true, platform))).toEqual(want)
   })
 
   // The renderer decides whether to confirm first; the menu must never reload by itself.
@@ -58,9 +62,19 @@ describe('buildMenuTemplate', () => {
     expect(win.webContents.send).toHaveBeenCalledExactlyOnceWith('app:reload-requested')
     expect(win.webContents.reload).not.toHaveBeenCalled()
   })
+})
 
-  it('macOS keeps the app and Window menus', () => {
-    const found = roles(buildMenuTemplate(true, 'darwin'))
-    expect(found).toEqual(expect.arrayContaining(['appMenu', 'windowMenu']))
+describe('installAppMenu', () => {
+  it('installs the template built for this build and platform', async () => {
+    const { Menu } = await import('electron')
+    const { installAppMenu } = await import('@main/app-menu')
+    const menu = {} as Electron.Menu
+    vi.mocked(Menu.buildFromTemplate).mockReturnValue(menu)
+
+    installAppMenu()
+
+    const [template] = vi.mocked(Menu.buildFromTemplate).mock.lastCall!
+    expect(roles(template as Item[])).toEqual(roles(buildMenuTemplate(true, process.platform)))
+    expect(Menu.setApplicationMenu).toHaveBeenCalledExactlyOnceWith(menu)
   })
 })

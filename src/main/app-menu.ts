@@ -27,10 +27,17 @@ export function buildMenuTemplate(
     ]
   }
 
+  // fileMenu holds Close (Cmd+W) on macOS; elsewhere windowMenu holds it (Ctrl+W) with Minimize.
   if (platform === 'darwin') {
-    return [{ role: 'appMenu' }, { role: 'editMenu' }, view, { role: 'windowMenu' }]
+    return [
+      { role: 'appMenu' },
+      { role: 'fileMenu' },
+      { role: 'editMenu' },
+      view,
+      { role: 'windowMenu' }
+    ]
   }
-  return [{ role: 'editMenu' }, view]
+  return [{ role: 'editMenu' }, view, { role: 'windowMenu' }]
 }
 
 export function installAppMenu(): void {
