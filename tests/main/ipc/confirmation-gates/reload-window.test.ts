@@ -68,6 +68,48 @@ describe('app:reload-window', () => {
     expect(fake.reload).toHaveBeenCalledOnce()
   })
 
+  // A gate left parked would leave isUnlocking set, so the reloaded page's unlock would fail
+  // with "Unlock already in progress" instead of reaching the gate again.
+  it.each([
+    ['migration', 'vault:migration-required', false],
+    ['dev-build', 'vault:dev-build-warning-required', true]
+  ])('lets the reloaded page unlock after a parked %s gate', async (_gate, channel, devBuild) => {
+    const container = await import('@main/vault/container')
+    vi.mocked(container.shouldWarnOpeningInDevBuild).mockReturnValue(devBuild)
+    const first = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    await invoke('app:reload-window')
+    await first
+    const second = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    expect(fake.sent.filter((c) => c === channel)).toHaveLength(2)
+    await invoke('app:reload-window')
+    await second
+  })
+
+  // The reload's did-navigate replaces the renderer; an unlock finishing after it must not
+  // leave the vault open for the new page to boot into.
+  it('relocks a vault whose unlock finishes after the reload', async () => {
+    let finishOpen: () => void = () => {}
+    vi.mocked(vault.openVault).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOpen = () => resolve({ maj: 1, min: 0 })
+        })
+    )
+    fake.reload.mockImplementation(() => ipc.markRendererReplaced())
+    const unlocking = invoke('vault:open', '/v.nvx', 'pw')
+    await flush()
+
+    await expect(invoke('app:reload-window')).resolves.toEqual({ success: true, data: true })
+    finishOpen()
+
+    await expect(unlocking).resolves.toEqual({ success: false, error: 'No window is open' })
+    expect(vault.closeVault).toHaveBeenCalledOnce()
+  })
+
   // The pack-failed toast is the only notice of lost changes; a reload would discard it.
   it('locks without reloading when the vault fails to pack', async () => {
     vi.mocked(vault.isVaultOpen).mockReturnValue(true)
