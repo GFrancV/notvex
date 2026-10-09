@@ -18,9 +18,11 @@ const note = (id: string, title: string, isTrashed = false): NoteListItem => ({
 })
 
 vi.mock('@/lib/ipc', () => ({ notvex: {} }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const { useCreateNote } = await import('@/hooks/use-create-note')
 const { CommandPalette } = await import('@/components/command-palette')
+const { toast } = await import('sonner')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 
@@ -124,6 +126,51 @@ describe('useCreateNote', () => {
     const { result } = renderHook(() => useCreateNote())
     await act(() => result.current())
     expect(createNote).toHaveBeenCalledWith(undefined)
+  })
+})
+
+describe('command palette create note from query', () => {
+  const createOption = (q: string): HTMLElement | null => option(`Create note "${q}"`)
+
+  it('is hidden while the query is empty', () => {
+    openPalette([note('n-1', 'alpha')])
+    expect(screen.queryByRole('option', { name: /^Create note/ })).toBeNull()
+  })
+
+  it('shows when nothing else matches, without the empty message', () => {
+    openPalette([note('n-1', 'alpha')])
+    type('qqq')
+    expect(createOption('qqq')).not.toBeNull()
+    expect(screen.queryByText('No results found.')).toBeNull()
+  })
+
+  it('comes after matching notes so Enter still opens the match', () => {
+    openPalette([note('n-1', 'alpha')])
+    type('alpha')
+    const options = screen.getAllByRole('option')
+    expect(options[0].textContent).toBe('alpha')
+    expect(options[0].getAttribute('aria-selected')).toBe('true')
+    expect(options.at(-1)).toBe(createOption('alpha'))
+  })
+
+  it('creates and opens a note titled with the trimmed query', async () => {
+    openPalette([note('n-1', 'alpha')])
+    type('  my idea ')
+    await act(async () => fireEvent.click(createOption('my idea')!))
+    expect(createNote).toHaveBeenCalledWith({ title: 'my idea', content: '' })
+    expect(useVaultStore.getState().activeNoteId).toBe('n-new')
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+  })
+
+  it.each([
+    ['Create note "qqq"', 'qqq'],
+    [/^New Note/, 'new note']
+  ])('toasts when creating from %s fails', async (name, query) => {
+    createNote.mockRejectedValueOnce(new Error('db locked'))
+    openPalette([])
+    type(query)
+    await act(async () => fireEvent.click(screen.getByRole('option', { name })))
+    expect(toast.error).toHaveBeenCalledWith('Failed to create note')
   })
 })
 

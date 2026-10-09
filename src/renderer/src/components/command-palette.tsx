@@ -1,5 +1,7 @@
 import { type JSX, type ReactNode, useCallback, useEffect, useState } from 'react'
 
+import { toast } from 'sonner'
+
 import { EyeIcon, FileTextIcon, LockIcon, PlusIcon, TagIcon, Trash2Icon, XIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
@@ -19,6 +21,8 @@ import {
 
 const RECENT_NOTES = 8
 const INVISIBLE = ['\u200b', '\u200c', '\u200d', '\u2060']
+// Note values always start with a title, so a bare suffix character never collides with one.
+const CREATE_NOTE_VALUE = INVISIBLE[0]
 
 // cmdk keys items by `value`, so notes sharing a title would highlight together. A suffix of
 // zero-width characters (which cmdk doesn't trim and nobody types) keeps each value unique while
@@ -91,9 +95,18 @@ function PaletteContent(): ReactNode {
     setNotes([])
   }
 
+  const handleCreate = async (title?: string): Promise<void> => {
+    try {
+      await handleNewNote(title)
+    } catch {
+      toast.error('Failed to create note')
+    }
+  }
+
   const noteHasTags = activeNoteId ? (noteTagsMap[activeNoteId] ?? []).length > 0 : false
   const activeNotes = notes.filter((n) => !n.isTrashed)
   const shownNotes = query ? activeNotes : activeNotes.slice(0, RECENT_NOTES)
+  const newTitle = query.trim()
 
   return (
     <>
@@ -103,11 +116,11 @@ function PaletteContent(): ReactNode {
         onValueChange={setQuery}
       />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        {!newTitle && <CommandEmpty>No results found.</CommandEmpty>}
         <CommandGroup heading="Commands">
           <CommandItem
             keywords={['create note', 'add note', 'blank']}
-            onSelect={() => run(handleNewNote)}
+            onSelect={() => run(handleCreate)}
           >
             <PlusIcon />
             <span>New Note</span>
@@ -172,6 +185,21 @@ function PaletteContent(): ReactNode {
               ))}
             </CommandGroup>
           </>
+        )}
+
+        {/* Its value never matches, so cmdk scores it 0 and sorts its group last (Enter keeps picking a
+            real match) and would hide both item and group without forceMount. */}
+        {newTitle && (
+          <CommandGroup forceMount>
+            <CommandItem
+              forceMount
+              value={CREATE_NOTE_VALUE}
+              onSelect={() => run(() => handleCreate(newTitle))}
+            >
+              <PlusIcon />
+              <span>{`Create note "${newTitle}"`}</span>
+            </CommandItem>
+          </CommandGroup>
         )}
       </CommandList>
     </>
