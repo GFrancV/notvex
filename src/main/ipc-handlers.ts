@@ -140,11 +140,14 @@ function touchActivity(): void {
 // - renderer reloaded or crashed: window.ts, with win = null.
 // relockOrphanedVault() is the exception: the renderer that asked for the unlock is gone, so
 // there's nothing to drain and it calls closeVault() directly.
-export async function closeVaultDrained(win: BrowserWindow | null): Promise<void> {
-  if (!isVaultOpen()) return
+export async function closeVaultDrained(
+  win: BrowserWindow | null
+): Promise<{ packFailed: boolean }> {
+  if (!isVaultOpen()) return { packFailed: false }
   if (win) await drainRenderer(win)
   const { packFailed } = await closeVault()
   if (packFailed && win && !win.isDestroyed()) win.webContents.send('vault:pack-failed')
+  return { packFailed }
 }
 
 export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {
@@ -1181,6 +1184,24 @@ export function registerIpcHandlers(
   handle('app:is-dev', () => {
     try {
       return ok(!app.isPackaged)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // The app's only renderer reload. Resolves true once reloading, false when it locked instead.
+  handle('app:reload-window', async () => {
+    try {
+      const win = requireWin()
+      cancelPendingConfirmations()
+      const { packFailed } = await closeVaultDrained(win)
+      if (packFailed) {
+        // a reload would discard the pack-failed toast, the only notice of the lost changes
+        win.webContents.send('vault:auto-locked')
+        return ok(false)
+      }
+      win.webContents.reload()
+      return ok(true)
     } catch (e) {
       return fail(e)
     }

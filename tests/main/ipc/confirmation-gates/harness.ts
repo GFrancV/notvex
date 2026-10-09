@@ -87,13 +87,20 @@ vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefi
 let lastSender: WebContents | null = null
 
 // Like a real BrowserWindow, sending to a destroyed one throws.
-export function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void } {
+export function fakeWindow(): {
+  win: BrowserWindow
+  sent: string[]
+  reload: ReturnType<typeof vi.fn>
+  destroy: () => void
+} {
   const sent: string[] = []
+  const reload = vi.fn()
   let destroyed = false
   const win = {
     isDestroyed: () => destroyed,
     webContents: {
       isDestroyed: () => destroyed,
+      reload,
       send: (channel: string) => {
         if (destroyed) throw new Error('Object has been destroyed')
         sent.push(channel)
@@ -101,7 +108,7 @@ export function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () 
     }
   } as unknown as BrowserWindow
   lastSender = win.webContents
-  return { win, sent, destroy: () => (destroyed = true) }
+  return { win, sent, reload, destroy: () => (destroyed = true) }
 }
 
 // The app's own page, which every handler requires as the calling frame.
