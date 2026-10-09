@@ -76,7 +76,7 @@ describe('app:reload-window', () => {
       vi.mocked(vault.createVault).mockImplementation(
         () =>
           new Promise((resolve, reject) => {
-            finishCreate = (fail) => (fail ? reject(fail) : resolve(['recovery', 'words']))
+            finishCreate = (fail) => (fail ? reject(fail) : resolve({ mnemonic: 'recovery words' }))
           })
       )
     })
