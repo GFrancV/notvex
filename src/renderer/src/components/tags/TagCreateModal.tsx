@@ -35,7 +35,10 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
     setLoading(true)
     try {
       if (editTag) {
-        await updateTag(editTag.id, { name: name.trim(), color })
+        // A name stored before main enforced TAG_NAME_MAX may exceed it; resending it unchanged
+        // would make a color-only edit fail.
+        const trimmed = name.trim()
+        await updateTag(editTag.id, trimmed === editTag.name ? { color } : { name: trimmed, color })
         toast.success('Tag updated')
       } else {
         await createTag({ name: name.trim(), color })
