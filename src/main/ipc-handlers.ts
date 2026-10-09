@@ -5,7 +5,7 @@ import { autoUpdater } from 'electron-updater'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, dirname, join } from 'node:path'
 
-import { CURRENT_VERSION_MIN, Prefs } from '@shared/types'
+import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
 import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
@@ -96,6 +96,17 @@ function handle(
 
 function requireVault(): void {
   if (!isVaultOpen()) throw new Error('Vault is locked')
+}
+
+// The renderer's maxLength only limits typing, so any caller of window.notvex.tags.* reaches
+// here unchecked. Validated on write only: tags stored before the cap stay readable.
+function validTagName(name: unknown): string {
+  const trimmed = typeof name === 'string' ? name.trim() : ''
+  if (trimmed.length === 0) throw new Error('Tag name cannot be empty')
+  if (trimmed.length > TAG_NAME_MAX) {
+    throw new Error(`Tag name must be at most ${TAG_NAME_MAX} characters`)
+  }
+  return trimmed
 }
 
 // ─── Auto-lock + periodic sync state ─────────────────────────────────────────
@@ -963,8 +974,9 @@ export function registerIpcHandlers(
   handle('tags:create', async (_e, input: CreateTagInput) => {
     try {
       requireVault()
+      const name = validTagName(input?.name)
       touchActivity()
-      return ok(await withVaultLock(() => createTag(getDb(), input)))
+      return ok(await withVaultLock(() => createTag(getDb(), { ...input, name })))
     } catch (e) {
       return fail(e)
     }
@@ -975,8 +987,9 @@ export function registerIpcHandlers(
     async (_e, input: { noteId: string; name: string; color: string }) => {
       try {
         requireVault()
+        const name = validTagName(input?.name)
         touchActivity()
-        return ok(await withVaultLock(() => createTagAndAssign(getDb(), input)))
+        return ok(await withVaultLock(() => createTagAndAssign(getDb(), { ...input, name })))
       } catch (e) {
         return fail(e)
       }
@@ -996,8 +1009,10 @@ export function registerIpcHandlers(
   handle('tags:update', async (_e, id: string, patch: TagPatch) => {
     try {
       requireVault()
+      const checked =
+        patch?.name === undefined ? patch : { ...patch, name: validTagName(patch.name) }
       touchActivity()
-      await withVaultLock(() => updateTag(getDb(), id, patch))
+      await withVaultLock(() => updateTag(getDb(), id, checked))
       return ok(null)
     } catch (e) {
       return fail(e)
