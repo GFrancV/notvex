@@ -45,13 +45,15 @@ describe('sortNotes', () => {
     expect(ids(sortNotes(notes, { field: 'title', direction: 'desc' }))).toEqual(['1', '2', '3'])
   })
 
-  it.each(['asc', 'desc'] as const)(
-    'puts untitled notes last when sorting by title %s',
-    (direction) => {
-      const notes = [note('u', { title: '' }), note('b', { title: 'b' }), note('a', { title: 'a' })]
-      expect(ids(sortNotes(notes, { field: 'title', direction })).at(-1)).toBe('u')
-    }
-  )
+  // New notes are stored as 'Untitled'; clearing a title stores ''. Both read as untitled.
+  it.each(
+    (['asc', 'desc'] as const).flatMap((direction) =>
+      ['', '   ', 'Untitled'].map((title) => ({ direction, title }))
+    )
+  )('puts $title-titled notes last when sorting by title $direction', ({ direction, title }) => {
+    const notes = [note('u', { title }), note('v', { title: 'Vault' }), note('a', { title: 'a' })]
+    expect(ids(sortNotes(notes, { field: 'title', direction })).at(-1)).toBe('u')
+  })
 
   it('keeps pinned notes first whatever the sort', () => {
     const notes = [

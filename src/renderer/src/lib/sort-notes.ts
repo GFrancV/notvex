@@ -1,9 +1,19 @@
 import type { NoteListItem, NoteSort } from '@shared/types'
 
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+// New notes are stored as 'Untitled' and a cleared title as '', but both read as untitled.
+function isUntitled(title: string): boolean {
+  const trimmed = title.trim()
+  return trimmed === '' || trimmed === 'Untitled'
+}
+
 function compareTitles(a: string, b: string, dir: number): number {
   // Untitled notes say nothing about their place in an alphabet, so they sink in both directions.
-  if (!a || !b) return Number(!a) - Number(!b)
-  return dir * a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+  const aUntitled = isUntitled(a)
+  const bUntitled = isUntitled(b)
+  if (aUntitled || bUntitled) return Number(aUntitled) - Number(bUntitled)
+  return dir * collator.compare(a, b)
 }
 
 function compareField(a: NoteListItem, b: NoteListItem, sort: NoteSort): number {
