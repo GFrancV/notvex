@@ -314,7 +314,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   })
 })
 
-describe('lifecycle: Chromium remote-debugging switches', () => {
+describe('lifecycle: Chromium switches that bypass the renderer boundary', () => {
   let app: Electron.App
   let exit: ReturnType<typeof vi.spyOn>
 
@@ -338,7 +338,15 @@ describe('lifecycle: Chromium remote-debugging switches', () => {
     return import('@main/index')
   }
 
-  it.each(['remote-debugging-port', 'remote-debugging-pipe'])(
+  it.each([
+    'remote-debugging-port',
+    'remote-debugging-pipe',
+    'renderer-cmd-prefix',
+    'gpu-launcher',
+    'utility-cmd-prefix',
+    'browser-subprocess-path',
+    'no-sandbox'
+  ])(
     'a packaged build launched with --%s exits before taking the single-instance lock',
     async (switchName) => {
       await launchWith(switchName, true)
