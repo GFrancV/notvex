@@ -56,9 +56,13 @@ describe('installNavigationGuard', () => {
   })
 
   // will-navigate only covers the main frame; an injected <iframe> must not load or navigate.
-  it('blocks subframe navigation', () => {
+  // The main frame is blocked here too, so the guard doesn't hinge on telling them apart.
+  it.each([
+    ['a subframe', false],
+    ['the main frame', true]
+  ])('blocks frame navigation in %s', (_frame, isMainFrame) => {
     const contents = createContents()
-    const event = { isMainFrame: false, preventDefault: vi.fn() }
+    const event = { isMainFrame, preventDefault: vi.fn() }
 
     contents.emit('will-frame-navigate', event)
 
