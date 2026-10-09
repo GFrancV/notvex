@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: true },
+  BrowserWindow: class {
+    webContents = { send: vi.fn(), reload: vi.fn() }
+  },
   Menu: { buildFromTemplate: vi.fn(), setApplicationMenu: vi.fn() }
 }))
 
+const { BrowserWindow } = await import('electron')
 const { buildMenuTemplate } = await import('@main/app-menu')
 
 type Item = Electron.MenuItemConstructorOptions
@@ -38,6 +42,21 @@ describe('buildMenuTemplate', () => {
     expect(found).toEqual(
       expect.arrayContaining(['editMenu', 'zoomIn', 'zoomOut', 'resetZoom', 'togglefullscreen'])
     )
+  })
+
+  // The renderer decides whether to confirm first; the menu must never reload by itself.
+  it.each(PLATFORMS)('%s Reload Window asks the renderer instead of reloading', (platform) => {
+    const items = buildMenuTemplate(true, platform).flatMap((m) =>
+      Array.isArray(m.submenu) ? (m.submenu as Item[]) : []
+    )
+    const reloadItem = items.find((item) => item.accelerator === 'CmdOrCtrl+R')
+    const win = new BrowserWindow()
+
+    reloadItem?.click?.({} as never, win, {} as never)
+
+    expect(reloadItem?.label).toBe('Reload Window')
+    expect(win.webContents.send).toHaveBeenCalledExactlyOnceWith('app:reload-requested')
+    expect(win.webContents.reload).not.toHaveBeenCalled()
   })
 
   it('macOS keeps the app and Window menus', () => {

@@ -6,13 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipc = vi.hoisted(() => ({
   status: vi.fn(),
-  reloadWindow: vi.fn()
+  reloadWindow: vi.fn(),
+  onReloadRequested: vi.fn<(cb: () => void) => () => void>(() => () => {})
 }))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     vault: { status: ipc.status },
-    app: { reloadWindow: ipc.reloadWindow }
+    app: { reloadWindow: ipc.reloadWindow },
+    onReloadRequested: ipc.onReloadRequested
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -83,6 +85,35 @@ describe('requestReload', () => {
 
 describe('ReloadWindowDialog', () => {
   beforeEach(() => vaultOpen(true))
+
+  // The menu item and its accelerator arrive as app:reload-requested.
+  it('asks for confirmation when the menu requests a reload', async () => {
+    let trigger: (() => void) | undefined
+    ipc.onReloadRequested.mockImplementation((cb) => {
+      trigger = cb
+      return () => {}
+    })
+    render(createElement(ReloadWindowDialog))
+
+    await act(async () => trigger?.())
+
+    expect(await screen.findByText(DIALOG_TITLE)).not.toBeNull()
+    expect(ipc.reloadWindow).not.toHaveBeenCalled()
+  })
+
+  it('reloads straight away on a menu request with no vault open', async () => {
+    vaultOpen(false)
+    let trigger: (() => void) | undefined
+    ipc.onReloadRequested.mockImplementation((cb) => {
+      trigger = cb
+      return () => {}
+    })
+    render(createElement(ReloadWindowDialog))
+
+    await act(async () => trigger?.())
+
+    await waitFor(() => expect(ipc.reloadWindow).toHaveBeenCalledOnce())
+  })
 
   it('Cancel closes the dialog without reloading', async () => {
     await requestWithDialogMounted()

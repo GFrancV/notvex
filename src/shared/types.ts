@@ -252,5 +252,6 @@ export interface NotvexAPI {
   onAutoLocked(callback: () => void): () => void
   /** Fires when a close couldn't pack the vault, so the latest changes were lost. */
   onPackFailed(callback: () => void): () => void
+  onReloadRequested(callback: () => void): () => void
   onOpenFile(callback: (filePath: string) => void): () => void
 }

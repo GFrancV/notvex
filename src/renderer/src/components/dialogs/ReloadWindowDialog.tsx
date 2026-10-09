@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -9,12 +9,16 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { reloadWindow } from '@/lib/reload-window'
+import { notvex } from '@/lib/ipc'
+import { reloadWindow, requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
 
+// Mounted in App for every view, so the menu accelerator works on Unlock and Setup too.
 export function ReloadWindowDialog(): ReactNode {
   const { reloadConfirmOpen, setReloadConfirmOpen } = useUiStore()
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => notvex.onReloadRequested(() => void requestReload()), [])
 
   const confirm = async (): Promise<void> => {
     setLoading(true)

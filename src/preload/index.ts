@@ -199,6 +199,13 @@ const api: NotvexAPI = {
       ipcRenderer.off('vault:pack-failed', listener)
     }
   },
+  onReloadRequested: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('app:reload-requested', listener)
+    return (): void => {
+      ipcRenderer.off('app:reload-requested', listener)
+    }
+  },
   onOpenFile: (callback) => {
     const listener = (_e: unknown, filePath: string): void => callback(filePath)
     ipcRenderer.on('vault:open-file', listener)
