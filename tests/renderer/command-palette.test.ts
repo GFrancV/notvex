@@ -62,6 +62,10 @@ function type(query: string): void {
   fireEvent.change(screen.getByRole('combobox'), { target: { value: query } })
 }
 
+function press(key: string): void {
+  fireEvent.keyDown(screen.getByRole('combobox'), { key })
+}
+
 const option = (name: string): HTMLElement | null => screen.queryByRole('option', { name })
 
 describe('command palette notes', () => {
@@ -101,6 +105,27 @@ describe('command palette notes', () => {
     const options = screen.getAllByRole('option', { name: 'Untitled' })
     expect(new Set(options.map((el) => el.dataset.value)).size).toBe(6)
     expect(options.filter((el) => el.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+  })
+
+  it('opens the highlighted note among duplicates on Enter', () => {
+    openPalette([1, 2, 3, 4, 5, 6].map((i) => note(`n-${i}`, 'Untitled')))
+    type('Untitled')
+    for (let i = 0; i < 4; i++) press('ArrowDown')
+    press('Enter')
+    expect(useVaultStore.getState().activeNoteId).toBe('n-5')
+  })
+
+  it('keeps apart a title that already ends in a zero-width character', () => {
+    // index 0 "q" + ZWNJ and index 4 "q" would both end up as "q" + ZWNJ + ZWSP
+    const zwnj = String.fromCharCode(0x200c)
+    openPalette([`q${zwnj}`, 'b', 'c', 'd', 'q'].map((t, i) => note(`n-${i}`, t)))
+    type('q')
+    const values = screen.getAllByRole('option').map((el) => el.dataset.value)
+    expect(new Set(values).size).toBe(values.length)
+    const selected = screen
+      .getAllByRole('option')
+      .filter((el) => el.getAttribute('aria-selected') === 'true')
+    expect(selected).toHaveLength(1)
   })
 })
 
@@ -150,6 +175,21 @@ describe('command palette create note from query', () => {
     expect(options[0].textContent).toBe('alpha')
     expect(options[0].getAttribute('aria-selected')).toBe('true')
     expect(options.at(-1)).toBe(createOption('alpha'))
+  })
+
+  it('opens the matching note on Enter instead of creating one', () => {
+    openPalette([note('n-1', 'alpha')])
+    type('alpha')
+    press('Enter')
+    expect(useVaultStore.getState().activeNoteId).toBe('n-1')
+    expect(createNote).not.toHaveBeenCalled()
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+  })
+
+  it('is hidden for a whitespace-only query', () => {
+    openPalette([note('n-1', 'alpha')])
+    type('   ')
+    expect(screen.queryByRole('option', { name: /^Create note/ })).toBeNull()
   })
 
   it('creates and opens a note titled with the trimmed query', async () => {

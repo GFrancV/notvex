@@ -20,16 +20,18 @@ import {
 } from './ui/command'
 
 const RECENT_NOTES = 8
-const INVISIBLE = ['\u200b', '\u200c', '\u200d', '\u2060']
-// Note values always start with a title, so a bare suffix character never collides with one.
-const CREATE_NOTE_VALUE = INVISIBLE[0]
+const ZERO_WIDTH_DIGITS = [0x200b, 0x200c, 0x200d, 0x2060].map((c) => String.fromCharCode(c))
+// Every note value ends in one of ZERO_WIDTH_DIGITS; this character is not one of them.
+const CREATE_NOTE_VALUE = String.fromCharCode(0x2063)
 
 // cmdk keys items by `value`, so notes sharing a title would highlight together. Appending the
 // index written with zero-width digits (which cmdk doesn't trim and nobody types) keeps each value
-// unique while matching still runs on the title alone.
+// unique while matching still runs on the title alone. Those characters are stripped from the title
+// first, or a pasted title ending in one could produce another note's value.
 function noteValue(title: string, index: number): string {
-  const digits = index.toString(INVISIBLE.length)
-  return title + [...digits].map((d) => INVISIBLE[Number(d)]).join('')
+  const base = [...title].filter((c) => !ZERO_WIDTH_DIGITS.includes(c)).join('')
+  const digits = index.toString(ZERO_WIDTH_DIGITS.length)
+  return base + [...digits].map((d) => ZERO_WIDTH_DIGITS[Number(d)]).join('')
 }
 
 export function CommandPalette(): JSX.Element | null {
@@ -182,8 +184,8 @@ function PaletteContent(): ReactNode {
           </>
         )}
 
-        {/* Its value never matches, so cmdk scores it 0 and sorts its group last (Enter keeps picking a
-            real match) and would hide both item and group without forceMount. */}
+        {/* Must stay last in JSX: cmdk doesn't reorder groups, and Enter has to keep picking a real
+            match. Its value never matches, so without forceMount cmdk would hide item and group. */}
         {newTitle && (
           <CommandGroup forceMount>
             <CommandItem
