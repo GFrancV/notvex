@@ -232,6 +232,17 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     )
   })
 
+  // web-contents-created only reaches listeners registered before the webContents exists, so
+  // the guard must be in place before ready, not just before the first window.
+  it('installs the navigation guard once, before ready', async () => {
+    await startApp()
+    const guard = vi.mocked((await import('@main/navigation-guard')).installNavigationGuard)
+    expect(guard).toHaveBeenCalledOnce()
+    expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(app.whenReady).mock.invocationCallOrder[0]!
+    )
+  })
+
   it('open-file after the window closed stores the path and opens a new window', async () => {
     await startApp()
     windows[0].close()
