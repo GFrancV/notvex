@@ -10,6 +10,7 @@ import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { NoteListItem } from '@shared/types'
+import { NoteSortMenu } from './note-sort-menu'
 import { TagFilter } from './tags/TagFilter'
 import { Button } from './ui/button'
 import {
@@ -154,7 +155,10 @@ export function NoteList(): ReactNode {
       {/* Header */}
       <div className="flex items-center justify-between gap-1.5 px-4 py-3">
         <h2 className="text-base">{listTitle()}</h2>
-        <span className="text-muted-foreground text-xs">{filteredNotes.length}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground text-xs">{filteredNotes.length}</span>
+          <NoteSortMenu />
+        </div>
       </div>
 
       {/* Tag filter header */}
@@ -228,7 +232,9 @@ export function NoteList(): ReactNode {
                     </div>
                     <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
                       <span className="shrink-0 whitespace-nowrap">
-                        {formatTimeAgo(note.updatedAt)}
+                        {formatTimeAgo(
+                          noteSort.field === 'createdAt' ? note.createdAt : note.updatedAt
+                        )}
                       </span>
                       {note.tags.length > 0 && (
                         <>
