@@ -48,9 +48,11 @@ export function NoteSortMenu(): ReactNode {
         <DropdownMenuRadioGroup
           value={noteSort.field}
           // A new field starts in its natural direction: A–Z for titles, newest first for dates.
-          onValueChange={(v) =>
+          // Radix also fires this when the checked item is picked again, which must not reset it.
+          onValueChange={(v) => {
+            if (v === noteSort.field) return
             update({ field: v as NoteSortField, direction: v === 'title' ? 'asc' : 'desc' })
-          }
+          }}
         >
           {FIELDS.map((f) => (
             <DropdownMenuRadioItem key={f.value} value={f.value}>

@@ -4,34 +4,40 @@ import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NoteListItem } from '@shared/types'
+import type { NoteListItem, Prefs } from '@shared/types'
 
 const ipc = vi.hoisted(() => {
   const now = Date.now()
+  const H = 60 * 60 * 1000
   const note = (
     id: string,
     title: string,
-    createdAgo: number,
-    updatedAgo: number
+    createdDays: number,
+    updatedHours: number
   ): NoteListItem => ({
     id,
     title,
     isPinned: false,
     isTrashed: false,
-    createdAt: now - createdAgo,
-    updatedAt: now - updatedAgo,
+    createdAt: now - createdDays * 24 * H,
+    updatedAt: now - updatedHours * H,
     trashedAt: null,
     tags: []
   })
-  const H = 60 * 60 * 1000
-  const all = [note('n-b', 'Beta', 3 * 24 * H, H), note('n-a', 'Alpha', 24 * H, 2 * H)]
+  // Alpha, Gamma, Beta is an order no sort produces, so a list rendered in it was not sorted:
+  //   title A–Z: Alpha Beta Gamma    modified newest: Beta Alpha Gamma
+  //   created newest: Alpha Beta Gamma (and the reverse of each)
+  const all = [note('n-a', 'Alpha', 1, 2), note('n-g', 'Gamma', 3, 3), note('n-b', 'Beta', 2, 1)]
   return {
     all,
     notes: {
       list: vi.fn(() => Promise.resolve({ success: true, data: all })),
       search: vi.fn(() => Promise.resolve({ success: true, data: all }))
     },
-    prefs: { set: vi.fn(() => Promise.resolve({ success: true, data: null })) }
+    prefs: {
+      get: vi.fn(),
+      set: vi.fn(() => Promise.resolve({ success: true, data: null }))
+    }
   }
 })
 
@@ -49,6 +55,13 @@ function openSortMenu(): void {
   fireEvent.keyDown(screen.getByRole('button', { name: 'Sort notes' }), { key: 'Enter' })
 }
 
+async function pick(name: string): Promise<void> {
+  const item = await screen.findByRole('menuitemradio', { name })
+  await act(async () => {
+    fireEvent.click(item)
+  })
+}
+
 beforeEach(() => {
   // In jsdom, from the second time a Radix menu opens in a file, its own auto-focus on mount
   // registers as a focus outside the menu and closes it at once. Real browsers don't do this;
@@ -61,6 +74,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.clearAllMocks()
 })
@@ -68,35 +82,56 @@ afterEach(() => {
 describe('note list sort menu', () => {
   it('reorders the list and saves the choice when a field is picked', async () => {
     render(createElement(NoteList))
-    expect(titles()).toEqual(['Beta', 'Alpha'])
+    expect(titles()).toEqual(['Beta', 'Alpha', 'Gamma'])
 
     openSortMenu()
-    await act(async () => {
-      fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Title' }))
-    })
+    await pick('Title')
 
     // Picking a field resets to its natural direction (A–Z), not the previous newest-first.
-    expect(titles()).toEqual(['Alpha', 'Beta'])
+    expect(titles()).toEqual(['Alpha', 'Beta', 'Gamma'])
     expect(ipc.prefs.set).toHaveBeenCalledExactlyOnceWith('noteSort', {
       field: 'title',
       direction: 'asc'
     })
   })
 
+  it('starts a date field newest first when coming from title', async () => {
+    usePrefsStore.setState({ noteSort: { field: 'title', direction: 'asc' } })
+    render(createElement(NoteList))
+
+    openSortMenu()
+    await pick('Date created')
+
+    expect(ipc.prefs.set).toHaveBeenCalledExactlyOnceWith('noteSort', {
+      field: 'createdAt',
+      direction: 'desc'
+    })
+  })
+
+  it('keeps the direction when the already-checked field is picked again', async () => {
+    usePrefsStore.setState({ noteSort: { field: 'title', direction: 'desc' } })
+    render(createElement(NoteList))
+
+    openSortMenu()
+    await pick('Title')
+
+    expect(titles()).toEqual(['Gamma', 'Beta', 'Alpha'])
+    expect(ipc.prefs.set).not.toHaveBeenCalled()
+  })
+
   it('labels the direction for the active field and saves a direction change', async () => {
     usePrefsStore.setState({ noteSort: { field: 'title', direction: 'asc' } })
     render(createElement(NoteList))
+    expect(titles()).toEqual(['Alpha', 'Beta', 'Gamma'])
 
     openSortMenu()
     expect(await screen.findByRole('menuitemradio', { name: 'A–Z' })).toHaveProperty(
       'ariaChecked',
       'true'
     )
-    await act(async () => {
-      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Z–A' }))
-    })
+    await pick('Z–A')
 
-    expect(titles()).toEqual(['Beta', 'Alpha'])
+    expect(titles()).toEqual(['Gamma', 'Beta', 'Alpha'])
     expect(ipc.prefs.set).toHaveBeenCalledExactlyOnceWith('noteSort', {
       field: 'title',
       direction: 'desc'
@@ -119,5 +154,39 @@ describe('note list sort menu', () => {
 
     expect(screen.getByText('3 days ago')).toBeDefined()
     expect(screen.queryByText('about 1 hour ago')).toBeNull()
+  })
+})
+
+describe('note list sort sources', () => {
+  it('sorts search results, which arrive in server order', async () => {
+    vi.useFakeTimers()
+    usePrefsStore.setState({ noteSort: { field: 'title', direction: 'asc' } })
+    render(createElement(NoteList))
+
+    act(() => useUiStore.setState({ searchQuery: 'a' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+
+    expect(ipc.notes.search).toHaveBeenCalledWith('a')
+    expect(titles()).toEqual(['Alpha', 'Beta', 'Gamma'])
+  })
+
+  it('applies the sort saved in prefs once the store loads', async () => {
+    const saved: Prefs = {
+      recentVaults: [],
+      autoLockMinutes: 15,
+      allowScreenCapture: false,
+      lockOnMinimize: false,
+      clipboardClearSeconds: 60,
+      noteSort: { field: 'title', direction: 'desc' }
+    }
+    ipc.prefs.get.mockResolvedValue({ success: true, data: saved })
+    render(createElement(NoteList))
+    expect(titles()).toEqual(['Beta', 'Alpha', 'Gamma'])
+
+    await act(() => usePrefsStore.getState().load())
+
+    expect(titles()).toEqual(['Gamma', 'Beta', 'Alpha'])
   })
 })

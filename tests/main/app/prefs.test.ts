@@ -23,6 +23,11 @@ describe('getPrefs noteSort', () => {
     expect(getPrefs().noteSort).toEqual({ field: 'title', direction: 'asc' })
   })
 
+  it('uses the default for a prefs.json written before noteSort existed', () => {
+    fsState.contents = JSON.stringify({ autoLockMinutes: 5 })
+    expect(getPrefs().noteSort).toEqual({ field: 'updatedAt', direction: 'desc' })
+  })
+
   it.each([
     ['an unknown field', { field: 'xyz', direction: 'asc' }],
     ['an unknown direction', { field: 'title', direction: 'sideways' }],
