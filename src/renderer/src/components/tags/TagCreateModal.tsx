@@ -2,9 +2,9 @@ import { type ReactNode, useState } from 'react'
 
 import { toast } from 'sonner'
 
-import { COLOR_NAMES, PRESET_COLORS, TAG_NAME_MAX } from '@/lib/tag-colors'
+import { COLOR_NAMES, PRESET_COLORS } from '@/lib/tag-colors'
 import { useVaultStore } from '@/store/vault.store'
-import type { Tag } from '@shared/types'
+import { TAG_NAME_MAX, type Tag } from '@shared/types'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Field, FieldError, FieldLabel } from '../ui/field'
@@ -35,7 +35,10 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
     setLoading(true)
     try {
       if (editTag) {
-        await updateTag(editTag.id, { name: name.trim(), color })
+        // A name stored before main enforced TAG_NAME_MAX may exceed it; resending it unchanged
+        // would make a color-only edit fail.
+        const trimmed = name.trim()
+        await updateTag(editTag.id, trimmed === editTag.name ? { color } : { name: trimmed, color })
         toast.success('Tag updated')
       } else {
         await createTag({ name: name.trim(), color })

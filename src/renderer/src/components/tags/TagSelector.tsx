@@ -3,8 +3,9 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { PRESET_COLORS, TAG_NAME_MAX } from '@/lib/tag-colors'
+import { PRESET_COLORS } from '@/lib/tag-colors'
 import { useVaultStore } from '@/store/vault.store'
+import { TAG_NAME_MAX } from '@shared/types'
 import { Button } from '../ui/button'
 
 interface TagSelectorProps {

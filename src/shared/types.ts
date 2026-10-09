@@ -28,6 +28,9 @@ export interface Tag {
   createdAt: number
 }
 
+// Roughly what fits in the sidebar row before truncating.
+export const TAG_NAME_MAX = 24
+
 export interface CreateNoteInput {
   title: string
   content: string
