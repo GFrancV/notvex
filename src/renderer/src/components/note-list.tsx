@@ -4,7 +4,9 @@ import { PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucid
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { notvex } from '@/lib/ipc'
+import { sortNotes } from '@/lib/sort-notes'
 import { cn, formatTimeAgo } from '@/lib/utils'
+import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { NoteListItem } from '@shared/types'
@@ -83,7 +85,12 @@ export function NoteList(): ReactNode {
     return result
   }, [notes, showPinned, activeTags, noteTagsMap, searchQuery])
 
-  const displayedNotes = showPinned || activeTags.length > 0 ? filteredNotes : notes
+  // Sorted last so every path that fills `notes` (list, search, tags) gets the user's order.
+  const noteSort = usePrefsStore((s) => s.noteSort)
+  const displayedNotes = useMemo(
+    () => sortNotes(showPinned || activeTags.length > 0 ? filteredNotes : notes, noteSort),
+    [showPinned, activeTags.length, filteredNotes, notes, noteSort]
+  )
 
   const handlePin = useCallback(
     async (note: NoteListItem): Promise<void> => {
