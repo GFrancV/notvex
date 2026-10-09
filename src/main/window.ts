@@ -1,4 +1,4 @@
-import { app, BrowserWindow, powerMonitor, shell } from 'electron'
+import { app, BrowserWindow, powerMonitor } from 'electron'
 import { join } from 'path'
 
 import {
@@ -10,7 +10,7 @@ import {
 } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
-import { devRendererUrl, isSafeExternalUrl, rendererIndexPath } from './url-guard'
+import { devRendererUrl, rendererIndexPath } from './url-guard'
 import { isVaultOpen } from './vault/vault'
 
 const isMac = process.platform === 'darwin'
@@ -52,18 +52,6 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     win.setTitle('Notvex - Dev')
     win.on('page-title-updated', (event) => event.preventDefault())
   }
-
-  // The renderer is a SPA and never navigates; any page this window loads
-  // would get the preload's window.notvex, so block every navigation —
-  // including a dropped file, which navigates to file:// by default.
-  // Reloads (Vite HMR, Ctrl+R) don't fire will-navigate.
-  win.webContents.on('will-navigate', (event) => event.preventDefault())
-
-  // Open external links in system browser, not in-app — http(s) only
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isSafeExternalUrl(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
 
   const devUrl = devRendererUrl()
   if (devUrl) {

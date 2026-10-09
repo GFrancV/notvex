@@ -32,7 +32,7 @@ const RELEASE_NOTES_SANITIZE_CONFIG = {
 
 // Release notes come from the GitHub API over the network — force external
 // links to open via the OS browser (handled by setWindowOpenHandler in
-// main/window.ts) instead of navigating inside the app window.
+// main/navigation-guard.ts) instead of navigating inside the app window.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     node.setAttribute('target', '_blank')
