@@ -55,6 +55,16 @@ describe('installNavigationGuard', () => {
     expect(event.preventDefault).toHaveBeenCalledOnce()
   })
 
+  // will-navigate only covers the main frame; an injected <iframe> must not load or navigate.
+  it('blocks subframe navigation', () => {
+    const contents = createContents()
+    const event = { isMainFrame: false, preventDefault: vi.fn() }
+
+    contents.emit('will-frame-navigate', event)
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+  })
+
   it('blocks attaching a <webview>', () => {
     const contents = createContents()
     const event = { preventDefault: vi.fn() }

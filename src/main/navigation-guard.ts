@@ -11,6 +11,8 @@ export function installNavigationGuard(): void {
     // Covers a dropped file too, which navigates to file:// by default.
     // Reloads (Vite HMR, Ctrl+R) don't fire will-navigate.
     contents.on('will-navigate', (event) => event.preventDefault())
+    // will-navigate only sees the main frame; this also stops subframes.
+    contents.on('will-frame-navigate', (event) => event.preventDefault())
     contents.on('will-attach-webview', (event) => event.preventDefault())
 
     // External links open in the system browser, not in-app — http(s) only
