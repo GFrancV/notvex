@@ -14,6 +14,7 @@ vi.mock('electron', async () => {
     setName = vi.fn()
     enableSandbox = vi.fn()
     requestSingleInstanceLock = vi.fn(() => true)
+    commandLine = { hasSwitch: vi.fn<(name: string) => boolean>(() => false) }
     whenReady = vi.fn(() => new Promise<void>(() => {}))
   }
   return {
@@ -324,5 +325,62 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(windows[0].focus).toHaveBeenCalled()
     expect(fileOpener.resolveOpenFilePath).toHaveBeenCalledWith(windows[0], NVX)
     expect(createWindow).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('lifecycle: Chromium switches that bypass the renderer boundary', () => {
+  let app: Electron.App
+  let exit: ReturnType<typeof vi.spyOn>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.resetModules()
+    app = (await import('electron')).app
+    app.removeAllListeners()
+    exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+  })
+
+  afterEach(() => {
+    Object.assign(app, { isPackaged: true })
+    vi.mocked(app.commandLine.hasSwitch).mockImplementation(() => false)
+    vi.restoreAllMocks()
+  })
+
+  function launchWith(switchName: string, isPackaged: boolean): Promise<unknown> {
+    Object.assign(app, { isPackaged })
+    vi.mocked(app.commandLine.hasSwitch).mockImplementation((name) => name === switchName)
+    return import('@main/index')
+  }
+
+  it.each([
+    'remote-debugging-port',
+    'remote-debugging-pipe',
+    'renderer-cmd-prefix',
+    'gpu-launcher',
+    'utility-cmd-prefix',
+    'browser-subprocess-path',
+    'no-sandbox'
+  ])(
+    'a packaged build launched with --%s exits before taking the single-instance lock',
+    async (switchName) => {
+      await launchWith(switchName, true)
+
+      expect(exit).toHaveBeenCalledWith(1)
+      expect(exit.mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(app.requestSingleInstanceLock).mock.invocationCallOrder[0]
+      )
+    }
+  )
+
+  it('a dev build keeps --remote-debugging-port available', async () => {
+    await launchWith('remote-debugging-port', false)
+
+    expect(exit).not.toHaveBeenCalled()
+  })
+
+  it('a packaged build launched without the switches starts normally', async () => {
+    await launchWith('', true)
+
+    expect(exit).not.toHaveBeenCalled()
   })
 })
