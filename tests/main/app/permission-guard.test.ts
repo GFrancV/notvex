@@ -31,10 +31,10 @@ describe('installPermissionGuard', () => {
   })
 
   function request(permission: string): boolean {
-    const callback = vi.fn()
+    const callback = vi.fn<(granted: boolean) => void>()
     requestHandler(null, permission, callback)
     expect(callback).toHaveBeenCalledOnce()
-    return callback.mock.calls[0]![0] as boolean
+    return callback.mock.calls[0]![0]
   }
 
   it('grants clipboard write, which navigator.clipboard.writeText needs', () => {
