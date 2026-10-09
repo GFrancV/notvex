@@ -24,7 +24,9 @@ describe('renderer CSP', () => {
     // repoint relative URLs and <form action> could post data off-app.
     ['base-uri', "'none'"],
     ['form-action', "'none'"],
-    ['object-src', "'none'"]
+    ['object-src', "'none'"],
+    // The app uses no frames, and for a file:// page 'self' would admit local files.
+    ['frame-src', "'none'"]
   ])('sets %s to %s', (directive, value) => {
     expect(cspDirectives().get(directive)).toBe(value)
   })
