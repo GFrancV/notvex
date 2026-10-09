@@ -95,13 +95,12 @@ describe('command palette notes', () => {
     expect(option('india')).toBeNull()
   })
 
-  it('highlights one of two notes that share a title', () => {
-    openPalette([note('n-1', 'Untitled'), note('n-2', 'Untitled')])
+  it('keeps notes that share a title apart', () => {
+    openPalette([1, 2, 3, 4, 5, 6].map((i) => note(`n-${i}`, 'Untitled')))
     type('Untitled')
-    const selected = screen
-      .getAllByRole('option', { name: 'Untitled' })
-      .filter((el) => el.getAttribute('aria-selected') === 'true')
-    expect(selected).toHaveLength(1)
+    const options = screen.getAllByRole('option', { name: 'Untitled' })
+    expect(new Set(options.map((el) => el.dataset.value)).size).toBe(6)
+    expect(options.filter((el) => el.getAttribute('aria-selected') === 'true')).toHaveLength(1)
   })
 })
 

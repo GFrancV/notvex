@@ -9,8 +9,8 @@ export function useCreateNote(): (title?: string) => Promise<void> {
 
   return useCallback(
     async (title?: string) => {
-      const t = (title ?? searchQuery).trim()
-      const note = await createNote(t ? { title: t, content: '' } : undefined)
+      const trimmed = (title ?? searchQuery).trim()
+      const note = await createNote(trimmed ? { title: trimmed, content: '' } : undefined)
       setActiveNoteId(note.id)
       setSearchQuery('')
       requestFocusTitle()

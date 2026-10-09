@@ -24,17 +24,12 @@ const INVISIBLE = ['\u200b', '\u200c', '\u200d', '\u2060']
 // Note values always start with a title, so a bare suffix character never collides with one.
 const CREATE_NOTE_VALUE = INVISIBLE[0]
 
-// cmdk keys items by `value`, so notes sharing a title would highlight together. A suffix of
-// zero-width characters (which cmdk doesn't trim and nobody types) keeps each value unique while
-// matching still runs on the title alone.
+// cmdk keys items by `value`, so notes sharing a title would highlight together. Appending the
+// index written with zero-width digits (which cmdk doesn't trim and nobody types) keeps each value
+// unique while matching still runs on the title alone.
 function noteValue(title: string, index: number): string {
-  let suffix = ''
-  let i = index
-  do {
-    suffix += INVISIBLE[i % INVISIBLE.length]
-    i = Math.floor(i / INVISIBLE.length)
-  } while (i > 0)
-  return title + suffix
+  const digits = index.toString(INVISIBLE.length)
+  return title + [...digits].map((d) => INVISIBLE[Number(d)]).join('')
 }
 
 export function CommandPalette(): JSX.Element | null {
