@@ -223,6 +223,9 @@ interface ThrottleState {
 
 const unlockThrottle: ThrottleState = { failedAttempts: 0, lockedUntil: 0 }
 let isUnlocking = false
+// createVault() only reports the vault open once it returns, so until then a reload would find it
+// closed, skip the confirmation and drop the recovery phrase the page is about to show.
+let isCreating = false
 
 // Bumped when the renderer is replaced while its window stays alive (reload,
 // crash). An unlock started under an older renderer has nobody left to show
@@ -399,6 +402,7 @@ export function registerIpcHandlers(
   })
 
   handle('vault:create', async (_e, filePath: string, password: string) => {
+    isCreating = true
     try {
       const result = await createVault(filePath, password, !app.isPackaged)
       recordVaultUsed(filePath)
@@ -406,6 +410,8 @@ export function registerIpcHandlers(
       return ok(result)
     } catch (e) {
       return fail(e)
+    } finally {
+      isCreating = false
     }
   })
 
@@ -1192,6 +1198,7 @@ export function registerIpcHandlers(
   // The app's only renderer reload. Resolves true once reloading, false when it locked instead.
   handle('app:reload-window', async () => {
     try {
+      if (isCreating) return fail('A vault is being created. Try again once it is ready.')
       const win = requireWin()
       cancelPendingConfirmations()
       const { packFailed } = await closeVaultDrained(win)

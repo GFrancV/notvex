@@ -67,6 +67,46 @@ describe('app:reload-window', () => {
     expect(fake.sent).toEqual(['vault:pack-failed', 'vault:auto-locked'])
   })
 
+  // The vault only reports open once createVault() returns, so a reload mid-create would find it
+  // closed and the recovery phrase would never be shown.
+  describe('while a vault is being created', () => {
+    let finishCreate: (fail?: Error) => void
+
+    beforeEach(() => {
+      vi.mocked(vault.createVault).mockImplementation(
+        () =>
+          new Promise((resolve, reject) => {
+            finishCreate = (fail) => (fail ? reject(fail) : resolve(['recovery', 'words']))
+          })
+      )
+    })
+
+    it('refuses to reload', async () => {
+      const creating = invoke('vault:create', '/v.nvx', 'pw')
+      await flush()
+
+      const res = await invoke('app:reload-window')
+
+      expect(res).toMatchObject({ success: false })
+      expect(fake.reload).not.toHaveBeenCalled()
+      finishCreate()
+      await creating
+    })
+
+    it.each([
+      ['succeeded', undefined],
+      ['failed', new Error('disk full')]
+    ])('reloads again once the create %s', async (_outcome, error) => {
+      const creating = invoke('vault:create', '/v.nvx', 'pw')
+      await flush()
+      finishCreate(error)
+      await creating
+
+      await expect(invoke('app:reload-window')).resolves.toEqual({ success: true, data: true })
+      expect(fake.reload).toHaveBeenCalledOnce()
+    })
+  })
+
   it('reports a failed close and does not reload', async () => {
     vi.mocked(vault.isVaultOpen).mockReturnValue(true)
     vi.mocked(vault.closeVault).mockRejectedValue(new Error('disk full'))
