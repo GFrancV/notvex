@@ -155,4 +155,20 @@ describe('drainRenderer', () => {
     await expect(drainRenderer(win)).resolves.toBeUndefined()
     expect(ipc.listenerCount('vault:flush-complete')).toBe(0)
   })
+
+  it('7 · waits out a longer timeout when the caller gives one', async () => {
+    const { win } = fakeWindow()
+
+    let settled = false
+    const drained = drainRenderer(win, 2000).then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await drained
+    expect(settled).toBe(true)
+  })
 })

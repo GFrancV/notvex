@@ -48,7 +48,7 @@ Built with Electron + React + TypeScript, for anyone who wants a fast, minimal, 
 - Dedicated reading view (`Ctrl+Shift+E`) that renders the full markdown with GFM support, syntax-highlighted code, and copy-to-clipboard.
 
 🧩 **Command palette & shortcuts**
-- Command palette (`Ctrl+K`) to jump to any note by title, create a note straight from what you typed, toggle views, show the trash, or lock the vault without touching the mouse. Commands also match common synonyms ("create note", "logout", "bin").
+- Command palette (`Ctrl+K`) to jump to any note by title, create a note straight from what you typed, toggle views, show the trash, lock the vault, or reload the window without touching the mouse. Commands also match common synonyms ("create note", "logout", "bin").
 - Keyboard shortcuts for the most common actions (see table below).
 
 🧩 **Multi-vault**
@@ -146,6 +146,7 @@ Installers are output to `dist/`.
 |---|---|
 | `Ctrl+K` | Command palette |
 | `Ctrl+L` | Lock vault |
+| `Ctrl+R` | Reload window (saves pending edits and locks the vault, after asking if it's unlocked) |
 | `Ctrl+N` | New note |
 | `Ctrl+Shift+F` | Focus search |
 | `Ctrl+Shift+E` | Toggle reading / edit view |

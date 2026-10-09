@@ -160,7 +160,9 @@ describe('every close path packs the latest edit (issue #61)', () => {
     }
 
     try {
-      await expect(ipc.closeVaultDrained(destroyed as never)).resolves.toBeUndefined()
+      await expect(ipc.closeVaultDrained(destroyed as never)).resolves.toEqual({
+        packFailed: true
+      })
 
       expect(destroyed.webContents.send).not.toHaveBeenCalled()
       expect(isVaultOpen()).toBe(false)

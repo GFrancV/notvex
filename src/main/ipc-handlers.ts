@@ -113,6 +113,9 @@ function validTagName(name: unknown): string {
 // ─── Auto-lock + periodic sync state ─────────────────────────────────────────
 
 const VAULT_SYNC_INTERVAL_MS = 30_000
+// A lock keeps the renderer, so a save that misses the short drain bound still fails visibly; a
+// reload takes the page and that error with it. Nobody is racing a reload the user asked for.
+const RELOAD_DRAIN_TIMEOUT_MS = 2_000
 
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
@@ -138,13 +141,18 @@ function touchActivity(): void {
 // - macOS window-all-closed (the app stays alive): index.ts, a safety net with win = null.
 //   It can fire mid-quitAndInstall(); harmless, closeVault() is serialized and idempotent.
 // - renderer reloaded or crashed: window.ts, with win = null.
+// - Reload Window (app:reload-window): before reloading, with a longer drain bound.
 // relockOrphanedVault() is the exception: the renderer that asked for the unlock is gone, so
 // there's nothing to drain and it calls closeVault() directly.
-export async function closeVaultDrained(win: BrowserWindow | null): Promise<void> {
-  if (!isVaultOpen()) return
-  if (win) await drainRenderer(win)
+export async function closeVaultDrained(
+  win: BrowserWindow | null,
+  drainTimeoutMs?: number
+): Promise<{ packFailed: boolean }> {
+  if (!isVaultOpen()) return { packFailed: false }
+  if (win) await drainRenderer(win, drainTimeoutMs)
   const { packFailed } = await closeVault()
   if (packFailed && win && !win.isDestroyed()) win.webContents.send('vault:pack-failed')
+  return { packFailed }
 }
 
 export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {
@@ -220,6 +228,9 @@ interface ThrottleState {
 
 const unlockThrottle: ThrottleState = { failedAttempts: 0, lockedUntil: 0 }
 let isUnlocking = false
+// createVault() only reports the vault open once it returns, so until then a reload would find it
+// closed, skip the confirmation and drop the recovery phrase the page is about to show.
+let isCreating = false
 
 // Bumped when the renderer is replaced while its window stays alive (reload,
 // crash). An unlock started under an older renderer has nobody left to show
@@ -396,6 +407,7 @@ export function registerIpcHandlers(
   })
 
   handle('vault:create', async (_e, filePath: string, password: string) => {
+    isCreating = true
     try {
       const result = await createVault(filePath, password, !app.isPackaged)
       recordVaultUsed(filePath)
@@ -403,6 +415,8 @@ export function registerIpcHandlers(
       return ok(result)
     } catch (e) {
       return fail(e)
+    } finally {
+      isCreating = false
     }
   })
 
@@ -1181,6 +1195,25 @@ export function registerIpcHandlers(
   handle('app:is-dev', () => {
     try {
       return ok(!app.isPackaged)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // The app's only renderer reload. Resolves true once reloading, false when it locked instead.
+  handle('app:reload-window', async () => {
+    try {
+      if (isCreating) return fail('A vault is being created. Try again once it is ready.')
+      const win = requireWin()
+      cancelPendingConfirmations()
+      const { packFailed } = await closeVaultDrained(win, RELOAD_DRAIN_TIMEOUT_MS)
+      if (packFailed) {
+        // a reload would discard the pack-failed toast, the only notice of the lost changes
+        win.webContents.send('vault:auto-locked')
+        return ok(false)
+      }
+      win.webContents.reload()
+      return ok(true)
     } catch (e) {
       return fail(e)
     }
