@@ -23,7 +23,11 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0), setPref: vi.fn() }))
+vi.mock('@main/prefs', async (importOriginal) => ({
+  isNoteSort: (await importOriginal<typeof import('@main/prefs')>()).isNoteSort,
+  getPref: vi.fn(() => 0),
+  setPref: vi.fn()
+}))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))

@@ -37,6 +37,7 @@ import {
   getCurrentVaultPath,
   getPref,
   getPrefs,
+  isNoteSort,
   promoteVaultToTop,
   recordVaultUsed,
   setPref
@@ -242,15 +243,7 @@ const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = 
   allowScreenCapture: (v) => typeof v === 'boolean',
   lockOnMinimize: (v) => typeof v === 'boolean',
   clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
-  noteSort: (v) => {
-    if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
-    const { field, direction, ...rest } = v as Record<string, unknown>
-    return (
-      Object.keys(rest).length === 0 &&
-      ['updatedAt', 'createdAt', 'title'].includes(field as string) &&
-      (direction === 'asc' || direction === 'desc')
-    )
-  }
+  noteSort: (v) => isNoteSort(v)
 }
 
 // ─── Migration coordinator ────────────────────────────────────────────────────
