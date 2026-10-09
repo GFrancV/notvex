@@ -105,33 +105,51 @@ function PaletteContent(): ReactNode {
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Commands">
-          <CommandItem onSelect={() => run(handleNewNote)}>
+          <CommandItem
+            keywords={['create note', 'add note', 'blank']}
+            onSelect={() => run(handleNewNote)}
+          >
             <PlusIcon />
             <span>New Note</span>
             <CommandShortcut>Ctrl+N</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => run(toggleEditorMode)}>
+          <CommandItem
+            keywords={['preview', 'read mode', 'edit mode', 'markdown']}
+            onSelect={() => run(toggleEditorMode)}
+          >
             <EyeIcon />
             <span>Toggle Reading View</span>
             <CommandShortcut>Ctrl+Shift+E</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => run(() => setShowTrash(true))}>
+          <CommandItem
+            keywords={['deleted notes', 'bin', 'recycle', 'restore']}
+            onSelect={() => run(() => setShowTrash(true))}
+          >
             <Trash2Icon />
             <span>Show Trash</span>
           </CommandItem>
-          <CommandItem onSelect={() => run(handleLock)}>
+          <CommandItem
+            keywords={['close vault', 'logout', 'sign out', 'exit']}
+            onSelect={() => run(handleLock)}
+          >
             <LockIcon />
             <span>Lock Vault</span>
             <CommandShortcut>Ctrl+L</CommandShortcut>
           </CommandItem>
           {activeNoteId && (
-            <CommandItem onSelect={() => run(() => setTagSelectorNoteId(activeNoteId))}>
+            <CommandItem
+              keywords={['add tag', 'assign tag', 'label']}
+              onSelect={() => run(() => setTagSelectorNoteId(activeNoteId))}
+            >
               <TagIcon />
               <span>Tag note with...</span>
             </CommandItem>
           )}
           {activeNoteId && noteHasTags && (
-            <CommandItem onSelect={() => run(() => setRemoveTagNoteId(activeNoteId))}>
+            <CommandItem
+              keywords={['untag', 'delete tag', 'unlabel']}
+              onSelect={() => run(() => setRemoveTagNoteId(activeNoteId))}
+            >
               <XIcon />
               <span>Remove tag from note...</span>
             </CommandItem>

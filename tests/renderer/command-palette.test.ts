@@ -126,3 +126,20 @@ describe('useCreateNote', () => {
     expect(createNote).toHaveBeenCalledWith(undefined)
   })
 })
+
+describe('command palette synonyms', () => {
+  it.each([
+    ['create note', /^New Note/],
+    ['add note', /^New Note/],
+    ['preview', /^Toggle Reading View/],
+    ['bin', /^Show Trash/],
+    ['logout', /^Lock Vault/],
+    ['assign tag', /^Tag note with/],
+    ['untag', /^Remove tag from note/]
+  ])('"%s" finds %s', (query, command) => {
+    useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
+    openPalette([note('n-1', 'zzz')])
+    type(query)
+    expect(screen.queryByRole('option', { name: command })).not.toBeNull()
+  })
+})
