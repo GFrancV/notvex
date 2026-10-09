@@ -9,7 +9,8 @@ const DEFAULTS: Prefs = {
   autoLockMinutes: 15,
   allowScreenCapture: false,
   lockOnMinimize: false,
-  clipboardClearSeconds: 60
+  clipboardClearSeconds: 60,
+  noteSort: { field: 'updatedAt', direction: 'desc' }
 }
 
 const MAX_RECENT_VAULTS = 5

@@ -241,7 +241,16 @@ const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = 
   autoLockMinutes: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 480,
   allowScreenCapture: (v) => typeof v === 'boolean',
   lockOnMinimize: (v) => typeof v === 'boolean',
-  clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v)
+  clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
+  noteSort: (v) => {
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+    const { field, direction, ...rest } = v as Record<string, unknown>
+    return (
+      Object.keys(rest).length === 0 &&
+      ['updatedAt', 'createdAt', 'title'].includes(field as string) &&
+      (direction === 'asc' || direction === 'desc')
+    )
+  }
 }
 
 // ─── Migration coordinator ────────────────────────────────────────────────────
