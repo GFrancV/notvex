@@ -43,6 +43,7 @@ vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
 const { createTag, createTagAndAssign, updateTag } = await import('@main/db/queries')
+const { isVaultOpen, withVaultLock } = await import('@main/vault/vault')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 
@@ -80,6 +81,8 @@ const TOO_LONG = { success: false, error: 'Tag name must be at most 24 character
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // clearAllMocks keeps queued *Once values; an unconsumed one would leak into the next test.
+  vi.mocked(isVaultOpen).mockReset()
   registerIpcHandlers({} as BrowserWindow, () => null)
 })
 
@@ -89,14 +92,23 @@ describe.each(channels)('$channel tag name validation', ({ call, query, nameSent
   it.each([
     ['empty', ''],
     ['whitespace-only', '   '],
-    ['non-string', 42]
-  ])('rejects a %s name without touching the DB', async (_label, name) => {
+    ['non-string', 42],
+    ['null', null]
+  ])('rejects a %s name before taking the vault lock', async (_label, name) => {
     expect(await call(name)).toEqual(EMPTY)
+    expect(withVaultLock).not.toHaveBeenCalled()
     expect(query).not.toHaveBeenCalled()
   })
 
-  it('rejects a name over the limit without touching the DB', async () => {
+  it('rejects a name over the limit before taking the vault lock', async () => {
     expect(await call('a'.repeat(25))).toEqual(TOO_LONG)
+    expect(withVaultLock).not.toHaveBeenCalled()
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('reports a locked vault before judging the name', async () => {
+    vi.mocked(isVaultOpen).mockReturnValueOnce(false)
+    expect(await call('a'.repeat(25))).toEqual({ success: false, error: 'Vault is locked' })
     expect(query).not.toHaveBeenCalled()
   })
 
