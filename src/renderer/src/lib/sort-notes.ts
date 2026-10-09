@@ -6,16 +6,18 @@ function compareTitles(a: string, b: string, dir: number): number {
   return dir * a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 }
 
-export function sortNotes(notes: NoteListItem[], sort: NoteSort): NoteListItem[] {
+function compareField(a: NoteListItem, b: NoteListItem, sort: NoteSort): number {
   const dir = sort.direction === 'asc' ? 1 : -1
+  if (sort.field === 'title') return compareTitles(a.title, b.title, dir)
+  if (sort.field === 'createdAt') return dir * (a.createdAt - b.createdAt)
+  return dir * (a.updatedAt - b.updatedAt)
+}
+
+export function sortNotes(notes: NoteListItem[], sort: NoteSort): NoteListItem[] {
   return [...notes].sort(
     (a, b) =>
       Number(b.isPinned) - Number(a.isPinned) ||
-      (sort.field === 'title'
-        ? compareTitles(a.title, b.title, dir)
-        : sort.field === 'createdAt'
-          ? dir * (a.createdAt - b.createdAt)
-          : dir * (a.updatedAt - b.updatedAt)) ||
+      compareField(a, b, sort) ||
       b.updatedAt - a.updatedAt ||
       a.id.localeCompare(b.id)
   )

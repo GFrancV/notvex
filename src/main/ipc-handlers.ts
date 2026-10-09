@@ -243,6 +243,8 @@ const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = 
   allowScreenCapture: (v) => typeof v === 'boolean',
   lockOnMinimize: (v) => typeof v === 'boolean',
   clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
+  // Resolved per call, not at load: suites that mock @main/prefs without isNoteSort would
+  // otherwise fail on import.
   noteSort: (v) => isNoteSort(v)
 }
 
