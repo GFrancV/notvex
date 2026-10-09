@@ -47,7 +47,7 @@ Built with Electron + React + TypeScript, for anyone who wants a fast, minimal, 
 - Dedicated reading view (`Ctrl+Shift+E`) that renders the full markdown with GFM support, syntax-highlighted code, and copy-to-clipboard.
 
 🧩 **Command palette & shortcuts**
-- Command palette (`Ctrl+K`) to jump to recent notes, create notes, toggle views, show the trash, or lock the vault without touching the mouse.
+- Command palette (`Ctrl+K`) to jump to any note by title, create a note straight from what you typed, toggle views, show the trash, or lock the vault without touching the mouse. Commands also match common synonyms ("create note", "logout", "bin").
 - Keyboard shortcuts for the most common actions (see table below).
 
 🧩 **Multi-vault**
