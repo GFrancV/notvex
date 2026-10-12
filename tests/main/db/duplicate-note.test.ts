@@ -110,6 +110,24 @@ describe('duplicateNote', () => {
     expect(await getNote(db, srcId, masterKey)).toEqual(before)
   })
 
+  it('names the copy of an untitled note "Untitled (copy)"', async () => {
+    const src = await createNote(db, { title: 'x', content: '' }, masterKey)
+    await updateNote(db, src.id, { title: '' }, masterKey)
+
+    const copy = await duplicateNote(db, src.id, masterKey)
+
+    expect(copy.title).toBe('Untitled (copy)')
+  })
+
+  it('copies a tagless note without tag links', async () => {
+    const src = await createNote(db, { title: 'Bare', content: 'body' }, masterKey)
+
+    const copy = await duplicateNote(db, src.id, masterKey)
+
+    expect(copy.tags).toEqual([])
+    expect(await dbAll(db, 'SELECT tag_id FROM note_tags WHERE note_id = ?', [copy.id])).toEqual([])
+  })
+
   it('rejects an unknown id without writing anything', async () => {
     await expect(duplicateNote(db, 'missing', masterKey)).rejects.toThrow('Note not found')
     expect(await dbAll(db, 'SELECT id FROM notes')).toHaveLength(0)

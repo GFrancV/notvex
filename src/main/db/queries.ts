@@ -196,7 +196,7 @@ export async function duplicateNote(
   try {
     const copy = await createNote(
       db,
-      { title: `${source.title} (copy)`, content: source.content },
+      { title: `${source.title || 'Untitled'} (copy)`, content: source.content },
       masterKey
     )
     await dbRun(
