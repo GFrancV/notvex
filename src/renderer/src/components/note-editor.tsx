@@ -22,6 +22,7 @@ import { usePendingSave } from '@/hooks/use-pending-save'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
+import { countText, formatCount, type TextCount } from '@/lib/text-count'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Note, Tag } from '@shared/types'
@@ -63,6 +64,9 @@ const notvexEditorTheme = EditorView.theme({
 })
 
 const AUTOSAVE_DELAY = 500
+// Recounting scans the whole note, so it waits for a typing pause instead of running per keystroke.
+const COUNT_DELAY = 300
+const NO_COUNT: TextCount = { words: 0, chars: 0 }
 
 export function NoteEditor(): ReactNode {
   const {
@@ -86,6 +90,7 @@ export function NoteEditor(): ReactNode {
   const [note, setNote] = useState<Note | null>(null)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [counts, setCounts] = useState<TextCount>(NO_COUNT)
   const [saving, setSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [editorView, setEditorView] = useState<EditorView | null>(null)
@@ -110,6 +115,7 @@ export function NoteEditor(): ReactNode {
 
   const activeIdRef = useRef<string | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
+  const countTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const titleInputRef = useRef<HTMLInputElement>(null)
   // Starts at the store's count: requests made before this mount (e.g. before a lock
   // unmounted the previous editor) were already handled and must not steal focus.
@@ -180,6 +186,7 @@ export function NoteEditor(): ReactNode {
         setTitle(res.data.title)
         persistedTitleRef.current = res.data.title
         setContent(res.data.content)
+        setCounts(countText(res.data.content))
         if (editorViewRef.current) {
           editorViewRef.current.dispatch({
             selection: { anchor: 0 },
@@ -205,6 +212,9 @@ export function NoteEditor(): ReactNode {
     return () => {
       void contentSaver.flush().catch(() => undefined)
       void titleSaver.flush().catch(() => undefined)
+      // A recount still pending belongs to the note being left; letting it fire would
+      // overwrite the next note's count.
+      clearTimeout(countTimerRef.current)
       window.removeEventListener('keydown', onKey, true)
     }
   }, [activeNoteId, setActiveNoteId, contentSaver, titleSaver])
@@ -226,6 +236,8 @@ export function NoteEditor(): ReactNode {
       // The id is captured here, at schedule time. A flush fired by a note
       // switch must persist against *this* note, not whichever is open by then.
       contentSaver.schedule(activeNoteId, value)
+      clearTimeout(countTimerRef.current)
+      countTimerRef.current = setTimeout(() => setCounts(countText(value)), COUNT_DELAY)
     },
     [activeNoteId, contentSaver]
   )
@@ -465,6 +477,13 @@ export function NoteEditor(): ReactNode {
           </EditorContextMenu>
         )}
       </div>
+
+      {note && !isLoading && (
+        <footer className="text-muted-foreground border-border shrink-0 border-t px-4 py-1 text-end text-xs tabular-nums">
+          {formatCount(counts.words, 'word', 'words')} ·{' '}
+          {formatCount(counts.chars, 'character', 'characters')}
+        </footer>
+      )}
     </div>
   )
 }
