@@ -58,7 +58,12 @@ export function toErrorLike(e: unknown): ErrorLike {
 
 function relativeToApp(file: string): string | null {
   let path = file
-  if (/^https?:/i.test(path)) return new URL(path).pathname
+  if (/^https?:/i.test(path)) {
+    const { pathname } = new URL(path)
+    // The dev server serves files outside the project as /@fs/<absolute path>.
+    if (!pathname.startsWith('/@fs/')) return pathname
+    path = `file://${pathname.slice('/@fs'.length)}`
+  }
   // Parsed by hand, not fileURLToPath: that one only understands the host OS's URL shape.
   if (/^file:/i.test(path)) {
     path = decodeURIComponent(new URL(path).pathname).replace(/^\/([A-Za-z]:\/)/, '$1')
@@ -73,10 +78,11 @@ function relativeToApp(file: string): string | null {
 }
 
 function trimLocation(location: string): string {
-  if (RUNTIME_LOCATION.test(location)) return location
   const position = POSITION.exec(location)?.[0] ?? ''
+  const file = location.slice(0, location.length - position.length)
+  if (RUNTIME_LOCATION.test(file)) return location
   try {
-    const relative = relativeToApp(location.slice(0, location.length - position.length))
+    const relative = relativeToApp(file)
     return relative === null ? '<path>' : relative + position
   } catch {
     return '<path>'

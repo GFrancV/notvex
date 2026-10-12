@@ -80,6 +80,27 @@ describe('formatEntry', () => {
     expect(out.match(/<path>/g)).toHaveLength(3)
   })
 
+  it("trims the dev server's /@fs/ URLs, which carry the absolute file path", () => {
+    const stack = [
+      'Error: x',
+      '    at a (http://localhost:5173/src/components/editor.tsx:1:2)',
+      `    at b (http://localhost:5173/@fs/C:/Users/${SENTINEL}/proj/node_modules/x.js:3:4)`,
+      '    at c (http://localhost:5173/@fs/C:/Program%20Files/Notvex/resources/app.asar/out/y.js:5:6)'
+    ].join('\n')
+
+    const out = formatEntry('renderer', { name: 'Error', stack })
+
+    expect(out).toContain('    at a (/src/components/editor.tsx:1:2)')
+    expect(out).toContain('    at b (<path>)')
+    expect(out).toContain('    at c (out/y.js:5:6)')
+    expect(out).not.toContain(SENTINEL)
+  })
+
+  it('keeps an anonymous location that has a position', () => {
+    const out = formatEntry('renderer', { name: 'Error', stack: 'Error\n    at <anonymous>:1:9' })
+    expect(out).toContain('    at <anonymous>:1:9')
+  })
+
   it('keeps runtime-internal locations as they are', () => {
     const stack = [
       'Error: x',
