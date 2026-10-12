@@ -456,6 +456,10 @@ export function NoteEditor(): ReactNode {
         ) : (
           <EditorContextMenu editorView={editorView}>
             <CodeMirror
+              // One instance per note: @uiw/react-codemirror defers external value updates while
+              // the user is typing, and a deferred update outlives a note switch, leaving the
+              // view showing (and editing) a document that isn't the open note's.
+              key={activeNoteId}
               value={content}
               theme="dark"
               extensions={[
