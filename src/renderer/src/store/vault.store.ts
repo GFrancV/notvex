@@ -37,6 +37,7 @@ interface VaultStore {
   setActiveNoteId: (id: string | null) => void
   loadNotes: (filter?: { trashed?: boolean; tagId?: string }) => Promise<void>
   createNote: (input?: CreateNoteInput) => Promise<NoteListItem>
+  duplicateNote: (id: string) => Promise<NoteListItem>
   loadTags: () => Promise<void>
   loadTagCounts: () => Promise<void>
   loadNoteTagsMap: () => Promise<void>
@@ -94,6 +95,23 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     set((s) => ({ notes: [res.data, ...s.notes] }))
 
     return res.data
+  },
+
+  duplicateNote: async (id: string): Promise<NoteListItem> => {
+    const res = await notvex.notes.duplicate(id)
+    if (!res.success) {
+      throw new Error(res.error)
+    }
+
+    const copy = res.data
+    set((s) => ({
+      notes: [copy, ...s.notes],
+      noteTagsMap: { ...s.noteTagsMap, [copy.id]: copy.tags.map((t) => t.id) }
+    }))
+    // The copy carries the source's tags, so every one of them gained a note.
+    if (copy.tags.length > 0) void get().loadTagCounts()
+
+    return copy
   },
 
   loadTags: async (): Promise<void> => {

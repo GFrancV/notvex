@@ -6,6 +6,7 @@ import { EditorView } from '@codemirror/view'
 import { andromeda } from '@uiw/codemirror-theme-andromeda'
 import CodeMirror from '@uiw/react-codemirror'
 import {
+  CopyIcon,
   EllipsisIcon,
   EyeIcon,
   FileTextIcon,
@@ -18,6 +19,7 @@ import {
 import { toast } from 'sonner'
 
 import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
+import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
@@ -281,6 +283,8 @@ export function NoteEditor(): ReactNode {
     void loadTagCounts()
   }
 
+  const duplicateNote = useDuplicateNote()
+
   useClipboardAutoClear(editorView?.dom ?? null)
 
   // Derive assigned tags from noteTagsMap (kept in sync by optimistic store)
@@ -402,12 +406,23 @@ export function NoteEditor(): ReactNode {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Note actions"
+                  className="text-muted-foreground"
+                >
                   <EllipsisIcon className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuGroup>
+                  {note && !note.isTrashed && (
+                    <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
+                      <CopyIcon className="size-4" />
+                      Duplicate
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     variant="destructive"
                     onClick={handleTrash}
