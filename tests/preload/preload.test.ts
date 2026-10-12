@@ -7,6 +7,7 @@ import type { NotvexAPI } from '@shared/types'
 
 const on = vi.fn()
 const off = vi.fn()
+const invoke = vi.fn()
 let api: NotvexAPI
 
 vi.mock('electron', () => ({
@@ -15,7 +16,7 @@ vi.mock('electron', () => ({
       api = value
     }
   },
-  ipcRenderer: { on, off, invoke: vi.fn(), send: vi.fn() }
+  ipcRenderer: { on, off, invoke, send: vi.fn() }
 }))
 
 describe('preload: onPackFailed (issue #61)', () => {
@@ -68,5 +69,19 @@ describe('preload: onReloadRequested', () => {
     unsubscribe()
 
     expect(off).toHaveBeenCalledWith('app:reload-requested', listener)
+  })
+})
+
+// Channel names are plain strings on both sides: a typo types fine and only fails at runtime.
+// The handlers are asserted in tests/main/ipc/markdown-io-handlers.test.ts.
+describe('preload: Markdown export/import channels', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('sends notes.export to notes:export with the note id', () => {
+    void api.notes.export('n1')
+
+    expect(invoke).toHaveBeenLastCalledWith('notes:export', 'n1')
   })
 })

@@ -10,6 +10,7 @@ import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { logError } from './log'
+import { serializeNote, toSafeFilename } from './markdown-io'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
@@ -50,7 +51,7 @@ import {
   hasAnyBackups
 } from './vault/backups'
 import { isValidNotvexFile, readContainer, shouldWarnOpeningInDevBuild } from './vault/container'
-import { KEY_FILE_MAX_BYTES, readKeyFileContents } from './vault/crypto'
+import { KEY_FILE_MAX_BYTES, memzero, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
   closeVault,
@@ -982,6 +983,44 @@ export function registerIpcHandlers(
       requireVault()
       touchActivity()
       return ok(await withVaultLock(() => searchNotesByTitle(getDb(), query, getMasterKey())))
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // ── Markdown export / import ────────────────────────────────────────────────
+  // The renderer sends only ids and gets back only counts: note content is read, decrypted and
+  // written here and never crosses IPC.
+
+  handle('notes:export', async (_e, noteId: string) => {
+    try {
+      requireVault()
+      touchActivity()
+      const note = await withVaultLock(() => getNote(getDb(), noteId, getMasterKey()))
+      if (!note) return fail('Note not found')
+
+      // Outside the vault lock: an open dialog must not hold up the periodic sync or a lock.
+      const { canceled, filePath } = await dialog.showSaveDialog(requireWin(), {
+        title: 'Export note',
+        defaultPath: dialogDefaultPath(`${toSafeFilename(note.title)}.md`),
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      })
+      if (canceled || !filePath) return ok(null)
+      rememberDialogDir(filePath)
+      // A lock while the dialog was open means the user may have walked away: don't write.
+      requireVault()
+
+      const tags = note.tags.map((t) => t.name)
+      const bytes = Buffer.from(serializeNote({ ...note, tags }), 'utf8')
+      try {
+        writeFileSync(filePath, bytes)
+      } catch (e) {
+        logError('notes:export: write failed:', e)
+        return fail('Could not write the exported file')
+      } finally {
+        memzero(bytes)
+      }
+      return ok(null)
     } catch (e) {
       return fail(e)
     }
