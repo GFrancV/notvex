@@ -19,12 +19,11 @@ already be fixed.
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Instead, report privately using one of:
+Instead, report privately using:
 
-- **GitHub Private Vulnerability Reporting** (preferred): go to the
+- **GitHub Private Vulnerability Reporting**: go to the
   [Security tab](https://github.com/GFrancV/notvex/security/advisories/new) of
   this repository and click "Report a vulnerability".
-- **Email**: [gfrancv@hotmail.com](mailto:gfrancv@hotmail.com)
 
 Please include:
 - A description of the vulnerability and its potential impact

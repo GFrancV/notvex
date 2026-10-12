@@ -61,6 +61,10 @@ vi.mock('@main/app-menu', () => ({
   installAppMenu: vi.fn()
 }))
 
+vi.mock('@main/navigation-guard', () => ({
+  installNavigationGuard: vi.fn()
+}))
+
 vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),
@@ -239,6 +243,17 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(install).toHaveBeenCalledOnce()
     expect(install.mock.invocationCallOrder[0]).toBeLessThan(
       createWindow.mock.invocationCallOrder[0]!
+    )
+  })
+
+  // web-contents-created only reaches listeners registered before the webContents exists, so
+  // the guard must be in place before ready, not just before the first window.
+  it('installs the navigation guard once, before ready', async () => {
+    await startApp()
+    const guard = vi.mocked((await import('@main/navigation-guard')).installNavigationGuard)
+    expect(guard).toHaveBeenCalledOnce()
+    expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(app.whenReady).mock.invocationCallOrder[0]!
     )
   })
 
