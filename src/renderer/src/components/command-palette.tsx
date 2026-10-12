@@ -2,9 +2,19 @@ import { type JSX, type ReactNode, useCallback, useEffect, useState } from 'reac
 
 import { toast } from 'sonner'
 
-import { EyeIcon, FileTextIcon, LockIcon, PlusIcon, TagIcon, Trash2Icon, XIcon } from 'lucide-react'
+import {
+  CopyIcon,
+  EyeIcon,
+  FileTextIcon,
+  LockIcon,
+  PlusIcon,
+  TagIcon,
+  Trash2Icon,
+  XIcon
+} from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
+import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -75,6 +85,7 @@ function PaletteContent(): ReactNode {
     noteTagsMap
   } = useVaultStore()
   const handleNewNote = useCreateNote()
+  const duplicateNote = useDuplicateNote()
   const [query, setQuery] = useState('')
 
   const run = useCallback(
@@ -101,6 +112,8 @@ function PaletteContent(): ReactNode {
   }
 
   const noteHasTags = activeNoteId ? (noteTagsMap[activeNoteId] ?? []).length > 0 : false
+  // notes includes trashed ones, and a trashed note can be open from the Trash view.
+  const activeNote = notes.find((n) => n.id === activeNoteId)
   const activeNotes = notes.filter((n) => !n.isTrashed)
   const shownNotes = query ? activeNotes : activeNotes.slice(0, RECENT_NOTES)
   const newTitle = query.trim()
@@ -162,6 +175,15 @@ function PaletteContent(): ReactNode {
             >
               <XIcon />
               <span>Remove tag from note...</span>
+            </CommandItem>
+          )}
+          {activeNote && !activeNote.isTrashed && (
+            <CommandItem
+              keywords={['copy note', 'clone']}
+              onSelect={() => run(() => duplicateNote(activeNote.id))}
+            >
+              <CopyIcon />
+              <span>Duplicate Note</span>
             </CommandItem>
           )}
         </CommandGroup>
