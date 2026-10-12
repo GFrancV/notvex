@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 
+import { installAppMenu } from './app-menu'
 import {
   extractNvxArgv,
   resolveOpenFilePath,
@@ -74,6 +75,7 @@ void app.whenReady().then(async (): Promise<void> => {
   cleanupOrphanedTempDbs()
   await initSodium()
   installPermissionGuard()
+  installAppMenu()
   openMainWindow()
   startupDone = true
 

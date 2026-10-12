@@ -126,7 +126,8 @@ const api: NotvexAPI = {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
   },
   app: {
-    isDev: () => ipcRenderer.invoke('app:is-dev')
+    isDev: () => ipcRenderer.invoke('app:is-dev'),
+    reloadWindow: () => ipcRenderer.invoke('app:reload-window')
   },
   updater: {
     onUpdateAvailable: (callback: (info: UpdateInfo) => void) => {
@@ -196,6 +197,13 @@ const api: NotvexAPI = {
     ipcRenderer.on('vault:pack-failed', listener)
     return (): void => {
       ipcRenderer.off('vault:pack-failed', listener)
+    }
+  },
+  onReloadRequested: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('app:reload-requested', listener)
+    return (): void => {
+      ipcRenderer.off('app:reload-requested', listener)
     }
   },
   onOpenFile: (callback) => {

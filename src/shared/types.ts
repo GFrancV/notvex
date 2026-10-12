@@ -229,6 +229,8 @@ export interface NotvexAPI {
   }
   app: {
     isDev(): Promise<IpcResult<boolean>>
+    /** Drains, locks and reloads; data is false when the vault failed to pack and only locked. */
+    reloadWindow(): Promise<IpcResult<boolean>>
   }
   updater: {
     onUpdateAvailable(callback: (info: UpdateInfo) => void): () => void
@@ -250,5 +252,6 @@ export interface NotvexAPI {
   onAutoLocked(callback: () => void): () => void
   /** Fires when a close couldn't pack the vault, so the latest changes were lost. */
   onPackFailed(callback: () => void): () => void
+  onReloadRequested(callback: () => void): () => void
   onOpenFile(callback: (filePath: string) => void): () => void
 }

@@ -48,6 +48,9 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     }
   })
 
+  // The app menu only exists for its accelerators; the custom title bar has no room for a bar.
+  win.setMenuBarVisibility(false)
+
   if (!app.isPackaged) {
     win.setTitle('Notvex - Dev')
     win.on('page-title-updated', (event) => event.preventDefault())

@@ -79,7 +79,8 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
     await ipc.lockVaultAndNotify(given.win)
 
-    expect(drainRenderer).toHaveBeenLastCalledWith(given.win)
+    // undefined: a lock keeps drainRenderer()'s default, short bound
+    expect(drainRenderer).toHaveBeenLastCalledWith(given.win, undefined)
     expect(given.sent).toEqual(['vault:auto-locked'])
   })
 
