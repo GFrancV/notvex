@@ -38,6 +38,10 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuTrigger: pass,
     DropdownMenuContent: pass,
     DropdownMenuGroup: pass,
+    DropdownMenuLabel: pass,
+    DropdownMenuRadioGroup: pass,
+    DropdownMenuRadioItem: pass,
+    DropdownMenuSeparator: (): null => null,
     DropdownMenuItem: ({ children, onClick }: { children?: unknown; onClick?: () => void }) =>
       h('div', { role: 'menuitem', onClick }, children as never)
   }
@@ -60,6 +64,7 @@ vi.mock('@/lib/ipc', () => ({
 const { useDuplicateNote } = await import('@/hooks/use-duplicate-note')
 const { createPendingSave } = await import('@/lib/pending-save')
 const { NoteEditor } = await import('@/components/note-editor')
+const { NoteList } = await import('@/components/note-list')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
 
@@ -165,6 +170,33 @@ describe('NoteEditor — Duplicate menu item', () => {
     await screen.findByDisplayValue('A')
 
     expect(screen.getByRole('menuitem', { name: 'Delete file' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Duplicate' })).toBeNull()
+  })
+})
+
+describe('NoteList — Duplicate context item', () => {
+  it('duplicates the right-clicked note even when another one is open', async () => {
+    const other = listItem('c', 'Other')
+    ipc.list.mockResolvedValue({ success: true, data: [other] })
+    ipc.duplicate.mockResolvedValue({ success: true, data: listItem('d', 'Other (copy)') })
+    useVaultStore.setState({ notes: [other], noteTagsMap: {} })
+    useUiStore.setState({ showTrash: false, showPinned: false, activeTags: [], searchQuery: '' })
+    render(createElement(NoteList))
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Duplicate' }))
+
+    await waitFor(() => expect(useVaultStore.getState().activeNoteId).toBe('d'))
+    expect(ipc.duplicate).toHaveBeenCalledWith('c')
+  })
+
+  it('is not offered in the trash view', async () => {
+    const trashed = { ...listItem('c', 'Other'), isTrashed: true }
+    ipc.list.mockResolvedValue({ success: true, data: [trashed] })
+    useVaultStore.setState({ notes: [trashed], noteTagsMap: {} })
+    useUiStore.setState({ showTrash: true, showPinned: false, activeTags: [], searchQuery: '' })
+    render(createElement(NoteList))
+
+    expect(await screen.findByRole('menuitem', { name: /Restore/ })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: 'Duplicate' })).toBeNull()
   })
 })

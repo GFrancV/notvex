@@ -1,8 +1,9 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucide-react'
+import { CopyIcon, PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
+import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { notvex } from '@/lib/ipc'
 import { sortNotes } from '@/lib/sort-notes'
 import { cn, formatTimeAgo } from '@/lib/utils'
@@ -29,6 +30,7 @@ export function NoteList(): ReactNode {
     useVaultStore()
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
   const handleNewNote = useCreateNote()
+  const duplicateNote = useDuplicateNote()
 
   const [contextMenuNote, setContextMenuNote] = useState<NoteListItem | null>(null)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
@@ -284,6 +286,14 @@ export function NoteList(): ReactNode {
                             Pin
                           </>
                         )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(): void => {
+                          void duplicateNote(note.id)
+                        }}
+                      >
+                        <CopyIcon className="size-4" />
+                        Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
