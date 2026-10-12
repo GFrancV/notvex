@@ -227,6 +227,10 @@ export interface NotvexAPI {
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>
   }
+  log: {
+    /** Main validates, truncates and rate-limits this; past the limit it is dropped silently. */
+    error(payload: { name: string; stack: string }): Promise<IpcResult<null>>
+  }
   app: {
     isDev(): Promise<IpcResult<boolean>>
     /** Drains, locks and reloads; data is false when the vault failed to pack and only locked. */

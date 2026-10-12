@@ -9,6 +9,7 @@ import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
 import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
+import { appendError } from './error-log'
 import { logError } from './log'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
@@ -117,6 +118,11 @@ const VAULT_SYNC_INTERVAL_MS = 30_000
 // reload takes the page and that error with it. Nobody is racing a reload the user asked for.
 const RELOAD_DRAIN_TIMEOUT_MS = 2_000
 
+const LOG_STACK_MAX = 4 * 1024
+const LOG_RATE_LIMIT = 10
+const LOG_RATE_WINDOW_MS = 60_000
+
+let rendererErrorTimes: number[] = []
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
 let syncTimer: ReturnType<typeof setInterval> | null = null
@@ -1148,6 +1154,29 @@ export function registerIpcHandlers(
     try {
       if (!isSafeExternalUrl(url)) return fail('URL must start with http:// or https://')
       await shell.openExternal(url)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // ── Error log ──────────────────────────────────────────────────────────────
+
+  // The renderer is untrusted here: an error loop must not fill the disk, so past the limit
+  // errors are dropped, and ok() because the renderer can do nothing useful with a refusal.
+  handle('log:error', (_e, payload: unknown) => {
+    try {
+      const { name, stack } = (
+        typeof payload === 'object' && payload !== null ? payload : {}
+      ) as Record<string, unknown>
+      if (typeof name !== 'string' || typeof stack !== 'string') {
+        return fail('Invalid error payload')
+      }
+      const now = Date.now()
+      rendererErrorTimes = rendererErrorTimes.filter((t) => now - t < LOG_RATE_WINDOW_MS)
+      if (rendererErrorTimes.length >= LOG_RATE_LIMIT) return ok(null)
+      rendererErrorTimes.push(now)
+      appendError('renderer', { name, stack: stack.slice(0, LOG_STACK_MAX) })
       return ok(null)
     } catch (e) {
       return fail(e)
