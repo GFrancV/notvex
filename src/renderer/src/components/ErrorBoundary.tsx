@@ -2,6 +2,7 @@ import { Component, type ReactNode } from 'react'
 
 import { AlertTriangleIcon } from 'lucide-react'
 
+import { BugReportActions } from '@/components/BugReportActions'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { notvex } from '@/lib/ipc'
@@ -45,6 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </Alert>
           {/* reloadWindow drains and locks the vault before reloading; a raw reload would not. */}
           <Button onClick={() => void notvex.app.reloadWindow()}>Reload</Button>
+          <BugReportActions />
         </div>
       </div>
     )

@@ -60,4 +60,11 @@ describe('ErrorBoundary', () => {
 
     expect(ipc.reloadWindow).toHaveBeenCalledTimes(1)
   })
+
+  it('offers to report the bug from the fallback', () => {
+    render(createElement(ErrorBoundary, null, createElement(Thrower)))
+
+    expect(screen.getByRole('button', { name: /report bug/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /copy report/i })).toBeTruthy()
+  })
 })

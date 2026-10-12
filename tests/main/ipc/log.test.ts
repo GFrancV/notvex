@@ -11,7 +11,7 @@ type Handler = (event: unknown, ...args: unknown[]) => unknown
 const handlers = new Map<string, Handler>()
 
 vi.mock('electron', () => ({
-  app: { isPackaged: false },
+  app: { isPackaged: false, getVersion: () => '1.4.0' },
   dialog: {},
   shell: {},
   ipcMain: { handle: (channel: string, fn: Handler): void => void handlers.set(channel, fn) }
@@ -31,10 +31,13 @@ vi.mock('@main/vault/vault', () => ({}))
 vi.mock('@main/db/queries', () => ({}))
 vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
-vi.mock('@main/error-log', () => ({ appendError: vi.fn() }))
+vi.mock('@main/error-log', () => ({
+  appendError: vi.fn(),
+  readLogTail: vi.fn(() => '2026-01-01T00:00:00.000Z [main] v1.4.0 TypeError')
+}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { appendError } = await import('@main/error-log')
+const { appendError, readLogTail } = await import('@main/error-log')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 
@@ -106,5 +109,29 @@ describe('log:error', () => {
     await invoke('log:error', payload)
 
     expect(appendError).toHaveBeenCalledTimes(11)
+  })
+})
+
+describe('log:build-report', () => {
+  it('returns the environment and the last 30 log lines', async () => {
+    const result = (await invoke('log:build-report')) as {
+      success: true
+      data: { environment: string; log: string }
+    }
+
+    expect(result.success).toBe(true)
+    expect(result.data.environment).toContain('1.4.0')
+    expect(result.data.environment).toContain(process.versions.electron ?? 'unknown')
+    expect(result.data.environment).toContain(process.platform)
+    expect(result.data.log).toBe('2026-01-01T00:00:00.000Z [main] v1.4.0 TypeError')
+    expect(readLogTail).toHaveBeenCalledWith(30)
+  })
+
+  it('fails cleanly when the log cannot be read', async () => {
+    vi.mocked(readLogTail).mockImplementationOnce(() => {
+      throw new Error('EACCES')
+    })
+
+    expect(await invoke('log:build-report')).toEqual({ success: false, error: 'EACCES' })
   })
 })

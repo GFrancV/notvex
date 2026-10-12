@@ -3,13 +3,14 @@ import type { BrowserWindow, IpcMainInvokeEvent, WebContents } from 'electron'
 import { app, dialog, ipcMain, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
+import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
 import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
-import { appendError } from './error-log'
+import { appendError, readLogTail } from './error-log'
 import { logError } from './log'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
@@ -121,6 +122,7 @@ const RELOAD_DRAIN_TIMEOUT_MS = 2_000
 const LOG_STACK_MAX = 4 * 1024
 const LOG_RATE_LIMIT = 10
 const LOG_RATE_WINDOW_MS = 60_000
+const REPORT_LOG_LINES = 30
 
 let rendererErrorTimes: number[] = []
 let lastActivityAt = Date.now()
@@ -1178,6 +1180,20 @@ export function registerIpcHandlers(
       rendererErrorTimes.push(now)
       appendError('renderer', { name, stack: stack.slice(0, LOG_STACK_MAX) })
       return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // Returned as parts, not one text: the renderer drops log lines to fit the issue URL limit.
+  handle('log:build-report', () => {
+    try {
+      const environment = [
+        `**Version:** ${app.getVersion()}`,
+        `**Electron:** ${process.versions.electron ?? 'unknown'}`,
+        `**OS:** ${process.platform} ${release()} ${process.arch}`
+      ].join(' · ')
+      return ok({ environment, log: readLogTail(REPORT_LOG_LINES) })
     } catch (e) {
       return fail(e)
     }

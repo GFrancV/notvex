@@ -126,7 +126,8 @@ const api: NotvexAPI = {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
   },
   log: {
-    error: (payload) => ipcRenderer.invoke('log:error', payload)
+    error: (payload) => ipcRenderer.invoke('log:error', payload),
+    buildReport: () => ipcRenderer.invoke('log:build-report')
   },
   app: {
     isDev: () => ipcRenderer.invoke('app:is-dev'),
