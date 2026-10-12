@@ -69,5 +69,31 @@ describe('NoteEditor — switching notes right after typing', () => {
 
     // The footer reads React state; the editor must agree with it in the same commit.
     expect(editorDoc()).toBe('bravo')
-  })
+    // Mounts the real CodeMirror twice under StrictMode, which is slow on a cold worker.
+  }, 20_000)
+
+  it('offers no editor to type into while the next note is still decrypting', async () => {
+    const notes: Record<string, Note> = { a: note('a', 'alpha text'), b: note('b', 'bravo') }
+    let releaseB = (): void => {}
+    ipc.get.mockImplementation((id: string) =>
+      id === 'b'
+        ? new Promise((resolve) => {
+            releaseB = () => resolve({ success: true, data: notes.b })
+          })
+        : Promise.resolve({ success: true, data: notes[id] })
+    )
+    useVaultStore.setState({ activeNoteId: 'a', notes: [], tags: [], noteTagsMap: {} })
+    render(createElement(NoteEditor), { reactStrictMode: true })
+    await waitFor(() => expect(editorDoc()).toBe('alpha text'))
+
+    act(() => useVaultStore.setState({ activeNoteId: 'b' }))
+    // An editor here would take focus, and a keystroke into its empty document would be
+    // autosaved over 'b' once the real content arrived.
+    expect(document.querySelector('.cm-editor')).toBeNull()
+
+    act(() => releaseB())
+    await waitFor(() => expect(editorDoc()).toBe('bravo'))
+    // The earlier test's pending save for 'a' may still flush here; only 'b' matters.
+    expect(ipc.update).not.toHaveBeenCalledWith('b', expect.anything())
+  }, 20_000)
 })

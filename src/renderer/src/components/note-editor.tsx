@@ -189,12 +189,6 @@ export function NoteEditor(): ReactNode {
         persistedTitleRef.current = res.data.title
         setContent(res.data.content)
         setCounts(countText(res.data.content))
-        if (editorViewRef.current) {
-          editorViewRef.current.dispatch({
-            selection: { anchor: 0 },
-            scrollIntoView: true
-          })
-        }
         if (wantsTitleFocus) focusTitlePendingRef.current = true
       }
     })
@@ -454,46 +448,51 @@ export function NoteEditor(): ReactNode {
         {editorMode === 'reading' ? (
           <NoteReadingView content={content} />
         ) : (
-          <EditorContextMenu editorView={editorView}>
-            <CodeMirror
-              // One instance per note: @uiw/react-codemirror defers external value updates while
-              // the user is typing, and a deferred update outlives a note switch, leaving the
-              // view showing (and editing) a document that isn't the open note's.
-              key={activeNoteId}
-              value={content}
-              theme="dark"
-              extensions={[
-                markdown({ base: markdownLanguage, codeLanguages }),
-                formattingKeymap,
-                andromeda,
-                notvexEditorTheme,
-                livePreviewPlugin,
-                tablePreviewField,
-                livePreviewTheme,
-                EditorView.lineWrapping
-              ]}
-              onChange={handleContentChange}
-              onCreateEditor={(view) => {
-                editorViewRef.current = view
-                setEditorView(view)
-                view.focus()
-              }}
-              basicSetup={{
-                lineNumbers: false,
-                foldGutter: false,
-                dropCursor: false,
-                allowMultipleSelections: false,
-                indentOnInput: false,
-                highlightActiveLine: true,
-                highlightSelectionMatches: false,
-                closeBrackets: false,
-                autocompletion: false,
-                crosshairCursor: false,
-                highlightActiveLineGutter: false
-              }}
-              className="h-full w-full overflow-auto"
-            />
-          </EditorContextMenu>
+          // Mounted only once the note has decrypted: it takes focus on mount, and a keystroke
+          // into an empty document before the content arrives would be autosaved over the note.
+          !isLoading && (
+            <EditorContextMenu editorView={editorView}>
+              <CodeMirror
+                // One instance per note: @uiw/react-codemirror defers external value updates while
+                // the user is typing, and a deferred update outlives a note switch, leaving the
+                // view showing (and editing) a document that isn't the open note's.
+                key={activeNoteId}
+                value={content}
+                theme="dark"
+                extensions={[
+                  markdown({ base: markdownLanguage, codeLanguages }),
+                  formattingKeymap,
+                  andromeda,
+                  notvexEditorTheme,
+                  livePreviewPlugin,
+                  tablePreviewField,
+                  livePreviewTheme,
+                  EditorView.lineWrapping
+                ]}
+                onChange={handleContentChange}
+                onCreateEditor={(view) => {
+                  editorViewRef.current = view
+                  setEditorView(view)
+                  // Mounted after load, so a title focused for a new note must keep its focus.
+                  if (document.activeElement !== titleInputRef.current) view.focus()
+                }}
+                basicSetup={{
+                  lineNumbers: false,
+                  foldGutter: false,
+                  dropCursor: false,
+                  allowMultipleSelections: false,
+                  indentOnInput: false,
+                  highlightActiveLine: true,
+                  highlightSelectionMatches: false,
+                  closeBrackets: false,
+                  autocompletion: false,
+                  crosshairCursor: false,
+                  highlightActiveLineGutter: false
+                }}
+                className="h-full w-full overflow-auto"
+              />
+            </EditorContextMenu>
+          )
         )}
       </div>
 
