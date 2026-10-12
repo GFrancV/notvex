@@ -31,6 +31,20 @@ export interface Tag {
 // Roughly what fits in the sidebar row before truncating.
 export const TAG_NAME_MAX = 24
 
+// Shared because main colours the tags it creates during a Markdown import.
+export const PRESET_COLORS = [
+  '#10b981',
+  '#3b82f6',
+  '#8b5cf6',
+  '#f59e0b',
+  '#ef4444',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
+  '#84cc16'
+]
+
 export interface CreateNoteInput {
   title: string
   content: string
