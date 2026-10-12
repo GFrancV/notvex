@@ -218,6 +218,8 @@ export interface NotvexAPI {
     search(query: string): Promise<IpcResult<NoteListItem[]>>
     /** Writes the note to a user-chosen .md file in main: true once written, null if canceled. */
     export(id: string): Promise<IpcResult<true | null>>
+    /** Writes every non-trashed note into a user-chosen folder: the count, or null if canceled. */
+    exportAll(): Promise<IpcResult<number | null>>
   }
   tags: {
     create(input: CreateTagInput): Promise<IpcResult<Tag>>

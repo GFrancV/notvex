@@ -84,4 +84,10 @@ describe('preload: Markdown export/import channels', () => {
 
     expect(invoke).toHaveBeenLastCalledWith('notes:export', 'n1')
   })
+
+  it('sends notes.exportAll to notes:export-all', () => {
+    void api.notes.exportAll()
+
+    expect(invoke).toHaveBeenLastCalledWith('notes:export-all')
+  })
 })

@@ -100,7 +100,8 @@ const api: NotvexAPI = {
     delete: (id) => ipcRenderer.invoke('notes:delete', id),
     emptyTrash: () => ipcRenderer.invoke('notes:empty-trash'),
     search: (q) => ipcRenderer.invoke('notes:search', q),
-    export: (id) => ipcRenderer.invoke('notes:export', id)
+    export: (id) => ipcRenderer.invoke('notes:export', id),
+    exportAll: () => ipcRenderer.invoke('notes:export-all')
   },
   tags: {
     create: (input) => ipcRenderer.invoke('tags:create', input),

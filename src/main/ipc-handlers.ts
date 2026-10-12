@@ -10,7 +10,7 @@ import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { logError } from './log'
-import { serializeNote, toSafeFilename } from './markdown-io'
+import { dedupeName, serializeNote, toSafeFilename } from './markdown-io'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
 import {
@@ -109,6 +109,19 @@ function validTagName(name: unknown): string {
     throw new Error(`Tag name must be at most ${TAG_NAME_MAX} characters`)
   }
   return trimmed
+}
+
+// 'wx' fails instead of replacing a file the user already has in `dir`; on EEXIST the next free
+// " (n)" name is tried. `used` also catches collisions within this export.
+function writeNewFile(dir: string, base: string, used: Set<string>, bytes: Uint8Array): void {
+  for (;;) {
+    try {
+      writeFileSync(join(dir, dedupeName(base, used)), bytes, { flag: 'wx' })
+      return
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
+    }
+  }
 }
 
 // ─── Auto-lock + periodic sync state ─────────────────────────────────────────
@@ -1021,6 +1034,52 @@ export function registerIpcHandlers(
         memzero(bytes)
       }
       return ok(true)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('notes:export-all', async () => {
+    try {
+      requireVault()
+      touchActivity()
+      // The folder is picked before any note is decrypted, so no plaintext waits on the user.
+      const { canceled, filePaths } = await dialog.showOpenDialog(requireWin(), {
+        title: 'Export all notes',
+        defaultPath: dialogDefaultPath(),
+        properties: ['openDirectory', 'createDirectory'],
+        buttonLabel: 'Export here'
+      })
+      const dir = filePaths[0]
+      if (canceled || !dir) return ok(null)
+      rememberDialogDir(dir)
+      requireVault()
+
+      // One note decrypted at a time. Exporting holds the vault lock, but it's a one-off action
+      // the user is waiting on.
+      return await withVaultLock(async () => {
+        const ids = (await listNotes(getDb(), getMasterKey(), { trashed: false })).map((n) => n.id)
+        const used = new Set<string>()
+        let written = 0
+        for (const id of ids) {
+          const note = await getNote(getDb(), id, getMasterKey())
+          if (!note) continue
+          const tags = note.tags.map((t) => t.name)
+          const bytes = Buffer.from(serializeNote({ ...note, tags }), 'utf8')
+          try {
+            writeNewFile(dir, toSafeFilename(note.title), used, bytes)
+          } catch (e) {
+            logError('notes:export-all: write failed:', e)
+            return fail(
+              `Export stopped after ${written} of ${ids.length} notes: a file could not be written`
+            )
+          } finally {
+            memzero(bytes)
+          }
+          written++
+        }
+        return ok(written)
+      })
     } catch (e) {
       return fail(e)
     }
