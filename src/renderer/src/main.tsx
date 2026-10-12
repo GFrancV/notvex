@@ -2,6 +2,7 @@ import React from 'react'
 
 import ReactDOM from 'react-dom/client'
 
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { reportError } from '@/lib/report-error'
 
 import App from './App'
@@ -12,6 +13,8 @@ window.addEventListener('unhandledrejection', (event) => reportError(event.reaso
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 )
