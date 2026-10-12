@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { dedupeName, serializeNote, toSafeFilename } from '@main/markdown-io'
+import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from '@main/markdown-io'
 
 describe('toSafeFilename', () => {
   it('keeps an ordinary title unchanged', () => {
@@ -120,5 +120,111 @@ describe('serializeNote', () => {
 
   it('normalizes CRLF in the content to LF', () => {
     expect(serializeNote({ title: 'T', content: 'a\r\nb', tags: [] })).toBe('# T\n\na\nb')
+  })
+})
+
+describe('parseMarkdownFile', () => {
+  it('uses the filename as the title of a plain file', () => {
+    expect(parseMarkdownFile('just text', 'shopping list.txt')).toEqual({
+      title: 'shopping list',
+      content: 'just text',
+      tags: []
+    })
+  })
+
+  it('takes the title from a leading heading and removes it with one blank line', () => {
+    expect(parseMarkdownFile('# Groceries\n\nmilk\neggs', 'x.md')).toEqual({
+      title: 'Groceries',
+      content: 'milk\neggs',
+      tags: []
+    })
+  })
+
+  it('skips blank lines before the heading', () => {
+    expect(parseMarkdownFile('\n\n# Title\nbody', 'x.md')).toMatchObject({
+      title: 'Title',
+      content: 'body'
+    })
+  })
+
+  it('leaves a heading that is not the first line in the content', () => {
+    const text = 'intro\n\n# Section'
+    expect(parseMarkdownFile(text, 'notes.md')).toMatchObject({ title: 'notes', content: text })
+  })
+
+  it('does not treat a level-2 heading or a hashtag as the title', () => {
+    expect(parseMarkdownFile('## Sub\nx', 'a.md').title).toBe('a')
+    expect(parseMarkdownFile('#tag\nx', 'b.md').title).toBe('b')
+  })
+
+  it('prefers the front matter title and keeps the heading in the content', () => {
+    expect(parseMarkdownFile('---\ntitle: From meta\n---\n# Heading\nbody', 'x.md')).toEqual({
+      title: 'From meta',
+      content: '# Heading\nbody',
+      tags: []
+    })
+  })
+
+  it('reads quoted front matter titles', () => {
+    expect(parseMarkdownFile('---\ntitle: "A: b"\n---\n', 'x.md').title).toBe('A: b')
+    expect(parseMarkdownFile("---\ntitle: 'It''s'\n---\n", 'x.md').title).toBe("It's")
+  })
+
+  it('falls back from an empty front matter title', () => {
+    expect(parseMarkdownFile('---\ntitle: ""\n---\n# H\n', 'x.md').title).toBe('H')
+  })
+
+  it('reads inline tags, quoted or not', () => {
+    const text = '---\ntags: [work, "a, b", \'q\', ideas]\n---\nbody'
+    expect(parseMarkdownFile(text, 'x.md')).toMatchObject({
+      tags: ['work', 'a, b', 'q', 'ideas'],
+      content: 'body'
+    })
+  })
+
+  it('reads block-list tags', () => {
+    const text = '---\ntags:\n  - work\n  - "deep: focus"\n- ideas\ndate: 2026-01-01\n---\nbody'
+    expect(parseMarkdownFile(text, 'x.md').tags).toEqual(['work', 'deep: focus', 'ideas'])
+  })
+
+  it('reads a single scalar tag', () => {
+    expect(parseMarkdownFile('---\ntags: solo\n---\n', 'x.md').tags).toEqual(['solo'])
+  })
+
+  it('ignores keys and lines it does not understand', () => {
+    const text = '---\naliases:\n  - other\ncreated: 2026-01-01\nnested:\n  a: 1\n---\nbody'
+    expect(parseMarkdownFile(text, 'x.md')).toEqual({ title: 'x', content: 'body', tags: [] })
+  })
+
+  it('ignores a tags value it cannot parse', () => {
+    expect(parseMarkdownFile('---\ntags: [a, b\n---\nbody', 'x.md').tags).toEqual([])
+  })
+
+  it('treats front matter without a closing line as plain content', () => {
+    const text = '---\ntags: [a]\nbody'
+    expect(parseMarkdownFile(text, 'x.md')).toEqual({ title: 'x', content: text, tags: [] })
+  })
+
+  it('strips a BOM and normalizes CRLF', () => {
+    const text = String.fromCharCode(0xfeff) + '---\r\ntags: [a]\r\n---\r\n# T\r\n\r\nl1\r\nl2'
+    expect(parseMarkdownFile(text, 'x.md')).toEqual({ title: 'T', content: 'l1\nl2', tags: ['a'] })
+  })
+
+  it('names a file with no usable name Untitled', () => {
+    expect(parseMarkdownFile('x', '.md').title).toBe('Untitled')
+  })
+
+  it.each([
+    { title: 'Plain', content: 'Body\nline 2', tags: [] },
+    { title: 'Tagged', content: '', tags: ['work', 'ideas'] },
+    {
+      title: 'C# notes',
+      content: '\n\nstarts blank',
+      tags: ['a, b', '[x]', 'k: v', '#h', 'say "hi"', ' pad ', "'q", '-d']
+    },
+    { title: 'Rule', content: '---\nnot front matter\n---', tags: [] },
+    { title: 'Heading body', content: '# Not the title\ntext', tags: ['t'] }
+  ])('round-trips $title through serializeNote', (note) => {
+    expect(parseMarkdownFile(serializeNote(note), 'ignored.md')).toEqual(note)
   })
 })
