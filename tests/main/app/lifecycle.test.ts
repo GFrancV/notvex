@@ -61,6 +61,11 @@ vi.mock('@main/app-menu', () => ({
   installAppMenu: vi.fn()
 }))
 
+// A real uncaughtException listener would swallow the test worker's own failures.
+vi.mock('@main/crash-handlers', () => ({
+  installCrashHandlers: vi.fn()
+}))
+
 vi.mock('@main/navigation-guard', () => ({
   installNavigationGuard: vi.fn()
 }))

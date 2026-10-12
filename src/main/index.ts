@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 
 import { installAppMenu } from './app-menu'
+import { installCrashHandlers } from './crash-handlers'
 import {
   extractNvxArgv,
   resolveOpenFilePath,
@@ -22,6 +23,9 @@ import { createWindow } from './window'
 if (!app.isPackaged) {
   app.setName('Notvex Dev')
 }
+
+// After setName, so a crash is logged under the right userData.
+installCrashHandlers()
 
 // Fuses don't cover these Chromium switches: they expose renderers over CDP, launch child
 // processes through a caller-chosen command, or undo enableSandbox(). Chromium has already
