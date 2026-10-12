@@ -121,6 +121,31 @@ describe('useDuplicateNote', () => {
     saver.dispose()
   })
 
+  it('does not copy when pending edits fail to save', async () => {
+    const saver = createPendingSave(vi.fn().mockRejectedValue(new Error('disk full')), 10_000)
+    saver.schedule('a', 'unsaved')
+
+    const { result } = renderHook(() => useDuplicateNote())
+    await act(() => result.current('a'))
+
+    expect(ipc.duplicate).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledWith('disk full')
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+    saver.dispose()
+  })
+
+  it('refreshes tag counts only when the copy carries tags', async () => {
+    const { result } = renderHook(() => useDuplicateNote())
+
+    ipc.duplicate.mockResolvedValue({ success: true, data: listItem('b', 'Plan (copy)', [tag]) })
+    await act(() => result.current('a'))
+    expect(ipc.counts).toHaveBeenCalledTimes(1)
+
+    ipc.duplicate.mockResolvedValue({ success: true, data: listItem('c', 'Bare (copy)') })
+    await act(() => result.current('a'))
+    expect(ipc.counts).toHaveBeenCalledTimes(1)
+  })
+
   it('opens the copy at the top of the list with its tags and the title focused', async () => {
     ipc.duplicate.mockResolvedValue({ success: true, data: listItem('b', 'Plan (copy)', [tag]) })
     const focusBefore = useUiStore.getState().focusTitleRequest
@@ -160,7 +185,8 @@ describe('NoteEditor — Duplicate menu item', () => {
     // Waits for the whole flow, so it can't switch notes under the next test.
     await waitFor(() => expect(useVaultStore.getState().activeNoteId).toBe('b'))
     expect(ipc.duplicate).toHaveBeenCalledWith('a')
-  })
+    // The first full NoteEditor render in this file, slow on a cold worker.
+  }, 20_000)
 
   it('is not offered for a trashed note', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', true) })
