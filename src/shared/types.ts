@@ -216,8 +216,8 @@ export interface NotvexAPI {
     delete(id: string): Promise<IpcResult<null>>
     emptyTrash(): Promise<IpcResult<null>>
     search(query: string): Promise<IpcResult<NoteListItem[]>>
-    /** Writes the note to a user-chosen .md file in main; null when the dialog is canceled. */
-    export(id: string): Promise<IpcResult<null>>
+    /** Writes the note to a user-chosen .md file in main: true once written, null if canceled. */
+    export(id: string): Promise<IpcResult<true | null>>
   }
   tags: {
     create(input: CreateTagInput): Promise<IpcResult<Tag>>

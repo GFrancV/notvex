@@ -1020,7 +1020,7 @@ export function registerIpcHandlers(
       } finally {
         memzero(bytes)
       }
-      return ok(null)
+      return ok(true)
     } catch (e) {
       return fail(e)
     }

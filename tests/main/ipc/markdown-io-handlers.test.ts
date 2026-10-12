@@ -94,7 +94,7 @@ describe('notes:export', () => {
 
     const result = await invoke('notes:export', 'n1')
 
-    expect(result).toEqual({ success: true, data: null })
+    expect(result).toEqual({ success: true, data: true })
     expect(written).toEqual({
       path: '/out/x.md',
       text: '---\ntags: [work]\n---\n# Plan: Q3?\n\nsecret body'

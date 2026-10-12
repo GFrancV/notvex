@@ -6,6 +6,7 @@ import { EditorView } from '@codemirror/view'
 import { andromeda } from '@uiw/codemirror-theme-andromeda'
 import CodeMirror from '@uiw/react-codemirror'
 import {
+  DownloadIcon,
   EllipsisIcon,
   EyeIcon,
   FileTextIcon,
@@ -25,6 +26,7 @@ import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Note, Tag } from '@shared/types'
+import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { EditorContextMenu } from './editor-context-menu'
 import { EditorToolbar } from './editor/EditorToolbar'
 import { NoteReadingView } from './note-reading-view'
@@ -36,6 +38,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
 import { Skeleton } from './ui/skeleton'
@@ -91,6 +94,7 @@ export function NoteEditor(): ReactNode {
   const [editorView, setEditorView] = useState<EditorView | null>(null)
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false)
   const [removeTagSelectorOpen, setRemoveTagSelectorOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   // Derive open state from both local button clicks and command palette triggers
   const showTagSelector =
@@ -261,6 +265,13 @@ export function NoteEditor(): ReactNode {
     void loadNotes()
   }
 
+  const handleExport = async (): Promise<void> => {
+    if (!activeNoteId) return
+    const res = await notvex.notes.export(activeNoteId)
+    if (!res.success) toast.error(res.error)
+    else if (res.data) toast.success('Note exported')
+  }
+
   const handleTrash = async (): Promise<void> => {
     if (!activeNoteId) return
     await notvex.notes.trash(activeNoteId)
@@ -396,6 +407,13 @@ export function NoteEditor(): ReactNode {
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => setExportOpen(true)}>
+                    <DownloadIcon className="size-4" />
+                    Export note…
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
                   <DropdownMenuItem
                     variant="destructive"
                     onClick={handleTrash}
@@ -407,6 +425,13 @@ export function NoteEditor(): ReactNode {
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* Outside DropdownMenuContent, which unmounts its children when the menu closes. */}
+            <ExportWarningDialog
+              open={exportOpen}
+              onOpenChange={setExportOpen}
+              title="Export note"
+              onConfirm={handleExport}
+            />
           </div>
         </div>
       </div>
