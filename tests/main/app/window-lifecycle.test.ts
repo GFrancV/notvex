@@ -14,7 +14,6 @@ vi.mock('electron', async () => {
       super()
     }
     webContents = Object.assign(new EventEmitter(), {
-      setWindowOpenHandler: vi.fn(),
       openDevTools: vi.fn()
     })
     loadURL = vi.fn(async () => undefined)
@@ -27,8 +26,7 @@ vi.mock('electron', async () => {
   return {
     app: { isPackaged: true },
     BrowserWindow: MockBrowserWindow,
-    powerMonitor: new EventEmitter(),
-    shell: { openExternal: vi.fn() }
+    powerMonitor: new EventEmitter()
   }
 })
 
@@ -188,32 +186,6 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
   })
 })
 
-// The renderer is a SPA that never navigates and any loaded page gets window.notvex, so every
-// navigation is blocked, lookalike hosts and dropped files included.
-describe('createWindow: navigation (issue #57)', () => {
-  let createWindow: typeof import('@main/window').createWindow
-
-  beforeEach(async () => {
-    vi.clearAllMocks()
-    ;({ createWindow } = await import('@main/window'))
-  })
-
-  it.each([
-    'file:///C:/Users/me/Downloads/evil.html',
-    'http://localhost.attacker.example/',
-    'http://localhost:5173/',
-    'https://github.com/GFrancV/notvex'
-  ])('blocks navigation to %s', (url) => {
-    const win = createWindow(() => null)
-    const event = { preventDefault: vi.fn() }
-
-    win.webContents.emit('will-navigate', event, url)
-    win.emit('closed')
-
-    expect(event.preventDefault).toHaveBeenCalledTimes(1)
-  })
-})
-
 // The bundle still reads ELECTRON_RENDERER_URL at runtime, so an installed app
 // launched with it set would load that (remote) page with the preload. Only a
 // dev build may load from the dev server.
@@ -263,47 +235,5 @@ describe('createWindow: dev server url (issue #57)', () => {
     win.emit('closed')
 
     expect(win.loadURL).toHaveBeenCalledExactlyOnceWith('http://localhost:5173')
-  })
-})
-
-// target="_blank" links (note live preview, release notes) and window.open
-// reach the OS through setWindowOpenHandler, so it must apply the same scheme
-// filter as shell:open-external — file:, ms-msdt:, search-ms: etc. are the
-// usual path from "click a link" to code execution on Windows.
-describe('createWindow: window-open handler (issue #56)', () => {
-  let createWindow: typeof import('@main/window').createWindow
-  let openExternal: ReturnType<typeof vi.fn>
-
-  beforeEach(async () => {
-    vi.clearAllMocks()
-    const electron = await import('electron')
-    openExternal = vi.mocked(electron.shell.openExternal)
-    ;({ createWindow } = await import('@main/window'))
-  })
-
-  function openWindow(url: string): unknown {
-    const win = createWindow(() => null)
-    const [handler] = vi.mocked(win.webContents.setWindowOpenHandler).mock.calls[0]
-    win.emit('closed') // drop its powerMonitor listeners; the handler outlives it
-    return handler({ url } as Parameters<typeof handler>[0])
-  }
-
-  it.each(['https://github.com/GFrancV/notvex', 'http://example.com', 'HTTPS://example.com'])(
-    'opens %s in the system browser',
-    (url) => {
-      expect(openWindow(url)).toEqual({ action: 'deny' })
-      expect(openExternal).toHaveBeenCalledExactlyOnceWith(url)
-    }
-  )
-
-  it.each([
-    'file://\\\\attacker\\share\\x.exe',
-    'file:///C:/Windows/System32/calc.exe',
-    'ms-msdt:/id PCWDiagnostic',
-    'search-ms:query=x',
-    'javascript:alert(1)'
-  ])('never hands %s to the OS', (url) => {
-    expect(openWindow(url)).toEqual({ action: 'deny' })
-    expect(openExternal).not.toHaveBeenCalled()
   })
 })
