@@ -19,6 +19,7 @@ import {
   createTagAndAssign,
   deleteNote,
   deleteTag,
+  duplicateNote,
   emptyTrash,
   getAllNoteTags,
   getNote,
@@ -914,6 +915,18 @@ export function registerIpcHandlers(
       touchActivity()
       await withVaultLock(() => updateNote(getDb(), id, patch, getMasterKey()))
       return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  // Takes only the id: the content is read and re-encrypted here, never round-tripped
+  // through the renderer.
+  handle('notes:duplicate', async (_e, id: string) => {
+    try {
+      requireVault()
+      touchActivity()
+      return ok(await withVaultLock(() => duplicateNote(getDb(), id, getMasterKey())))
     } catch (e) {
       return fail(e)
     }

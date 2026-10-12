@@ -197,6 +197,7 @@ export interface NotvexAPI {
     get(id: string): Promise<IpcResult<Note | null>>
     list(filter?: NoteFilter): Promise<IpcResult<NoteListItem[]>>
     update(id: string, patch: NotePatch): Promise<IpcResult<null>>
+    duplicate(id: string): Promise<IpcResult<NoteListItem>>
     trash(id: string): Promise<IpcResult<null>>
     restore(id: string): Promise<IpcResult<null>>
     delete(id: string): Promise<IpcResult<null>>
