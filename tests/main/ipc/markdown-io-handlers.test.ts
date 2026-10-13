@@ -46,12 +46,17 @@ vi.mock('@main/vault/vault', () => ({
   isVaultOpen: vi.fn(() => true),
   withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn())
 }))
-vi.mock('@main/db/queries', () => ({ getNote: vi.fn(), listNotes: vi.fn(), importNotes: vi.fn() }))
+vi.mock('@main/db/queries', () => ({
+  getNote: vi.fn(),
+  getNoteTitle: vi.fn(),
+  importNotes: vi.fn(),
+  listNotes: vi.fn()
+}))
 vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { getNote, importNotes, listNotes } = await import('@main/db/queries')
+const { getNote, getNoteTitle, importNotes, listNotes } = await import('@main/db/queries')
 const { isVaultOpen } = await import('@main/vault/vault')
 const { memzero } = await import('@main/vault/crypto')
 const { logError } = await import('@main/log')
@@ -86,6 +91,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isVaultOpen).mockReset().mockReturnValue(true)
   vi.mocked(getNote).mockResolvedValue(NOTE)
+  vi.mocked(getNoteTitle).mockResolvedValue(NOTE.title)
   written = undefined
   vi.mocked(writeFileSync).mockImplementation((path, data) => {
     written = { path: String(path), text: Buffer.from(data as Uint8Array).toString('utf8') }
@@ -131,11 +137,22 @@ describe('notes:export', () => {
     expect(buf.every((b) => b === 0)).toBe(true)
   })
 
-  it('writes nothing when the dialog is canceled', async () => {
+  it('writes nothing, and never decrypts the content, when the dialog is canceled', async () => {
     vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: true, filePath: '' })
 
     expect(await invoke('notes:export', 'n1')).toEqual({ success: true, data: null })
     expect(writeFileSync).not.toHaveBeenCalled()
+    expect(getNote).not.toHaveBeenCalled()
+  })
+
+  it('decrypts the note only after a path was chosen', async () => {
+    vi.mocked(dialog.showSaveDialog).mockImplementation(async () => {
+      expect(getNote).not.toHaveBeenCalled()
+      return { canceled: false, filePath: '/out/x.md' }
+    })
+
+    expect(await invoke('notes:export', 'n1')).toEqual({ success: true, data: true })
+    expect(getNote).toHaveBeenCalledOnce()
   })
 
   it('refuses a locked vault without opening a dialog', async () => {
@@ -159,15 +176,29 @@ describe('notes:export', () => {
       error: 'Vault is locked'
     })
     expect(writeFileSync).not.toHaveBeenCalled()
+    expect(getNote).not.toHaveBeenCalled()
   })
 
-  it('reports a missing note', async () => {
-    vi.mocked(getNote).mockResolvedValue(null)
+  it('reports a missing note without opening a dialog', async () => {
+    vi.mocked(getNoteTitle).mockResolvedValue(null)
 
     expect(await invoke('notes:export', 'gone')).toEqual({
       success: false,
       error: 'Note not found'
     })
+    expect(dialog.showSaveDialog).not.toHaveBeenCalled()
+  })
+
+  // A different vault may have been unlocked while the dialog was open; its notes have other ids.
+  it('writes nothing if the note is gone once the dialog closes', async () => {
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: false, filePath: '/out/x.md' })
+    vi.mocked(getNote).mockResolvedValue(null)
+
+    expect(await invoke('notes:export', 'n1')).toEqual({
+      success: false,
+      error: 'Note not found'
+    })
+    expect(writeFileSync).not.toHaveBeenCalled()
   })
 
   it('hides the path of a failed write from the renderer', async () => {

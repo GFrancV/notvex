@@ -184,6 +184,21 @@ export async function getNote(
   }
 }
 
+// The title alone, for callers that must not hold decrypted content yet (export's save dialog).
+export async function getNoteTitle(
+  db: sqlite3.Database,
+  id: string,
+  masterKey: Uint8Array
+): Promise<string | null> {
+  const row = await dbGet<{ title: Buffer; title_iv: Buffer }>(
+    db,
+    'SELECT title, title_iv FROM notes WHERE id = ?',
+    [id]
+  )
+  if (!row) return null
+  return decryptField(new Uint8Array(row.title), new Uint8Array(row.title_iv), masterKey)
+}
+
 export async function listNotes(
   db: sqlite3.Database,
   masterKey: Uint8Array,

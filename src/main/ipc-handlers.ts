@@ -43,6 +43,7 @@ import {
   getNote,
   getNoteCountPerTag,
   getNoteTags,
+  getNoteTitle,
   importNotes,
   listNotes,
   listTags,
@@ -1086,19 +1087,23 @@ export function registerIpcHandlers(
     try {
       requireVault()
       touchActivity()
-      const note = await withVaultLock(() => getNote(getDb(), noteId, getMasterKey()))
-      if (!note) return fail('Note not found')
+      // Only the title before the dialog: the content isn't decrypted while it waits on the user.
+      const title = await withVaultLock(() => getNoteTitle(getDb(), noteId, getMasterKey()))
+      if (title === null) return fail('Note not found')
 
       // Outside the vault lock: an open dialog must not hold up the periodic sync or a lock.
       const { canceled, filePath } = await dialog.showSaveDialog(requireWin(), {
         title: 'Export note',
-        defaultPath: dialogDefaultPath(`${toSafeFilename(note.title)}.md`),
+        defaultPath: dialogDefaultPath(`${toSafeFilename(title)}.md`),
         filters: [{ name: 'Markdown', extensions: ['md'] }]
       })
       if (canceled || !filePath) return ok(null)
       rememberDialogDir(filePath)
       // A lock while the dialog was open means the user may have walked away: don't write.
       requireVault()
+      // Re-read from whatever vault is open now; another one may have been unlocked meanwhile.
+      const note = await withVaultLock(() => getNote(getDb(), noteId, getMasterKey()))
+      if (!note) return fail('Note not found')
 
       const bytes = toMarkdownBytes(note)
       try {
