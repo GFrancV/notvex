@@ -95,6 +95,7 @@ const api: NotvexAPI = {
     get: (id) => ipcRenderer.invoke('notes:get', id),
     list: (filter) => ipcRenderer.invoke('notes:list', filter),
     update: (id, patch) => ipcRenderer.invoke('notes:update', id, patch),
+    duplicate: (id) => ipcRenderer.invoke('notes:duplicate', id),
     trash: (id) => ipcRenderer.invoke('notes:trash', id),
     restore: (id) => ipcRenderer.invoke('notes:restore', id),
     delete: (id) => ipcRenderer.invoke('notes:delete', id),
@@ -169,6 +170,7 @@ const api: NotvexAPI = {
       }
     },
     checkNow: () => ipcRenderer.invoke('updater:check-now'),
+    checkOnStartup: () => ipcRenderer.invoke('updater:check-on-startup'),
     download: () => ipcRenderer.invoke('updater:download'),
     installNow: () => ipcRenderer.invoke('updater:install-now'),
     getCurrentVersion: () => ipcRenderer.invoke('updater:get-current-version')

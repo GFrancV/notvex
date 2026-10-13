@@ -6,6 +6,7 @@ import { EditorView } from '@codemirror/view'
 import { andromeda } from '@uiw/codemirror-theme-andromeda'
 import CodeMirror from '@uiw/react-codemirror'
 import {
+  CopyIcon,
   DownloadIcon,
   EllipsisIcon,
   EyeIcon,
@@ -19,10 +20,12 @@ import {
 import { toast } from 'sonner'
 
 import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
+import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
+import { countText, formatCount, type TextCount } from '@/lib/text-count'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Note, Tag } from '@shared/types'
@@ -66,6 +69,9 @@ const notvexEditorTheme = EditorView.theme({
 })
 
 const AUTOSAVE_DELAY = 500
+// Recounting scans the whole note, so it waits for a typing pause instead of running per keystroke.
+const COUNT_DELAY = 300
+const NO_COUNT: TextCount = { words: 0, chars: 0 }
 
 export function NoteEditor(): ReactNode {
   const {
@@ -89,6 +95,7 @@ export function NoteEditor(): ReactNode {
   const [note, setNote] = useState<Note | null>(null)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [counts, setCounts] = useState<TextCount>(NO_COUNT)
   const [saving, setSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [editorView, setEditorView] = useState<EditorView | null>(null)
@@ -114,6 +121,7 @@ export function NoteEditor(): ReactNode {
 
   const activeIdRef = useRef<string | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
+  const countTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const titleInputRef = useRef<HTMLInputElement>(null)
   // Starts at the store's count: requests made before this mount (e.g. before a lock
   // unmounted the previous editor) were already handled and must not steal focus.
@@ -184,12 +192,7 @@ export function NoteEditor(): ReactNode {
         setTitle(res.data.title)
         persistedTitleRef.current = res.data.title
         setContent(res.data.content)
-        if (editorViewRef.current) {
-          editorViewRef.current.dispatch({
-            selection: { anchor: 0 },
-            scrollIntoView: true
-          })
-        }
+        setCounts(countText(res.data.content))
         if (wantsTitleFocus) focusTitlePendingRef.current = true
       }
     })
@@ -209,6 +212,9 @@ export function NoteEditor(): ReactNode {
     return () => {
       void contentSaver.flush().catch(() => undefined)
       void titleSaver.flush().catch(() => undefined)
+      // A recount still pending belongs to the note being left; letting it fire would
+      // overwrite the next note's count.
+      clearTimeout(countTimerRef.current)
       window.removeEventListener('keydown', onKey, true)
     }
   }, [activeNoteId, setActiveNoteId, contentSaver, titleSaver])
@@ -230,6 +236,8 @@ export function NoteEditor(): ReactNode {
       // The id is captured here, at schedule time. A flush fired by a note
       // switch must persist against *this* note, not whichever is open by then.
       contentSaver.schedule(activeNoteId, value)
+      clearTimeout(countTimerRef.current)
+      countTimerRef.current = setTimeout(() => setCounts(countText(value)), COUNT_DELAY)
     },
     [activeNoteId, contentSaver]
   )
@@ -279,6 +287,8 @@ export function NoteEditor(): ReactNode {
     void loadNotes()
     void loadTagCounts()
   }
+
+  const duplicateNote = useDuplicateNote()
 
   useClipboardAutoClear(editorView?.dom ?? null)
 
@@ -404,14 +414,20 @@ export function NoteEditor(): ReactNode {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-muted-foreground"
                   aria-label="Note actions"
+                  className="text-muted-foreground"
                 >
                   <EllipsisIcon className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuGroup>
+                  {note && !note.isTrashed && (
+                    <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
+                      <CopyIcon className="size-4" />
+                      Duplicate
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => setExportOpen(true)}>
                     <DownloadIcon className="size-4" />
                     Export note…
@@ -457,44 +473,60 @@ export function NoteEditor(): ReactNode {
         {editorMode === 'reading' ? (
           <NoteReadingView content={content} />
         ) : (
-          <EditorContextMenu editorView={editorView}>
-            <CodeMirror
-              value={content}
-              theme="dark"
-              extensions={[
-                markdown({ base: markdownLanguage, codeLanguages }),
-                formattingKeymap,
-                andromeda,
-                notvexEditorTheme,
-                livePreviewPlugin,
-                tablePreviewField,
-                livePreviewTheme,
-                EditorView.lineWrapping
-              ]}
-              onChange={handleContentChange}
-              onCreateEditor={(view) => {
-                editorViewRef.current = view
-                setEditorView(view)
-                view.focus()
-              }}
-              basicSetup={{
-                lineNumbers: false,
-                foldGutter: false,
-                dropCursor: false,
-                allowMultipleSelections: false,
-                indentOnInput: false,
-                highlightActiveLine: true,
-                highlightSelectionMatches: false,
-                closeBrackets: false,
-                autocompletion: false,
-                crosshairCursor: false,
-                highlightActiveLineGutter: false
-              }}
-              className="h-full w-full overflow-auto"
-            />
-          </EditorContextMenu>
+          // Mounted only once the note has decrypted: it takes focus on mount, and a keystroke
+          // into an empty document before the content arrives would be autosaved over the note.
+          !isLoading && (
+            <EditorContextMenu editorView={editorView}>
+              <CodeMirror
+                // One instance per note: @uiw/react-codemirror defers external value updates while
+                // the user is typing, and a deferred update outlives a note switch, leaving the
+                // view showing (and editing) a document that isn't the open note's.
+                key={activeNoteId}
+                value={content}
+                theme="dark"
+                extensions={[
+                  markdown({ base: markdownLanguage, codeLanguages }),
+                  formattingKeymap,
+                  andromeda,
+                  notvexEditorTheme,
+                  livePreviewPlugin,
+                  tablePreviewField,
+                  livePreviewTheme,
+                  EditorView.lineWrapping
+                ]}
+                onChange={handleContentChange}
+                onCreateEditor={(view) => {
+                  editorViewRef.current = view
+                  setEditorView(view)
+                  // Mounted after load, so a title focused for a new note must keep its focus.
+                  if (document.activeElement !== titleInputRef.current) view.focus()
+                }}
+                basicSetup={{
+                  lineNumbers: false,
+                  foldGutter: false,
+                  dropCursor: false,
+                  allowMultipleSelections: false,
+                  indentOnInput: false,
+                  highlightActiveLine: true,
+                  highlightSelectionMatches: false,
+                  closeBrackets: false,
+                  autocompletion: false,
+                  crosshairCursor: false,
+                  highlightActiveLineGutter: false
+                }}
+                className="h-full w-full overflow-auto"
+              />
+            </EditorContextMenu>
+          )
         )}
       </div>
+
+      {note && !isLoading && (
+        <footer className="text-muted-foreground border-border shrink-0 border-t px-4 py-1 text-end text-xs tabular-nums">
+          {formatCount(counts.words, 'word', 'words')} ·{' '}
+          {formatCount(counts.chars, 'character', 'characters')}
+        </footer>
+      )}
     </div>
   )
 }

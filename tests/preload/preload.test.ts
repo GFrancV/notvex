@@ -72,6 +72,20 @@ describe('preload: onReloadRequested', () => {
   })
 })
 
+// Main only enforces the startup opt-out on this channel; routing checkOnStartup to
+// updater:check-now would bypass it.
+describe('preload: updater.checkOnStartup', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('invokes the gated startup channel', () => {
+    void api.updater.checkOnStartup()
+
+    expect(invoke).toHaveBeenLastCalledWith('updater:check-on-startup')
+  })
+})
+
 // Channel names are plain strings on both sides: a typo types fine and only fails at runtime.
 // The handlers are asserted in tests/main/ipc/markdown-io-handlers.test.ts.
 describe('preload: Markdown export/import channels', () => {

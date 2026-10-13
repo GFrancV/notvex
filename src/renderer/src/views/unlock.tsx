@@ -57,6 +57,15 @@ export function Unlock(): ReactNode {
   const keyFileContentsRef = useRef<Uint8Array | null>(null)
   const recoveryKeyFileContentsRef = useRef<Uint8Array | null>(null)
   const pendingPathRef = useRef(pendingOpenVaultPath)
+  const passwordRef = useRef<HTMLInputElement>(null)
+  const mnemonicRef = useRef<HTMLTextAreaElement>(null)
+
+  // key={mode} mounts one field at a time, so the other ref is always null.
+  const focusInput = useCallback((select = false): void => {
+    const field = passwordRef.current ?? mnemonicRef.current
+    field?.focus()
+    if (select) field?.select()
+  }, [])
 
   const startCountdown = useCallback((seconds: number): void => {
     if (countdownRef.current) clearInterval(countdownRef.current)
@@ -114,8 +123,9 @@ export function Unlock(): ReactNode {
       recoveryKeyFileContentsRef.current = null
       setPendingOpenVaultPath(null)
       await refreshThrottleStatus()
+      focusInput()
     })()
-  }, [pendingOpenVaultPath, refreshThrottleStatus, setPendingOpenVaultPath])
+  }, [pendingOpenVaultPath, refreshThrottleStatus, setPendingOpenVaultPath, focusInput])
 
   async function afterUnlock(viaRecovery = false): Promise<void> {
     await Promise.all([refreshAll(), usePrefsStore.getState().load()])
@@ -141,11 +151,13 @@ export function Unlock(): ReactNode {
       // unlock form instead of showing an error.
       if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
+      focusInput(true)
       await refreshThrottleStatus()
       return
     }
     if (res.data === null) {
       setError('Incorrect password or key file.')
+      focusInput(true)
       await refreshThrottleStatus()
       return
     }
@@ -167,10 +179,12 @@ export function Unlock(): ReactNode {
       // A declined prompt, not a credential failure — see handleUnlockVault.
       if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
+      focusInput()
       return
     }
     if (res.data === null) {
       setError('Invalid recovery key or key file.')
+      focusInput()
       return
     }
     setVaultVersion(res.data)
@@ -188,6 +202,7 @@ export function Unlock(): ReactNode {
     keyFileContentsRef.current = null
     recoveryKeyFileContentsRef.current = null
     await refreshThrottleStatus()
+    focusInput()
   }
 
   const handleCreateNew = async (): Promise<void> => {
@@ -298,6 +313,8 @@ export function Unlock(): ReactNode {
                   <FieldLabel htmlFor="unlock-password">Master password</FieldLabel>
                   <PasswordInput
                     id="unlock-password"
+                    ref={passwordRef}
+                    autoFocus
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
@@ -397,6 +414,8 @@ export function Unlock(): ReactNode {
 
                 <Field>
                   <Textarea
+                    ref={mnemonicRef}
+                    autoFocus
                     value={mnemonic}
                     onChange={(e) => setMnemonic(e.target.value)}
                     placeholder="Enter your 24-word recovery phrase…"

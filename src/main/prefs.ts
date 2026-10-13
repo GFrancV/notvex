@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import type { NoteSort, Prefs } from '@shared/types'
@@ -10,7 +10,8 @@ const DEFAULTS: Prefs = {
   allowScreenCapture: false,
   lockOnMinimize: false,
   clipboardClearSeconds: 60,
-  noteSort: { field: 'updatedAt', direction: 'desc' }
+  noteSort: { field: 'updatedAt', direction: 'desc' },
+  checkUpdatesOnStartup: true
 }
 
 const MAX_RECENT_VAULTS = 5
@@ -36,6 +37,9 @@ export function getPrefs(): Prefs {
     const prefs = { ...DEFAULTS, ...(JSON.parse(readFileSync(path, 'utf8')) as Partial<Prefs>) }
     // prefs.json can be hand-edited, so a stored value is as untrusted as one from the renderer.
     if (!isNoteSort(prefs.noteSort)) prefs.noteSort = DEFAULTS.noteSort
+    if (typeof prefs.checkUpdatesOnStartup !== 'boolean') {
+      prefs.checkUpdatesOnStartup = DEFAULTS.checkUpdatesOnStartup
+    }
     return prefs
   } catch {
     return { ...DEFAULTS }
@@ -44,7 +48,11 @@ export function getPrefs(): Prefs {
 
 export function setPrefs(patch: Partial<Prefs>): Prefs {
   const updated = { ...getPrefs(), ...patch }
-  writeFileSync(prefsPath(), JSON.stringify(updated, null, 2))
+  const path = prefsPath()
+  const tmp = `${path}.tmp`
+  // a crash mid-write must leave the old prefs.json, not a truncated one getPrefs reads as defaults
+  writeFileSync(tmp, JSON.stringify(updated, null, 2))
+  renameSync(tmp, path)
   return updated
 }
 

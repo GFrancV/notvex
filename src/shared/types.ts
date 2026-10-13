@@ -126,6 +126,7 @@ export interface Prefs {
   lockOnMinimize: boolean
   clipboardClearSeconds: number
   noteSort: NoteSort
+  checkUpdatesOnStartup: boolean
 }
 
 export interface UnlockThrottleStatus {
@@ -220,6 +221,7 @@ export interface NotvexAPI {
     get(id: string): Promise<IpcResult<Note | null>>
     list(filter?: NoteFilter): Promise<IpcResult<NoteListItem[]>>
     update(id: string, patch: NotePatch): Promise<IpcResult<null>>
+    duplicate(id: string): Promise<IpcResult<NoteListItem>>
     trash(id: string): Promise<IpcResult<null>>
     restore(id: string): Promise<IpcResult<null>>
     delete(id: string): Promise<IpcResult<null>>
@@ -268,6 +270,8 @@ export interface NotvexAPI {
     onUpdateDownloaded(callback: () => void): () => void
     onError(callback: (error: { message: string }) => void): () => void
     checkNow(): Promise<IpcResult<string | null>>
+    /** Like checkNow, but main skips it (data null) when checkUpdatesOnStartup is off. */
+    checkOnStartup(): Promise<IpcResult<string | null>>
     download(): Promise<IpcResult<null>>
     installNow(): Promise<IpcResult<null>>
     getCurrentVersion(): Promise<IpcResult<string>>

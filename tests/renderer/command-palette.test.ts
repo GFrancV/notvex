@@ -17,8 +17,12 @@ const note = (id: string, title: string, isTrashed = false): NoteListItem => ({
   tags: []
 })
 
+const duplicate = vi.hoisted(() => vi.fn(async (): Promise<void> => undefined))
+
 vi.mock('@/lib/ipc', () => ({ notvex: {} }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+// The duplicate flow itself is covered in duplicate-note.test.ts; here only the wiring matters.
+vi.mock('@/hooks/use-duplicate-note', () => ({ useDuplicateNote: () => duplicate }))
 vi.mock('@/lib/reload-window', () => ({ requestReload: vi.fn(async () => undefined) }))
 
 const { useCreateNote } = await import('@/hooks/use-create-note')
@@ -214,6 +218,35 @@ describe('command palette create note from query', () => {
   })
 })
 
+describe('command palette duplicate note', () => {
+  const duplicateOption = (): HTMLElement | null => option('Duplicate Note')
+
+  it('is offered for the open note', () => {
+    useVaultStore.setState({ activeNoteId: 'n-1' })
+    openPalette([note('n-1', 'alpha')])
+    expect(duplicateOption()).not.toBeNull()
+  })
+
+  it('is hidden with no open note', () => {
+    openPalette([note('n-1', 'alpha')])
+    expect(duplicateOption()).toBeNull()
+  })
+
+  it('is hidden when the open note is in the trash', () => {
+    useVaultStore.setState({ activeNoteId: 'n-1' })
+    openPalette([note('n-1', 'alpha', true)])
+    expect(duplicateOption()).toBeNull()
+  })
+
+  it('duplicates the open note and closes the palette', () => {
+    useVaultStore.setState({ activeNoteId: 'n-1' })
+    openPalette([note('n-1', 'alpha')])
+    fireEvent.click(duplicateOption()!)
+    expect(duplicate).toHaveBeenCalledWith('n-1')
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+  })
+})
+
 describe('command palette reload', () => {
   // requestReload() decides whether to confirm first; the palette only closes and hands over.
   it('closes and requests a reload', async () => {
@@ -234,7 +267,8 @@ describe('command palette synonyms', () => {
     ['logout', /^Lock Vault/],
     ['refresh', /^Reload Window/],
     ['assign tag', /^Tag note with/],
-    ['untag', /^Remove tag from note/]
+    ['untag', /^Remove tag from note/],
+    ['clone', /^Duplicate Note/]
   ])('"%s" finds %s', (query, command) => {
     useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
     openPalette([note('n-1', 'zzz')])
