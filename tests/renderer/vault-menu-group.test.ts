@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -96,7 +96,7 @@ describe('VaultMenuGroup: Import Markdown…', () => {
     expect(refreshAll).not.toHaveBeenCalled()
     const [message, options] = vi.mocked(toast.warning).mock.calls[0]
     expect(message).toBe('Imported 0 notes')
-    render(createElement('div', null, (options as { description: unknown }).description))
+    render(createElement('div', null, (options as { description: ReactNode }).description))
     expect(screen.getByText('big.md: larger than 5 MB')).not.toBeNull()
   })
 
