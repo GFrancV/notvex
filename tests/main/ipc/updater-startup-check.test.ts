@@ -81,6 +81,11 @@ describe('updater:check-on-startup', () => {
     })
     expect(checkForUpdates).toHaveBeenCalledOnce()
   })
+
+  it('returns a failure result instead of throwing when the check fails', async () => {
+    checkForUpdates.mockRejectedValueOnce(new Error('offline'))
+    await expect(invoke('updater:check-on-startup')).resolves.toMatchObject({ success: false })
+  })
 })
 
 describe('updater:check-now', () => {
