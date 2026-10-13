@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
 
+import { toast } from 'sonner'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -32,7 +34,13 @@ export function ExportWarningDialog({
     setBusy(true)
     try {
       // Main reads notes from the vault, so edits still inside the autosave debounce go first.
-      await flushAllPending()
+      // If they can't be saved, exporting would write an older version than the one on screen.
+      try {
+        await flushAllPending()
+      } catch {
+        toast.error('Your latest edits could not be saved, so nothing was exported')
+        return
+      }
       await onConfirm()
     } finally {
       setBusy(false)

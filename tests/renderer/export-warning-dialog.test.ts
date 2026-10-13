@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const calls: string[] = []
 const flushAllPending = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/pending-save', () => ({ flushAllPending }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const { ExportWarningDialog } = await import('@/components/dialogs/ExportWarningDialog')
+const { toast } = await import('sonner')
 
 function renderDialog(): {
   onConfirm: ReturnType<typeof vi.fn>
@@ -60,5 +62,31 @@ describe('ExportWarningDialog', () => {
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
     expect(calls).toEqual(['flush', 'export'])
+  })
+
+  it('waits for pending edits to finish saving before exporting', async () => {
+    const { onConfirm } = renderDialog()
+    let finishSaving = (): void => {}
+    flushAllPending.mockImplementation(() => new Promise<void>((r) => (finishSaving = r)))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await act(async () => {})
+    expect(onConfirm).not.toHaveBeenCalled()
+
+    await act(async () => finishSaving())
+    expect(onConfirm).toHaveBeenCalledOnce()
+  })
+
+  it('exports nothing and says so when pending edits fail to save', async () => {
+    const { onConfirm, onOpenChange } = renderDialog()
+    flushAllPending.mockRejectedValue(new Error('disk full'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith(
+      'Your latest edits could not be saved, so nothing was exported'
+    )
   })
 })
