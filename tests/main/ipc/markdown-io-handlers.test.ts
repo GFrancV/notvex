@@ -40,11 +40,22 @@ vi.mock('@main/vault/crypto', () => ({
   KEY_FILE_MAX_BYTES: 0,
   memzero: vi.fn((buf: Uint8Array) => buf.fill(0))
 }))
+// Counts how deep inside withVaultLock the code is, so tests can tell DB work done under the
+// lock from an OS dialog left open outside it.
+const lock = vi.hoisted(() => ({ depth: 0 }))
+
 vi.mock('@main/vault/vault', () => ({
   getDb: vi.fn(() => ({})),
   getMasterKey: vi.fn(() => new Uint8Array(32)),
   isVaultOpen: vi.fn(() => true),
-  withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn())
+  withVaultLock: vi.fn(async <T>(fn: () => Promise<T>) => {
+    lock.depth++
+    try {
+      return await fn()
+    } finally {
+      lock.depth--
+    }
+  })
 }))
 vi.mock('@main/db/queries', () => ({
   getNote: vi.fn(),
@@ -554,5 +565,74 @@ describe('notes:import', () => {
 
     expect(await invoke('notes:import')).toEqual({ success: false, error: 'Vault is locked' })
     expect(importNotes).not.toHaveBeenCalled()
+  })
+
+  it('runs the whole import inside one vault lock and the dialog outside it', async () => {
+    files.set('/in/a.md', Buffer.from('a'))
+    vi.mocked(dialog.showOpenDialog).mockImplementation(async () => {
+      expect(lock.depth).toBe(0)
+      return { canceled: false, filePaths: ['/in/a.md'] }
+    })
+    const depths: number[] = []
+    vi.mocked(importNotes).mockImplementation(async () => {
+      depths.push(lock.depth)
+      return { imported: 1, skipped: [], droppedTags: [] }
+    })
+
+    await invoke('notes:import')
+
+    expect(depths).toEqual([1])
+  })
+
+  it('reports a failed import transaction without the file paths', async () => {
+    selecting(['/home/alice/notes/a.md'])
+    vi.mocked(importNotes).mockRejectedValue(new Error('SQLITE_FULL: database or disk is full'))
+
+    const result = await invoke('notes:import')
+
+    expect(result).toEqual({ success: false, error: 'SQLITE_FULL: database or disk is full' })
+    expect(JSON.stringify(result)).not.toContain('/home/alice')
+  })
+})
+
+describe('vault lock around the export dialogs', () => {
+  it('reads the note under the lock and leaves the save dialog outside it', async () => {
+    const depths: Record<string, number> = {}
+    vi.mocked(getNoteTitle).mockImplementation(async () => {
+      depths.title = lock.depth
+      return NOTE.title
+    })
+    vi.mocked(getNote).mockImplementation(async () => {
+      depths.note = lock.depth
+      return NOTE
+    })
+    vi.mocked(dialog.showSaveDialog).mockImplementation(async () => {
+      depths.dialog = lock.depth
+      return { canceled: false, filePath: '/out/x.md' }
+    })
+
+    await invoke('notes:export', 'n1')
+
+    expect(depths).toEqual({ title: 1, dialog: 0, note: 1 })
+  })
+
+  it('reads every note for export-all under the lock and the folder dialog outside it', async () => {
+    const depths: number[] = []
+    vi.mocked(dialog.showOpenDialog).mockImplementation(async () => {
+      depths.push(lock.depth)
+      return { canceled: false, filePaths: [join('/out', 'all')] }
+    })
+    vi.mocked(listNotes).mockImplementation(async () => {
+      depths.push(lock.depth)
+      return [NOTE]
+    })
+    vi.mocked(getNote).mockImplementation(async () => {
+      depths.push(lock.depth)
+      return NOTE
+    })
+
+    await invoke('notes:export-all')
+
+    expect(depths).toEqual([0, 1, 1])
   })
 })
