@@ -21,12 +21,16 @@ interface Props {
 export function ClearLogsDialog({ open, onOpenChange }: Props): ReactNode {
   const [clearing, setClearing] = useState(false)
 
+  // The invoke itself can reject, not just return a failure; the dialog must stay closable.
   const confirm = async (): Promise<void> => {
     setClearing(true)
-    const result = await notvex.log.clear()
+    const cleared = await notvex.log
+      .clear()
+      .then((result) => result.success)
+      .catch(() => false)
     setClearing(false)
     onOpenChange(false)
-    if (result.success) toast.success('Logs cleared')
+    if (cleared) toast.success('Logs cleared')
     else toast.error("Couldn't clear the logs")
   }
 

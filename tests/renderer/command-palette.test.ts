@@ -17,11 +17,12 @@ const note = (id: string, title: string, isTrashed = false): NoteListItem => ({
   tags: []
 })
 
-vi.mock('@/lib/ipc', () => ({ notvex: { log: { openFolder: vi.fn() } } }))
+vi.mock('@/lib/ipc', () => ({ notvex: {} }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('@/lib/bug-report', () => ({
   openBugReport: vi.fn(async () => undefined),
-  loadDebugInfo: vi.fn(async () => 'REPORT BODY')
+  loadDebugInfo: vi.fn(async () => 'REPORT BODY'),
+  openLogsFolder: vi.fn(async () => undefined)
 }))
 vi.mock('@/lib/reload-window', () => ({ requestReload: vi.fn(async () => undefined) }))
 
@@ -249,9 +250,9 @@ describe('command palette help', () => {
   })
 
   it('opens the logs folder', async () => {
-    const { notvex } = await import('@/lib/ipc')
+    const { openLogsFolder } = await import('@/lib/bug-report')
     await pick(/^Open Logs Folder/)
-    expect(notvex.log.openFolder).toHaveBeenCalledOnce()
+    expect(openLogsFolder).toHaveBeenCalledOnce()
   })
 })
 

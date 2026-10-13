@@ -97,6 +97,20 @@ describe('HelpMenu', () => {
     expect(ipc.openFolder).toHaveBeenCalledTimes(1)
   })
 
+  it('says so when the logs folder cannot be opened', async () => {
+    ipc.openFolder.mockResolvedValue({ success: false, error: 'Failed to open path' })
+    await openMenu()
+    fireEvent.click(item(/open logs folder/i))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't open the logs folder"))
+  })
+
+  it('says so when the browser cannot be opened for a bug report', async () => {
+    ipc.openExternal.mockResolvedValue({ success: false, error: 'no browser' })
+    await openMenu()
+    fireEvent.click(item(/report a bug/i))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't open the browser"))
+  })
+
   it('opens the About dialog', async () => {
     await openMenu()
     fireEvent.click(item(/about notvex/i))
@@ -133,6 +147,16 @@ describe('HelpMenu', () => {
 
       await waitFor(() => expect(ipc.clear).toHaveBeenCalledTimes(1))
       expect(toast.success).toHaveBeenCalledWith('Logs cleared')
+    })
+
+    it('can still be closed when the clear call itself rejects', async () => {
+      ipc.clear.mockRejectedValue(new Error('IPC gone'))
+      await openClearDialog()
+
+      fireEvent.click(screen.getByRole('button', { name: /^clear logs$/i }))
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't clear the logs"))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     })
 
     it('says so when clearing fails', async () => {

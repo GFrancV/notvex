@@ -14,20 +14,29 @@ interface Props {
 
 interface State {
   failed: boolean
+  reloadRefused: boolean
 }
 
 // A class because React only catches render errors in componentDidCatch. The fallback reads no
 // store and never shows error.message: the broken state may be the cause, and the message can
 // carry note content.
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { failed: false }
+  state: State = { failed: false, reloadRefused: false }
 
-  static getDerivedStateFromError(): State {
+  static getDerivedStateFromError(): Partial<State> {
     return { failed: true }
   }
 
   componentDidCatch(error: Error): void {
     reportError(error)
+  }
+
+  // reloadWindow drains and locks the vault before reloading; a raw reload would not. It only
+  // locks when the vault failed to pack, and the Toaster that would say so is inside the
+  // crashed App, so the fallback says it itself.
+  reload = async (): Promise<void> => {
+    const result = await notvex.app.reloadWindow().catch(() => null)
+    if (!result?.success || !result.data) this.setState({ reloadRefused: true })
   }
 
   render(): ReactNode {
@@ -44,8 +53,12 @@ export class ErrorBoundary extends Component<Props, State> {
               screen.
             </AlertDescription>
           </Alert>
-          {/* reloadWindow drains and locks the vault before reloading; a raw reload would not. */}
-          <Button onClick={() => void notvex.app.reloadWindow()}>Reload</Button>
+          <Button onClick={() => void this.reload()}>Reload</Button>
+          {this.state.reloadRefused && (
+            <p className="text-muted-foreground text-center text-sm">
+              Couldn&apos;t reload yet. The vault is locked; press Reload again.
+            </p>
+          )}
           <BugReportActions />
         </div>
       </div>

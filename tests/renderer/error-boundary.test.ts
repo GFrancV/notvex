@@ -61,6 +61,19 @@ describe('ErrorBoundary', () => {
     expect(ipc.reloadWindow).toHaveBeenCalledTimes(1)
   })
 
+  // The Toaster lives inside the crashed App, so the fallback has to say it itself.
+  it.each([
+    ['the vault could only be locked', { success: true, data: false }],
+    ['main refused the reload', { success: false, error: 'busy' }]
+  ])('asks to try again when %s', async (_label, result) => {
+    ipc.reloadWindow.mockResolvedValue(result)
+    render(createElement(ErrorBoundary, null, createElement(Thrower)))
+
+    fireEvent.click(screen.getByRole('button', { name: /reload/i }))
+
+    expect(await screen.findByText(/couldn't reload yet/i)).toBeTruthy()
+  })
+
   it('offers to report the bug from the fallback', () => {
     render(createElement(ErrorBoundary, null, createElement(Thrower)))
 

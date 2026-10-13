@@ -18,7 +18,7 @@ import {
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
-import { loadDebugInfo, openBugReport } from '@/lib/bug-report'
+import { loadDebugInfo, openBugReport, openLogsFolder } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
@@ -205,7 +205,7 @@ function PaletteContent(): ReactNode {
           </CommandItem>
           <CommandItem
             keywords={['logs', 'errors', 'diagnostics']}
-            onSelect={() => run(() => void notvex.log.openFolder())}
+            onSelect={() => run(openLogsFolder)}
           >
             <FolderOpenIcon />
             <span>Open Logs Folder</span>

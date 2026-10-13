@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { DOCS_URL, loadDebugInfo, openBugReport } from '@/lib/bug-report'
+import { DOCS_URL, loadDebugInfo, openBugReport, openLogsFolder } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 
 interface Props {
@@ -60,7 +60,7 @@ export function HelpMenu({ onOpenAbout }: Props): ReactNode {
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem onClick={() => void notvex.log.openFolder()}>
+            <DropdownMenuItem onClick={() => void openLogsFolder()}>
               <FolderOpenIcon />
               Open logs folder
             </DropdownMenuItem>

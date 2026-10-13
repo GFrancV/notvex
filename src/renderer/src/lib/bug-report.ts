@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+
 import type { BugReportParts } from '@shared/types'
 
 import { notvex } from '@/lib/ipc'
@@ -50,5 +52,11 @@ export async function loadDebugInfo(): Promise<string> {
 }
 
 export async function openBugReport(): Promise<void> {
-  await notvex.shell.openExternal(issueUrl(await loadReportParts()))
+  const result = await notvex.shell.openExternal(issueUrl(await loadReportParts()))
+  if (!result.success) toast.error("Couldn't open the browser")
+}
+
+export async function openLogsFolder(): Promise<void> {
+  const result = await notvex.log.openFolder()
+  if (!result.success) toast.error("Couldn't open the logs folder")
 }
