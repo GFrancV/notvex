@@ -80,10 +80,10 @@ Measured via `pnpm test:coverage`:
 
 | Metric | Value | Previous floor |
 |---|---|---|
-| Statements | 39.69% (1455/3665) | 19.61% (665/3390) |
-| Branches | 29.62% (530/1789) | 12.27% (201/1638) |
-| Functions | 32.62% (305/935) | 15.17% (129/850) |
-| Lines | 41.70% (1370/3285) | 20.79% (639/3073) |
+| Statements | 50.15% (2063/4113) | 39.69% (1455/3665) |
+| Branches | 41.40% (838/2024) | 29.62% (530/1789) |
+| Functions | 43.70% (451/1032) | 32.62% (305/935) |
+| Lines | 51.67% (1898/3673) | 41.70% (1370/3285) |
 
 Coverage percentage alone does not prove a test asserts anything: a covered
 line can still pass against deliberately broken code.
