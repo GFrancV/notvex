@@ -401,7 +401,12 @@ export function NoteEditor(): ReactNode {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
+                  aria-label="Note actions"
+                >
                   <EllipsisIcon className="size-4" />
                 </Button>
               </DropdownMenuTrigger>

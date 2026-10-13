@@ -48,7 +48,14 @@ const handleImport = async (): Promise<void> => {
     toast.dismiss(toastId) // user canceled the file dialog
     return
   }
-  if (res.data.imported > 0) await useVaultStore.getState().refreshAll()
+  if (res.data.imported > 0) {
+    // The notes are already committed; a failed refresh (e.g. the vault locked meanwhile) must
+    // not leave the progress toast spinning instead of reporting what was imported.
+    await useVaultStore
+      .getState()
+      .refreshAll()
+      .catch(() => {})
+  }
   const { message, details } = summarizeImport(res.data)
   if (details.length === 0) {
     toast.success(message, { id: toastId })
