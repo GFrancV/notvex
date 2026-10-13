@@ -1,14 +1,11 @@
 import { notvex } from '@/lib/ipc'
+import { toErrorLike } from '@shared/error-stack'
 
 // Called from the error path itself (window.onerror, the ErrorBoundary), so it can never throw.
-// Only name and stack are sent; main strips the message from the stack before it is written.
+// The message is cut here too, so it never crosses IPC; main still filters what it receives.
 export function reportError(e: unknown): void {
   try {
-    const payload =
-      e instanceof Error
-        ? { name: String(e.name), stack: typeof e.stack === 'string' ? e.stack : '' }
-        : { name: 'NonError', stack: '' }
-    notvex.log.error(payload).catch(() => undefined)
+    notvex.log.error(toErrorLike(e)).catch(() => undefined)
   } catch {
     /* nothing left to report to */
   }

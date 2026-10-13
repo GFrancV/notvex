@@ -5,13 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The log is plaintext on disk, so these tests prove what can't reach it, not what can.
 
-const SENTINEL = 'SENTINEL-7f3a'
+const SENTINEL = 'SENTINEL7f3a'
 const APP_ROOT = 'C:\\Program Files\\Notvex\\resources\\app.asar'
 
 const state = vi.hoisted(() => ({ userData: '' }))
 
 vi.mock('electron', () => ({
   app: {
+    isPackaged: false,
     getPath: () => state.userData,
     getAppPath: () => 'C:\\Program Files\\Notvex\\resources\\app.asar',
     getVersion: () => '1.4.0'
@@ -28,10 +29,12 @@ let root = ''
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'notvex-log-'))
   state.userData = root
+  vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 })
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
+  vi.unstubAllEnvs()
 })
 
 describe('formatEntry', () => {
@@ -124,6 +127,66 @@ describe('formatEntry', () => {
   ])('writes the name as Error when it %s', (_label, name) => {
     const out = formatEntry('main', { name, stack: '' })
     expect(out).toMatch(/v1\.4\.0 Error$/)
+  })
+
+  // A message can span lines, and any of them can look like a frame.
+  describe('message lines shaped like frames', () => {
+    it('strips the whole "Name: message" header, however many lines it spans', () => {
+      const err = new Error(
+        [
+          'bad tag',
+          `    at buy ${SENTINEL} milk (native)`,
+          `    at node:${SENTINEL} text`,
+          `    at ${SENTINEL} (out/main/x.js:1:1)`
+        ].join('\n')
+      )
+      err.stack = `${err.name}: ${err.message}\n    at real (${APP_ROOT}\\out\\main\\a.js:1:1)`
+
+      const out = formatEntry('main', toErrorLike(err))
+
+      expect(out).not.toContain(SENTINEL)
+      expect(out).toContain('    at real (out/main/a.js:1:1)')
+    })
+
+    it.each([
+      ['a function name with free text', `    at buy ${SENTINEL} milk (native)`],
+      ['a node: location with free text', `    at node:${SENTINEL} words`],
+      ['a node: location in parentheses', `    at f (node:my ${SENTINEL})`],
+      ['an http URL from another host', `    at f (http://evil.test/${SENTINEL}/x.js:1:1)`],
+      ['a bare https URL', `    at https://example.com/${SENTINEL}:1:1`],
+      ['a path climbing out of the app', `    at f (${APP_ROOT}\\..\\..\\${SENTINEL}\\x.js:1:1)`]
+    ])('never keeps %s, even when it reaches the frames', (_label, line) => {
+      const out = formatEntry('renderer', { name: 'Error', stack: `Error\n${line}` })
+      expect(out).not.toContain(SENTINEL)
+    })
+
+    it('keeps the code-shaped function names V8 produces', () => {
+      const stack = [
+        'Error',
+        '    at Object.<anonymous> (node:x:1:1)',
+        '    at new Promise (<anonymous>)',
+        '    at async Promise.all (index 0)',
+        '    at Array.map [as forEach] (native)',
+        '    at Object.react_stack_bottom_frame (node:x:1:1)'
+      ].join('\n')
+
+      const out = formatEntry('main', { name: 'Error', stack })
+
+      expect(out).toContain('    at Object.<anonymous> (node:x:1:1)')
+      expect(out).toContain('    at new Promise (<anonymous>)')
+      expect(out).toContain('    at async Promise.all (index 0)')
+      expect(out).toContain('    at Array.map [as forEach] (native)')
+      expect(out).toContain('    at Object.react_stack_bottom_frame (node:x:1:1)')
+    })
+
+    it('replaces http URLs in a packaged build, where there is no dev server', () => {
+      vi.stubEnv('ELECTRON_RENDERER_URL', '')
+      const out = formatEntry('renderer', {
+        name: 'Error',
+        stack: 'Error\n    at a (http://localhost:5173/src/x.tsx:1:2)'
+      })
+      expect(out).toContain('    at a (<path>)')
+    })
   })
 
   it('replaces a function name that is not code-shaped', () => {

@@ -14,10 +14,16 @@ beforeEach(() => {
 })
 
 describe('reportError', () => {
-  it('sends the error name and stack', () => {
-    const err = new RangeError('x')
+  it('sends the error name and its stack frames, never the message', () => {
+    const err = new RangeError('secret note text\n    at looks like a frame (x)')
+    err.stack = `RangeError: ${err.message}\n    at f (app.js:1:1)`
+
     reportError(err)
-    expect(ipc.error).toHaveBeenCalledExactlyOnceWith({ name: 'RangeError', stack: err.stack })
+
+    expect(ipc.error).toHaveBeenCalledExactlyOnceWith({
+      name: 'RangeError',
+      stack: '\n    at f (app.js:1:1)'
+    })
   })
 
   it('sends a non-Error as NonError without stringifying it', () => {
