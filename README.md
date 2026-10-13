@@ -21,7 +21,7 @@ Your notes live in a single encrypted file on your own disk. No one else — not
 
 ## What is Notvex
 
-Notvex is a desktop app for taking notes **privately and encrypted**, without relying on any external service. No accounts, no cloud sync, no telemetry: every note is stored encrypted in a single file (`vault.nvx`) that you fully control. Copy it, move it, back it up, or carry it on a USB drive — it stays just as secure as it is on your disk.
+Notvex is a desktop app for taking notes **privately and encrypted**, without relying on any external service. No accounts, no cloud sync, no telemetry — the only network request is an optional update check on startup (see [Updates](#key-features)): every note is stored encrypted in a single file (`vault.nvx`) that you fully control. Copy it, move it, back it up, or carry it on a USB drive — it stays just as secure as it is on your disk.
 
 Under the hood, Notvex combines a SQLCipher database (AES-256 page-level encryption) with a second layer of field-level encryption (XChaCha20-Poly1305) on each note's title and content, deriving the master key with Argon2id. The result: even if someone gets hold of the vault file, without your password (or your recovery key) the content is indistinguishable from random binary noise.
 
@@ -57,6 +57,7 @@ Built with Electron + React + TypeScript, for anyone who wants a fast, minimal, 
 
 🛠️ **Updates**
 - Built-in update checking (electron-updater) with download progress and in-app install.
+- On startup, Notvex asks GitHub whether a new release exists. This is its only network connection, and GitHub sees your IP address, OS and app version. Turn it off in **Security settings → Updates**; you can still check manually from **About**.
 
 🔒 **Security** — see the dedicated section below.
 
