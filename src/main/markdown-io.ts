@@ -90,7 +90,8 @@ function parseFlowList(raw: string): string[] | undefined {
     }
     if (quote) {
       if (ch === quote) quote = ''
-    } else if (ch === '"' || ch === "'") {
+    } else if ((ch === '"' || ch === "'") && current.trim() === '') {
+      // YAML only reads a quote as one at the start of a scalar: `it's` is a plain tag.
       quote = ch
     }
     if (ch === ',' && !quote) {

@@ -200,6 +200,11 @@ describe('parseMarkdownFile', () => {
     expect(parseMarkdownFile('---\ntags: [a, b\n---\nbody', 'x.md').tags).toEqual([])
   })
 
+  it('reads a quote inside an unquoted tag as part of the tag', () => {
+    const text = '---\ntags: [it\'s, say"hi, b]\n---\n'
+    expect(parseMarkdownFile(text, 'x.md').tags).toEqual(["it's", 'say"hi', 'b'])
+  })
+
   it('treats front matter without a closing line as plain content', () => {
     const text = '---\ntags: [a]\nbody'
     expect(parseMarkdownFile(text, 'x.md')).toEqual({ title: 'x', content: text, tags: [] })
@@ -223,7 +228,8 @@ describe('parseMarkdownFile', () => {
       tags: ['a, b', '[x]', 'k: v', '#h', 'say "hi"', ' pad ', "'q", '-d']
     },
     { title: 'Rule', content: '---\nnot front matter\n---', tags: [] },
-    { title: 'Heading body', content: '# Not the title\ntext', tags: ['t'] }
+    { title: 'Heading body', content: '# Not the title\ntext', tags: ['t'] },
+    { title: 'Apostrophe', content: '', tags: ["John's", 'work'] }
   ])('round-trips $title through serializeNote', (note) => {
     expect(parseMarkdownFile(serializeNote(note), 'ignored.md')).toEqual(note)
   })
