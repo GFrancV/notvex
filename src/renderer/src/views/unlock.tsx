@@ -151,11 +151,13 @@ export function Unlock(): ReactNode {
       // unlock form instead of showing an error.
       if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
+      focusInput(true)
       await refreshThrottleStatus()
       return
     }
     if (res.data === null) {
       setError('Incorrect password or key file.')
+      focusInput(true)
       await refreshThrottleStatus()
       return
     }
@@ -177,10 +179,12 @@ export function Unlock(): ReactNode {
       // A declined prompt, not a credential failure — see handleUnlockVault.
       if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
+      focusInput(true)
       return
     }
     if (res.data === null) {
       setError('Invalid recovery key or key file.')
+      focusInput(true)
       return
     }
     setVaultVersion(res.data)

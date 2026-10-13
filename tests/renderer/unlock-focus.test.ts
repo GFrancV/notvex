@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const VAULT = '/vaults/main.nvx'
 const OTHER_VAULT = '/vaults/other.nvx'
+const MNEMONIC = Array.from({ length: 24 }, (_, i) => `word${i}`).join(' ')
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
@@ -16,7 +17,9 @@ vi.mock('@/lib/ipc', () => ({
         data: { isThrottled: false, waitSeconds: 0, failedAttempts: 0 }
       }),
       chooseFile: vi.fn().mockResolvedValue({ success: true, data: OTHER_VAULT }),
-      hasVault: vi.fn().mockResolvedValue({ success: true, data: true })
+      hasVault: vi.fn().mockResolvedValue({ success: true, data: true }),
+      open: vi.fn(),
+      openWithRecovery: vi.fn()
     }
   }
 }))
@@ -94,5 +97,51 @@ describe('Unlock focus', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open existing vault' }))
 
     await waitFor(() => expect(document.activeElement).toBe(passwordInput()))
+  })
+
+  it('refocuses and selects the password after a failed unlock click', async () => {
+    vi.mocked(notvex.vault.open).mockResolvedValueOnce({ success: true, data: null })
+    await renderUnlock()
+    fireEvent.change(passwordInput(), { target: { value: 'wrong password' } })
+    const unlockButton = screen.getByRole('button', { name: 'Unlock' })
+    unlockButton.focus()
+
+    fireEvent.click(unlockButton)
+
+    const input = passwordInput() as HTMLInputElement
+    await waitFor(() => expect(document.activeElement).toBe(input))
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'wrong password'.length])
+  })
+
+  it('refocuses and selects the recovery phrase after a failed recovery', async () => {
+    vi.mocked(notvex.vault.openWithRecovery).mockResolvedValueOnce({ success: true, data: null })
+    await renderUnlock()
+    fireEvent.click(screen.getByRole('button', { name: /Use recovery key/ }))
+    fireEvent.change(recoveryTextarea(), { target: { value: MNEMONIC } })
+    const recoverButton = screen.getByRole('button', { name: 'Recover Access' })
+    recoverButton.focus()
+
+    fireEvent.click(recoverButton)
+
+    const textarea = recoveryTextarea() as HTMLTextAreaElement
+    await waitFor(() => expect(document.activeElement).toBe(textarea))
+    expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([0, MNEMONIC.length])
+  })
+
+  it('leaves focus alone when the user cancels the migration prompt', async () => {
+    vi.mocked(notvex.vault.open).mockResolvedValueOnce({
+      success: false,
+      error: 'MIGRATION_CANCELLED'
+    })
+    await renderUnlock()
+    fireEvent.change(passwordInput(), { target: { value: 'some password' } })
+    const unlockButton = screen.getByRole('button', { name: 'Unlock' })
+    unlockButton.focus()
+
+    fireEvent.click(unlockButton)
+
+    await waitFor(() => expect(notvex.vault.open).toHaveBeenCalled())
+    await waitFor(() => expect(unlockButton).toHaveProperty('disabled', false))
+    expect(document.activeElement).toBe(unlockButton)
   })
 })
