@@ -103,6 +103,7 @@ export interface Prefs {
   lockOnMinimize: boolean
   clipboardClearSeconds: number
   noteSort: NoteSort
+  checkUpdatesOnStartup: boolean
 }
 
 export interface UnlockThrottleStatus {
