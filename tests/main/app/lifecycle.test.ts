@@ -132,6 +132,11 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     expect(app.enableSandbox).toHaveBeenCalledTimes(1)
   })
 
+  it('installs the crash handlers once, before the app is ready', async () => {
+    const { installCrashHandlers } = await import('@main/crash-handlers')
+    expect(installCrashHandlers).toHaveBeenCalledTimes(1)
+  })
+
   it('before-quit calls event.preventDefault() synchronously', () => {
     const event = { preventDefault: vi.fn() }
     app.emit('before-quit', event)

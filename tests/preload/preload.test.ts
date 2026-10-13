@@ -7,6 +7,7 @@ import type { NotvexAPI } from '@shared/types'
 
 const on = vi.fn()
 const off = vi.fn()
+const invoke = vi.fn()
 let api: NotvexAPI
 
 vi.mock('electron', () => ({
@@ -15,7 +16,7 @@ vi.mock('electron', () => ({
       api = value
     }
   },
-  ipcRenderer: { on, off, invoke: vi.fn(), send: vi.fn() }
+  ipcRenderer: { on, off, invoke, send: vi.fn() }
 }))
 
 describe('preload: onPackFailed (issue #61)', () => {
@@ -68,5 +69,27 @@ describe('preload: onReloadRequested', () => {
     unsubscribe()
 
     expect(off).toHaveBeenCalledWith('app:reload-requested', listener)
+  })
+})
+
+// The IPC tests call the handlers by channel name, so a typo here would pass them all.
+describe('preload: log channels', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('log.error invokes log:error with the payload', () => {
+    const payload = { name: 'Error', stack: '' }
+    void api.log.error(payload)
+    expect(invoke).toHaveBeenLastCalledWith('log:error', payload)
+  })
+
+  it.each([
+    ['buildReport', 'log:build-report'],
+    ['openFolder', 'log:open-folder'],
+    ['clear', 'log:clear']
+  ] as const)('log.%s invokes %s', (method, channel) => {
+    void api.log[method]()
+    expect(invoke).toHaveBeenLastCalledWith(channel)
   })
 })

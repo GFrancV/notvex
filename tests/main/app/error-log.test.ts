@@ -250,6 +250,34 @@ describe('appendError / readLogTail / clearLog', () => {
     expect(readLogTail(1)).toMatch(/New$/)
   })
 
+  it('reads the tail across the rotated file and the current one, oldest first', () => {
+    appendError('main', { name: 'Newest', stack: '' })
+    writeFileSync(`${logFile()}.1`, 'old-1\nold-2\n')
+
+    const lines = readLogTail(3).split('\n')
+
+    expect(lines[0]).toBe('old-1')
+    expect(lines[1]).toBe('old-2')
+    expect(lines[2]).toMatch(/Newest$/)
+  })
+
+  it('keeps one rotated file, so the log stays bounded', () => {
+    appendError('main', { name: 'First', stack: '' })
+    writeFileSync(logFile(), 'x'.repeat(512 * 1024 + 1), { flag: 'a' })
+    appendError('main', { name: 'Second', stack: '' })
+    writeFileSync(logFile(), 'y'.repeat(512 * 1024 + 1), { flag: 'a' })
+
+    appendError('main', { name: 'Third', stack: '' })
+
+    expect(readFileSync(`${logFile()}.1`, 'utf8')).toMatch(/^.*Second\ny+$/)
+    expect(existsSync(`${logFile()}.2`)).toBe(false)
+  })
+
+  it('returns nothing for a tail of zero lines', () => {
+    appendError('main', { name: 'Error', stack: '' })
+    expect(readLogTail(0)).toBe('')
+  })
+
   it('clears both files', () => {
     appendError('main', { name: 'Error', stack: '' })
     writeFileSync(`${logFile()}.1`, 'old\n')

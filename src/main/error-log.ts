@@ -132,6 +132,8 @@ export function appendError(origin: string, event: ErrorLike | CrashDetails): vo
 }
 
 export function readLogTail(lines: number): string {
+  // slice(-0) would return the whole log.
+  if (lines <= 0) return ''
   const file = logFile()
   const text = [`${file}.1`, file]
     .filter((f) => existsSync(f))
