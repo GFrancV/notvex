@@ -15,8 +15,10 @@ import {
   InputGroupInput
 } from '@/components/ui/input-group'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
+import { summarizeImport } from '@/lib/import-summary'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
+import { useVaultStore } from '@/store/vault.store'
 
 // The dropdown closes as soon as this item is clicked (standard menu
 // behavior), so any loading state on the item itself is never visible — a
@@ -33,6 +35,29 @@ const handleSaveCopy = async (): Promise<void> => {
   } else {
     toast.dismiss(toastId) // user canceled the save dialog
   }
+}
+
+const handleImport = async (): Promise<void> => {
+  const toastId = toast.loading('Importing notes…')
+  const res = await notvex.notes.import()
+  if (!res.success) {
+    toast.error(res.error, { id: toastId })
+    return
+  }
+  if (!res.data) {
+    toast.dismiss(toastId) // user canceled the file dialog
+    return
+  }
+  if (res.data.imported > 0) await useVaultStore.getState().refreshAll()
+  const { message, details } = summarizeImport(res.data)
+  if (details.length === 0) {
+    toast.success(message, { id: toastId })
+    return
+  }
+  toast.warning(message, {
+    id: toastId,
+    description: <span className="whitespace-pre-line">{details.join('\n')}</span>
+  })
 }
 
 const handleOpenBackupsFolder = async (): Promise<void> => {
@@ -68,6 +93,9 @@ export function VaultMenuGroup({ vaultPath, onExportAll }: VaultMenuGroupProps):
       </DropdownMenuItem>
       <DropdownMenuItem className="text-primary" onClick={onExportAll}>
         Export all notes…
+      </DropdownMenuItem>
+      <DropdownMenuItem className="text-primary" onClick={handleImport}>
+        Import Markdown…
       </DropdownMenuItem>
       <DropdownMenuItem className="text-primary" onClick={handleOpenBackupsFolder}>
         Open backups folder
