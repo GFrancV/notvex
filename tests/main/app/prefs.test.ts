@@ -1,20 +1,53 @@
+import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // prefs.json is a plain file anyone can edit, so a value read back from it is untrusted too.
 
 const fsState = vi.hoisted(() => ({ contents: '' }))
+const fsMock = vi.hoisted(() => ({ writeFileSync: vi.fn(), renameSync: vi.fn() }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
 vi.mock('fs', () => ({
   existsSync: () => true,
   readFileSync: () => fsState.contents,
-  writeFileSync: vi.fn()
+  writeFileSync: fsMock.writeFileSync,
+  renameSync: fsMock.renameSync
 }))
 
-const { getPrefs } = await import('@main/prefs')
+const { getPrefs, setPrefs } = await import('@main/prefs')
+
+const PREFS_PATH = join('/user-data', 'prefs.json')
+const TMP_PATH = `${PREFS_PATH}.tmp`
 
 afterEach(() => {
   fsState.contents = ''
+  vi.resetAllMocks()
+})
+
+describe('setPrefs', () => {
+  it('writes to a temp file and renames it over prefs.json', () => {
+    setPrefs({ autoLockMinutes: 5 })
+
+    expect(fsMock.writeFileSync).toHaveBeenCalledExactlyOnceWith(TMP_PATH, expect.any(String))
+    expect(JSON.parse(fsMock.writeFileSync.mock.calls[0][1])).toMatchObject({
+      autoLockMinutes: 5,
+      noteSort: { field: 'updatedAt', direction: 'desc' }
+    })
+    expect(fsMock.renameSync).toHaveBeenCalledExactlyOnceWith(TMP_PATH, PREFS_PATH)
+    expect(fsMock.writeFileSync.mock.invocationCallOrder[0]).toBeLessThan(
+      fsMock.renameSync.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('leaves prefs.json untouched when the temp write throws', () => {
+    fsMock.writeFileSync.mockImplementation(() => {
+      throw new Error('ENOSPC')
+    })
+
+    expect(() => setPrefs({ autoLockMinutes: 5 })).toThrow('ENOSPC')
+    expect(fsMock.writeFileSync).toHaveBeenCalledExactlyOnceWith(TMP_PATH, expect.any(String))
+    expect(fsMock.renameSync).not.toHaveBeenCalled()
+  })
 })
 
 describe('getPrefs noteSort', () => {
