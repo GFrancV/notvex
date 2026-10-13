@@ -15,6 +15,7 @@ describe('ipc-handlers.ts: notes/tags handlers wrapped in withVaultLock (issue #
     'notes:trash',
     'notes:restore',
     'notes:delete',
+    'notes:duplicate',
     'notes:empty-trash',
     'notes:search',
     'tags:create',

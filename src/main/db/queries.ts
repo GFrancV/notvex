@@ -180,6 +180,38 @@ export async function getNote(
   }
 }
 
+// The copy goes through createNote, so it gets fresh nonces and timestamps and starts
+// unpinned. Note and tag links share one transaction: a half-made copy without its tags
+// would otherwise survive a failure.
+export async function duplicateNote(
+  db: sqlite3.Database,
+  id: string,
+  masterKey: Uint8Array
+): Promise<NoteListItem> {
+  const source = await getNote(db, id, masterKey)
+  if (!source) throw new Error('Note not found')
+  if (source.isTrashed) throw new Error('Cannot duplicate a trashed note')
+
+  await dbRun(db, 'BEGIN TRANSACTION')
+  try {
+    const copy = await createNote(
+      db,
+      { title: `${source.title || 'Untitled'} (copy)`, content: source.content },
+      masterKey
+    )
+    await dbRun(
+      db,
+      'INSERT INTO note_tags (note_id, tag_id) SELECT ?, tag_id FROM note_tags WHERE note_id = ?',
+      [copy.id, id]
+    )
+    await dbRun(db, 'COMMIT')
+    return { ...copy, tags: source.tags }
+  } catch (err) {
+    await dbRun(db, 'ROLLBACK').catch(() => {})
+    throw err
+  }
+}
+
 export async function listNotes(
   db: sqlite3.Database,
   masterKey: Uint8Array,
