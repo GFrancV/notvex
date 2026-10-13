@@ -160,6 +160,36 @@ describe('formatEntry', () => {
       expect(out).not.toContain(SENTINEL)
     })
 
+    it('keeps no frame at all when the message changed after the stack was formatted', () => {
+      const err = new Error(`a\n    at ${SENTINEL} (native)\n    at node:/Users/${SENTINEL}/v.nvx`)
+      void err.stack
+      err.message = `wrapped: ${err.message}`
+
+      const out = formatEntry('main', toErrorLike(err))
+
+      expect(out).not.toContain(SENTINEL)
+      expect(out).toMatch(/v1\.4\.0 Error$/)
+    })
+
+    it('never keeps a node: location that is an absolute path', () => {
+      const out = formatEntry('main', {
+        name: 'Error',
+        stack: `Error\n    at f (node:/Users/${SENTINEL}/vault.nvx)`
+      })
+      expect(out).not.toContain(SENTINEL)
+    })
+
+    it('never decodes an app path into a forged line or free text', () => {
+      const forged = `x%0A2026-01-01T00:00:00.000Z%20[main]%20v9%20${SENTINEL}`
+      const out = formatEntry('renderer', {
+        name: 'Error',
+        stack: `Error\n    at f (file:///C:/Program%20Files/Notvex/resources/app.asar/${forged}:1:1)`
+      })
+
+      expect(out).not.toContain(SENTINEL)
+      expect(out.split('\n')).toHaveLength(2)
+    })
+
     it('keeps the code-shaped function names V8 produces', () => {
       const stack = [
         'Error',

@@ -36,8 +36,11 @@ const SAFE_TOKEN = /^[a-z][a-z-]{0,31}$/
 const SAFE_FUNCTION = /^(?:(?:new|async) )?[\w$.<>]{1,100}(?: \[as [\w$]{1,100}\])?$/
 const FRAME = /^\s*at (?:(.+?) \((.+)\)|(.+))$/
 const POSITION = /(?::\d+){1,2}$/
-const RUNTIME_LOCATION = /^(?:node:[\w/.-]+|native|<anonymous>|index \d+)$/
+// Node's own module ids (node:internal/fs/utils, node:electron/js2c/...), never an absolute path.
+const RUNTIME_LOCATION = /^(?:node:\w+(?:\/\w+)*|native|<anonymous>|index \d+)$/
 const PARENT_SEGMENT = /(?:^|\/)\.\.(?:\/|$)/
+// Decoding a file URL can yield anything, newlines included, so only path characters survive.
+const SAFE_RELATIVE_PATH = /^[\w@+./-]{1,200}$/
 
 export function logDir(): string {
   return join(app.getPath('userData'), 'logs')
@@ -59,7 +62,7 @@ function relativeToApp(file: string): string | null {
     const url = new URL(path)
     if (!devUrl || url.origin !== new URL(devUrl).origin) return null
     // The dev server serves files outside the project as /@fs/<absolute path>.
-    if (!url.pathname.startsWith('/@fs/')) return url.pathname
+    if (!url.pathname.startsWith('/@fs/')) return safeRelative(url.pathname)
     path = `file://${url.pathname.slice('/@fs'.length)}`
   }
   // Parsed by hand, not fileURLToPath: that one only understands the host OS's URL shape.
@@ -72,9 +75,12 @@ function relativeToApp(file: string): string | null {
   const under = /^[A-Za-z]:\//.test(root)
     ? path.toLowerCase().startsWith(`${root.toLowerCase()}/`)
     : path.startsWith(`${root}/`)
-  const relative = under ? path.slice(root.length + 1) : null
-  // root/../../x passes the prefix check but points outside the app.
-  return relative !== null && !PARENT_SEGMENT.test(relative) ? relative : null
+  return under ? safeRelative(path.slice(root.length + 1)) : null
+}
+
+// root/../../x passes the prefix check but points outside the app.
+function safeRelative(path: string): string | null {
+  return SAFE_RELATIVE_PATH.test(path) && !PARENT_SEGMENT.test(path) ? path : null
 }
 
 function trimLocation(location: string): string {
