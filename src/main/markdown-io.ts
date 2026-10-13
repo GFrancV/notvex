@@ -134,6 +134,19 @@ function parseFrontMatter(lines: string[]): { title?: string; tags?: string[] } 
   return meta
 }
 
+// `---` is also a Markdown horizontal rule, so a note can open with two of them around plain
+// text. Only a block made entirely of YAML-shaped lines, with at least one `key:`, is front
+// matter; anything else stays in the content instead of being silently dropped.
+const YAML_KEY_LINE = /^[A-Za-z_][\w-]*:/
+const YAML_OTHER_LINE = /^(\s|-(\s|$)|#|$)/
+
+function looksLikeFrontMatter(block: string[]): boolean {
+  return (
+    block.some((line) => YAML_KEY_LINE.test(line)) &&
+    block.every((line) => YAML_KEY_LINE.test(line) || YAML_OTHER_LINE.test(line))
+  )
+}
+
 export function parseMarkdownFile(text: string, filename: string): MarkdownNote {
   const withoutBom = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
   const lines = withoutBom.replace(/\r\n?/g, '\n').split('\n')
@@ -141,8 +154,9 @@ export function parseMarkdownFile(text: string, filename: string): MarkdownNote 
   let body = lines
   if (lines[0].trimEnd() === '---') {
     const end = lines.findIndex((line, i) => i > 0 && /^(---|\.\.\.)\s*$/.test(line))
-    if (end > 0) {
-      meta = parseFrontMatter(lines.slice(1, end))
+    const block = end > 0 ? lines.slice(1, end) : []
+    if (looksLikeFrontMatter(block)) {
+      meta = parseFrontMatter(block)
       body = lines.slice(end + 1)
     }
   }

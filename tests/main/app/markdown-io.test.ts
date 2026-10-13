@@ -205,6 +205,16 @@ describe('parseMarkdownFile', () => {
     expect(parseMarkdownFile(text, 'x.md').tags).toEqual(["it's", 'say"hi', 'b'])
   })
 
+  it('keeps a block between horizontal rules as content, not front matter', () => {
+    const text = '---\nintro paragraph\n---\nbody'
+    expect(parseMarkdownFile(text, 'f.md')).toEqual({ title: 'f', content: text, tags: [] })
+  })
+
+  it('keeps two horizontal rules with nothing between them as content', () => {
+    const text = '---\n---\nbody'
+    expect(parseMarkdownFile(text, 'f.md').content).toBe(text)
+  })
+
   it('treats front matter without a closing line as plain content', () => {
     const text = '---\ntags: [a]\nbody'
     expect(parseMarkdownFile(text, 'x.md')).toEqual({ title: 'x', content: text, tags: [] })
