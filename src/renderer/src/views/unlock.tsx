@@ -179,12 +179,12 @@ export function Unlock(): ReactNode {
       // A declined prompt, not a credential failure — see handleUnlockVault.
       if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
       setError(res.error)
-      focusInput(true)
+      focusInput()
       return
     }
     if (res.data === null) {
       setError('Invalid recovery key or key file.')
-      focusInput(true)
+      focusInput()
       return
     }
     setVaultVersion(res.data)
