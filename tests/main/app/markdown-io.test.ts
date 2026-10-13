@@ -121,6 +121,16 @@ describe('serializeNote', () => {
   it('normalizes CRLF in the content to LF', () => {
     expect(serializeNote({ title: 'T', content: 'a\r\nb', tags: [] })).toBe('# T\n\na\nb')
   })
+
+  it('collapses blank lines in a title to one space', () => {
+    expect(serializeNote({ title: ' a \n \n b ', content: '', tags: [] })).toBe('# a b\n\n')
+  })
+
+  it('serializes a title with a long whitespace run in linear time', () => {
+    const start = performance.now()
+    serializeNote({ title: 'a' + ' '.repeat(50_000) + 'b', content: '', tags: [] })
+    expect(performance.now() - start).toBeLessThan(100)
+  })
 })
 
 describe('parseMarkdownFile', () => {
@@ -227,6 +237,26 @@ describe('parseMarkdownFile', () => {
 
   it('names a file with no usable name Untitled', () => {
     expect(parseMarkdownFile('x', '.md').title).toBe('Untitled')
+  })
+
+  it('caps an imported title at 500 characters', () => {
+    const long = 'a'.repeat(600)
+    expect(parseMarkdownFile(`---\ntitle: ${long}\n---\n`, 'x.md').title).toBe('a'.repeat(500))
+    expect(parseMarkdownFile(`# ${long}\n`, 'x.md').title).toBe('a'.repeat(500))
+  })
+
+  // An imported file is untrusted: a long whitespace run must not make parsing quadratic,
+  // which would freeze the main process with the vault unlocked.
+  const SPACES = ' '.repeat(50_000)
+
+  it.each([
+    ['a front matter value', `---\ntitle: a${SPACES}b\n---\n`],
+    ['a heading', `#${SPACES}\nx`],
+    ['a heading with text', `# a${SPACES}b\nx`]
+  ])('parses %s with a long whitespace run in linear time', (_label, text) => {
+    const start = performance.now()
+    parseMarkdownFile(text, 'x.md')
+    expect(performance.now() - start).toBeLessThan(100)
   })
 
   it.each([

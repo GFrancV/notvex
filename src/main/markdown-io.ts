@@ -50,7 +50,9 @@ function yamlTag(tag: string): string {
 }
 
 export function serializeNote({ title, content, tags }: MarkdownNote): string {
-  const heading = title.replace(/\s*[\r\n]+\s*/g, ' ').trim() || 'Untitled'
+  // split + trim rather than /\s*[\r\n]+\s*/, which backtracks quadratically on long whitespace.
+  const lines = title.split(/[\r\n]+/).map((line) => line.trim())
+  const heading = lines.filter(Boolean).join(' ') || 'Untitled'
   const body = `# ${heading}\n\n${content.replace(/\r\n/g, '\n')}`
   if (tags.length === 0) return body
   return `---\ntags: [${tags.map(yamlTag).join(', ')}]\n---\n${body}`
@@ -73,7 +75,10 @@ function parseScalar(raw: string): string | undefined {
   if (s.startsWith("'")) {
     return s.length >= 2 && s.endsWith("'") ? s.slice(1, -1).replace(/''/g, "'") : undefined
   }
-  return s.replace(/\s+#.*$/, '')
+  // A plain scalar ends at " #" (a YAML comment). Found with a one-character search rather than
+  // /\s+#.*$/, which backtracks quadratically on a long whitespace run.
+  const comment = s.search(/\s#/)
+  return comment >= 0 ? s.slice(0, comment).trimEnd() : s
 }
 
 function parseFlowList(raw: string): string[] | undefined {
@@ -134,6 +139,16 @@ function parseFrontMatter(lines: string[]): { title?: string; tags?: string[] } 
   return meta
 }
 
+// An imported file can carry a title of megabytes; the sidebar lists every title.
+const IMPORT_TITLE_MAX = 500
+
+function capTitle(title: string): string {
+  if (title.length <= IMPORT_TITLE_MAX) return title
+  // Array.from splits by code point, so the cut never lands inside a surrogate pair.
+  const codePoints = Array.from(title.slice(0, IMPORT_TITLE_MAX * 2))
+  return codePoints.slice(0, IMPORT_TITLE_MAX).join('').trimEnd()
+}
+
 // `---` is also a Markdown horizontal rule, so a note can open with two of them around plain
 // text. Only a block made entirely of YAML-shaped lines, with at least one `key:`, is front
 // matter; anything else stays in the content instead of being silently dropped.
@@ -164,16 +179,17 @@ export function parseMarkdownFile(text: string, filename: string): MarkdownNote 
   let title = meta.title
   if (!title) {
     const first = body.findIndex((line) => line.trim() !== '')
-    const heading = first >= 0 ? /^#[ \t]+(.*\S)\s*$/.exec(body[first]) : null
+    const marker = first >= 0 ? /^#[ \t]+/.exec(body[first]) : null
+    const heading = marker ? body[first].slice(marker[0].length).trim() : ''
     if (heading) {
-      title = heading[1]
+      title = heading
       // serializeNote writes "# title" plus a blank line; dropping both keeps a round trip exact.
       body = body.slice(body[first + 1] === '' ? first + 2 : first + 1)
     }
   }
 
   return {
-    title: title || filename.replace(/\.[^.]*$/, '').trim() || 'Untitled',
+    title: capTitle(title || filename.replace(/\.[^.]*$/, '').trim() || 'Untitled'),
     content: body.join('\n'),
     tags: meta.tags ?? []
   }
