@@ -88,7 +88,11 @@ function parseFlowList(raw: string): string[] | undefined {
       current += ch + s[++i]
       continue
     }
-    if (quote ? ch === quote : ch === '"' || ch === "'") quote = quote ? '' : ch
+    if (quote) {
+      if (ch === quote) quote = ''
+    } else if (ch === '"' || ch === "'") {
+      quote = ch
+    }
     if (ch === ',' && !quote) {
       items.push(current)
       current = ''

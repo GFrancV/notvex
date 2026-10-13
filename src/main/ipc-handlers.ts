@@ -16,6 +16,7 @@ import type {
   CreateNoteInput,
   CreateTagInput,
   ImportRead,
+  Note,
   NoteFilter,
   NotePatch,
   TagPatch
@@ -119,6 +120,12 @@ function validTagName(name: unknown): string {
   return trimmed
 }
 
+// The caller must memzero the result once written.
+function toMarkdownBytes(note: Note): Buffer {
+  const tags = note.tags.map((t) => t.name)
+  return Buffer.from(serializeNote({ ...note, tags }), 'utf8')
+}
+
 // 'wx' fails instead of replacing a file the user already has in `dir`; on EEXIST the next free
 // " (n)" name is tried. `used` also catches collisions within this export.
 function writeNewFile(dir: string, base: string, used: Set<string>, bytes: Uint8Array): void {
@@ -139,6 +146,14 @@ const IMPORT_MAX_FILES = 500
 const IMPORT_MAX_BYTES = 5 * 1024 * 1024
 const utf8Strict = new TextDecoder('utf-8', { fatal: true })
 
+function decodeUtf8(raw: Uint8Array): string | null {
+  try {
+    return utf8Strict.decode(raw)
+  } catch {
+    return null
+  }
+}
+
 async function readImportFile(file: string): Promise<ImportRead> {
   let raw: Buffer
   try {
@@ -150,12 +165,8 @@ async function readImportFile(file: string): Promise<ImportRead> {
   }
   try {
     if (raw.length > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
-    let text: string
-    try {
-      text = utf8Strict.decode(raw)
-    } catch {
-      return { skip: 'not valid UTF-8' }
-    }
+    const text = decodeUtf8(raw)
+    if (text === null) return { skip: 'not valid UTF-8' }
     return { note: parseMarkdownFile(text, basename(file)) }
   } finally {
     memzero(raw)
@@ -1061,8 +1072,7 @@ export function registerIpcHandlers(
       // A lock while the dialog was open means the user may have walked away: don't write.
       requireVault()
 
-      const tags = note.tags.map((t) => t.name)
-      const bytes = Buffer.from(serializeNote({ ...note, tags }), 'utf8')
+      const bytes = toMarkdownBytes(note)
       try {
         writeFileSync(filePath, bytes)
       } catch (e) {
@@ -1102,8 +1112,7 @@ export function registerIpcHandlers(
         for (const id of ids) {
           const note = await getNote(getDb(), id, getMasterKey())
           if (!note) continue
-          const tags = note.tags.map((t) => t.name)
-          const bytes = Buffer.from(serializeNote({ ...note, tags }), 'utf8')
+          const bytes = toMarkdownBytes(note)
           try {
             writeNewFile(dir, toSafeFilename(note.title), used, bytes)
           } catch (e) {
