@@ -57,6 +57,15 @@ export function Unlock(): ReactNode {
   const keyFileContentsRef = useRef<Uint8Array | null>(null)
   const recoveryKeyFileContentsRef = useRef<Uint8Array | null>(null)
   const pendingPathRef = useRef(pendingOpenVaultPath)
+  const passwordRef = useRef<HTMLInputElement>(null)
+  const mnemonicRef = useRef<HTMLTextAreaElement>(null)
+
+  // key={mode} mounts one field at a time, so the other ref is always null.
+  const focusInput = useCallback((select = false): void => {
+    const field = passwordRef.current ?? mnemonicRef.current
+    field?.focus()
+    if (select) field?.select()
+  }, [])
 
   const startCountdown = useCallback((seconds: number): void => {
     if (countdownRef.current) clearInterval(countdownRef.current)
@@ -114,8 +123,9 @@ export function Unlock(): ReactNode {
       recoveryKeyFileContentsRef.current = null
       setPendingOpenVaultPath(null)
       await refreshThrottleStatus()
+      focusInput()
     })()
-  }, [pendingOpenVaultPath, refreshThrottleStatus, setPendingOpenVaultPath])
+  }, [pendingOpenVaultPath, refreshThrottleStatus, setPendingOpenVaultPath, focusInput])
 
   async function afterUnlock(viaRecovery = false): Promise<void> {
     await Promise.all([refreshAll(), usePrefsStore.getState().load()])
@@ -188,6 +198,7 @@ export function Unlock(): ReactNode {
     keyFileContentsRef.current = null
     recoveryKeyFileContentsRef.current = null
     await refreshThrottleStatus()
+    focusInput()
   }
 
   const handleCreateNew = async (): Promise<void> => {
@@ -298,6 +309,7 @@ export function Unlock(): ReactNode {
                   <FieldLabel htmlFor="unlock-password">Master password</FieldLabel>
                   <PasswordInput
                     id="unlock-password"
+                    ref={passwordRef}
                     autoFocus
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -398,6 +410,7 @@ export function Unlock(): ReactNode {
 
                 <Field>
                   <Textarea
+                    ref={mnemonicRef}
                     autoFocus
                     value={mnemonic}
                     onChange={(e) => setMnemonic(e.target.value)}

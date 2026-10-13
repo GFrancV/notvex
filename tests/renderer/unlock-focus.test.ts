@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const VAULT = '/vaults/main.nvx'
+const OTHER_VAULT = '/vaults/other.nvx'
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
@@ -13,7 +14,9 @@ vi.mock('@/lib/ipc', () => ({
       getUnlockThrottleStatus: vi.fn().mockResolvedValue({
         success: true,
         data: { isThrottled: false, waitSeconds: 0, failedAttempts: 0 }
-      })
+      }),
+      chooseFile: vi.fn().mockResolvedValue({ success: true, data: OTHER_VAULT }),
+      hasVault: vi.fn().mockResolvedValue({ success: true, data: true })
     }
   }
 }))
@@ -63,5 +66,33 @@ describe('Unlock focus', () => {
     fireEvent.click(screen.getByRole('button', { name: /Back to unlock/ }))
 
     expect(document.activeElement).toBe(passwordInput())
+  })
+
+  it('refocuses the password input after picking another vault', async () => {
+    await renderUnlock()
+    const vaultButton = screen.getByRole('button', { name: new RegExp(VAULT) })
+    vaultButton.focus()
+
+    fireEvent.click(vaultButton)
+
+    await waitFor(() => expect(document.activeElement).toBe(passwordInput()))
+  })
+
+  it('refocuses the password input when a vault file is opened while unlocking', async () => {
+    await renderUnlock()
+    screen.getByRole('button', { name: 'Advanced options' }).focus()
+
+    act(() => useVaultStore.setState({ pendingOpenVaultPath: OTHER_VAULT }))
+
+    await waitFor(() => expect(document.activeElement).toBe(passwordInput()))
+  })
+
+  it('focuses the password input after picking a vault from the not-found state', async () => {
+    usePrefsStore.setState({ recentVaults: [] })
+    render(createElement(Unlock))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open existing vault' }))
+
+    await waitFor(() => expect(document.activeElement).toBe(passwordInput()))
   })
 })
