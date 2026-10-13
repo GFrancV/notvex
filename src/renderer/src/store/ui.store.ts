@@ -8,6 +8,7 @@ interface UiStore {
   showPinned: boolean
   commandPaletteOpen: boolean
   settingsOpen: boolean
+  reloadConfirmOpen: boolean
   tagSelectorNoteId: string | null
   removeTagNoteId: string | null
   focusTitleRequest: number
@@ -21,6 +22,7 @@ interface UiStore {
   setShowPinned: (v: boolean) => void
   setCommandPaletteOpen: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
+  setReloadConfirmOpen: (v: boolean) => void
   setTagSelectorNoteId: (id: string | null) => void
   setRemoveTagNoteId: (id: string | null) => void
   requestFocusTitle: () => void
@@ -35,6 +37,7 @@ export const useUiStore = create<UiStore>((set) => ({
   showPinned: false,
   commandPaletteOpen: false,
   settingsOpen: false,
+  reloadConfirmOpen: false,
   tagSelectorNoteId: null,
   removeTagNoteId: null,
   focusTitleRequest: 0,
@@ -58,6 +61,7 @@ export const useUiStore = create<UiStore>((set) => ({
   setShowPinned: (showPinned): void => set({ showPinned, activeTags: [], showTrash: false }),
   setCommandPaletteOpen: (commandPaletteOpen): void => set({ commandPaletteOpen }),
   setSettingsOpen: (settingsOpen): void => set({ settingsOpen }),
+  setReloadConfirmOpen: (reloadConfirmOpen): void => set({ reloadConfirmOpen }),
   setTagSelectorNoteId: (tagSelectorNoteId): void => set({ tagSelectorNoteId }),
   setRemoveTagNoteId: (removeTagNoteId): void => set({ removeTagNoteId }),
   requestFocusTitle: (): void => set((s) => ({ focusTitleRequest: s.focusTitleRequest + 1 })),

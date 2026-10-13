@@ -59,6 +59,7 @@ vi.mock('@main/vault/vault', () => ({
   withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn()),
   isVaultOpen: vi.fn(() => false),
   closeVault: vi.fn(async () => ({ packFailed: false })),
+  createVault: vi.fn(),
   openVaultWithRecovery: vi.fn(async () => 1),
   rotateVaultCredentials: vi.fn(),
   syncContainer: vi.fn(),
@@ -80,20 +81,30 @@ vi.mock('@main/vault/vault', () => ({
 
 vi.mock('@main/db/queries', () => ({}))
 vi.mock('@main/clipboard-guard', () => ({}))
-vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
+vi.mock('@main/drain-renderer', () => ({
+  FLUSH_ACK_TIMEOUT_MS: 200,
+  drainRenderer: vi.fn(async () => undefined)
+}))
 
 // The renderer a handler call comes from by default: the most recently created
 // window, i.e. the one the user is looking at.
 let lastSender: WebContents | null = null
 
 // Like a real BrowserWindow, sending to a destroyed one throws.
-export function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () => void } {
+export function fakeWindow(): {
+  win: BrowserWindow
+  sent: string[]
+  reload: ReturnType<typeof vi.fn>
+  destroy: () => void
+} {
   const sent: string[] = []
+  const reload = vi.fn()
   let destroyed = false
   const win = {
     isDestroyed: () => destroyed,
     webContents: {
       isDestroyed: () => destroyed,
+      reload,
       send: (channel: string) => {
         if (destroyed) throw new Error('Object has been destroyed')
         sent.push(channel)
@@ -101,7 +112,7 @@ export function fakeWindow(): { win: BrowserWindow; sent: string[]; destroy: () 
     }
   } as unknown as BrowserWindow
   lastSender = win.webContents
-  return { win, sent, destroy: () => (destroyed = true) }
+  return { win, sent, reload, destroy: () => (destroyed = true) }
 }
 
 // The app's own page, which every handler requires as the calling frame.

@@ -8,6 +8,7 @@ import {
   FileTextIcon,
   LockIcon,
   PlusIcon,
+  RotateCwIcon,
   TagIcon,
   Trash2Icon,
   XIcon
@@ -16,6 +17,7 @@ import {
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { notvex } from '@/lib/ipc'
+import { requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import {
@@ -158,6 +160,11 @@ function PaletteContent(): ReactNode {
             <LockIcon />
             <span>Lock Vault</span>
             <CommandShortcut>Ctrl+L</CommandShortcut>
+          </CommandItem>
+          <CommandItem keywords={['refresh', 'restart']} onSelect={() => run(requestReload)}>
+            <RotateCwIcon />
+            <span>Reload Window</span>
+            <CommandShortcut>Ctrl+R</CommandShortcut>
           </CommandItem>
           {activeNoteId && (
             <CommandItem

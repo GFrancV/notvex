@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { DevBuildWarningDialog } from '@/components/dialogs/DevBuildWarningDialog'
 import { MigrationRequiredDialog } from '@/components/dialogs/MigrationRequiredDialog'
+import { ReloadWindowDialog } from '@/components/dialogs/ReloadWindowDialog'
 import { UpdateAvailableDialog } from '@/components/dialogs/UpdateAvailableDialog'
 import { Toaster } from '@/components/ui/sonner'
 import { notvex } from '@/lib/ipc'
@@ -99,6 +100,7 @@ export default function App(): ReactNode {
       <UpdateAvailableDialog />
       <MigrationRequiredDialog />
       <DevBuildWarningDialog />
+      <ReloadWindowDialog />
     </>
   )
 }

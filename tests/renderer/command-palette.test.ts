@@ -23,6 +23,7 @@ vi.mock('@/lib/ipc', () => ({ notvex: {} }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 // The duplicate flow itself is covered in duplicate-note.test.ts; here only the wiring matters.
 vi.mock('@/hooks/use-duplicate-note', () => ({ useDuplicateNote: () => duplicate }))
+vi.mock('@/lib/reload-window', () => ({ requestReload: vi.fn(async () => undefined) }))
 
 const { useCreateNote } = await import('@/hooks/use-create-note')
 const { CommandPalette } = await import('@/components/command-palette')
@@ -246,6 +247,17 @@ describe('command palette duplicate note', () => {
   })
 })
 
+describe('command palette reload', () => {
+  // requestReload() decides whether to confirm first; the palette only closes and hands over.
+  it('closes and requests a reload', async () => {
+    const { requestReload } = await import('@/lib/reload-window')
+    openPalette([])
+    await act(async () => fireEvent.click(screen.getByRole('option', { name: /^Reload Window/ })))
+    expect(requestReload).toHaveBeenCalledOnce()
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+  })
+})
+
 describe('command palette synonyms', () => {
   it.each([
     ['create note', /^New Note/],
@@ -253,6 +265,7 @@ describe('command palette synonyms', () => {
     ['preview', /^Toggle Reading View/],
     ['bin', /^Show Trash/],
     ['logout', /^Lock Vault/],
+    ['refresh', /^Reload Window/],
     ['assign tag', /^Tag note with/],
     ['untag', /^Remove tag from note/],
     ['clone', /^Duplicate Note/]
