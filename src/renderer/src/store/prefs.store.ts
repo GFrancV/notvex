@@ -12,6 +12,7 @@ interface PrefsStore {
   lockOnMinimize: boolean
   clipboardClearSeconds: number
   noteSort: NoteSort
+  checkUpdatesOnStartup: boolean
   recentVaults: RecentVault[]
   load: () => Promise<void>
   setPref: <K extends SettingKey>(key: K, value: Prefs[K]) => Promise<void>
@@ -25,6 +26,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
   lockOnMinimize: false,
   clipboardClearSeconds: 60,
   noteSort: { field: 'updatedAt', direction: 'desc' },
+  checkUpdatesOnStartup: true,
   recentVaults: [],
 
   load: async () => {
@@ -38,6 +40,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
         lockOnMinimize: p.lockOnMinimize,
         clipboardClearSeconds: p.clipboardClearSeconds,
         noteSort: p.noteSort,
+        checkUpdatesOnStartup: p.checkUpdatesOnStartup,
         recentVaults: p.recentVaults
       })
     } else {

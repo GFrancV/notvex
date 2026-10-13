@@ -27,15 +27,21 @@ interface Props {
 
 export function SecuritySettingsDialog({ open, onOpenChange }: Props): ReactNode {
   const { setPref } = usePrefsStore()
-  const { autoLockMinutes, lockOnMinimize, allowScreenCapture, clipboardClearSeconds } =
-    usePrefsStore(
-      useShallow((s) => ({
-        autoLockMinutes: s.autoLockMinutes,
-        lockOnMinimize: s.lockOnMinimize,
-        allowScreenCapture: s.allowScreenCapture,
-        clipboardClearSeconds: s.clipboardClearSeconds
-      }))
-    )
+  const {
+    autoLockMinutes,
+    lockOnMinimize,
+    allowScreenCapture,
+    clipboardClearSeconds,
+    checkUpdatesOnStartup
+  } = usePrefsStore(
+    useShallow((s) => ({
+      autoLockMinutes: s.autoLockMinutes,
+      lockOnMinimize: s.lockOnMinimize,
+      allowScreenCapture: s.allowScreenCapture,
+      clipboardClearSeconds: s.clipboardClearSeconds,
+      checkUpdatesOnStartup: s.checkUpdatesOnStartup
+    }))
+  )
 
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [keyFileDialogOpen, setKeyFileDialogOpen] = useState(false)
@@ -157,6 +163,25 @@ export function SecuritySettingsDialog({ open, onOpenChange }: Props): ReactNode
               <Checkbox
                 checked={!allowScreenCapture}
                 onCheckedChange={(v) => handleAllowScreenCapture(!(v === true))}
+              />
+            </SettingRow>
+          </section>
+
+          <Separator />
+
+          {/* ── Updates ── */}
+          <section className="space-y-3">
+            <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+              Updates
+            </p>
+
+            <SettingRow
+              label="Check for updates on startup"
+              description="Contacts GitHub when Notvex starts. GitHub sees your IP address, OS and app version. You can still check manually from About."
+            >
+              <Checkbox
+                checked={checkUpdatesOnStartup}
+                onCheckedChange={(v) => void setPref('checkUpdatesOnStartup', v === true)}
               />
             </SettingRow>
           </section>

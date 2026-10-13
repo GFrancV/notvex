@@ -21,6 +21,7 @@ import {
   createTagAndAssign,
   deleteNote,
   deleteTag,
+  duplicateNote,
   emptyTrash,
   getAllNoteTags,
   getNote,
@@ -272,6 +273,7 @@ const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = 
   autoLockMinutes: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 480,
   allowScreenCapture: (v) => typeof v === 'boolean',
   lockOnMinimize: (v) => typeof v === 'boolean',
+  checkUpdatesOnStartup: (v) => typeof v === 'boolean',
   clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
   // Resolved per call, not at load: suites that mock @main/prefs without isNoteSort would
   // otherwise fail on import.
@@ -941,6 +943,18 @@ export function registerIpcHandlers(
     }
   })
 
+  // Takes only the id: the content is read and re-encrypted here, never round-tripped
+  // through the renderer.
+  handle('notes:duplicate', async (_e, id: string) => {
+    try {
+      requireVault()
+      touchActivity()
+      return ok(await withVaultLock(() => duplicateNote(getDb(), id, getMasterKey())))
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
   handle('notes:trash', async (_e, id: string) => {
     try {
       requireVault()
@@ -1219,7 +1233,7 @@ export function registerIpcHandlers(
 
   // ── Updater ────────────────────────────────────────────────────────────────
 
-  handle('updater:check-now', async () => {
+  const checkForUpdates = async (): Promise<IpcResult<string | null>> => {
     try {
       const result = await autoUpdater.checkForUpdates()
       const available = result?.isUpdateAvailable ?? false
@@ -1227,7 +1241,14 @@ export function registerIpcHandlers(
     } catch (e) {
       return fail(e)
     }
-  })
+  }
+
+  handle('updater:check-now', checkForUpdates)
+
+  // The opt-out is enforced here, not in the renderer, so a renderer bug can't leak the request.
+  handle('updater:check-on-startup', () =>
+    getPref('checkUpdatesOnStartup') ? checkForUpdates() : ok(null)
+  )
 
   handle('updater:download', async () => {
     try {

@@ -44,23 +44,45 @@ function setPrefIpc(key: string, value: unknown): Promise<unknown> {
   return Promise.resolve(fn({ sender: {}, senderFrame }, key, value))
 }
 
+let ipc: typeof import('@main/ipc-handlers')
+let setPref: ReturnType<typeof vi.fn>
+
+beforeEach(async () => {
+  handlers.clear()
+  vi.resetModules()
+  vi.clearAllMocks()
+  setPref = vi.mocked((await import('@main/prefs')).setPref)
+  ipc = await import('@main/ipc-handlers')
+  ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
+})
+
+afterEach(() => {
+  ipc.stopAutoLockTimer()
+})
+
+describe('prefs:set checkUpdatesOnStartup', () => {
+  it.each([true, false])('accepts %s', async (value) => {
+    await expect(setPrefIpc('checkUpdatesOnStartup', value)).resolves.toEqual({
+      success: true,
+      data: null
+    })
+    expect(setPref).toHaveBeenCalledExactlyOnceWith('checkUpdatesOnStartup', value)
+  })
+
+  it.each([
+    ['a string', 'false'],
+    ['a number', 0],
+    ['null', null]
+  ])('rejects %s', async (_label, value) => {
+    await expect(setPrefIpc('checkUpdatesOnStartup', value)).resolves.toEqual({
+      success: false,
+      error: 'Invalid value for preference: checkUpdatesOnStartup'
+    })
+    expect(setPref).not.toHaveBeenCalled()
+  })
+})
+
 describe('prefs:set noteSort', () => {
-  let ipc: typeof import('@main/ipc-handlers')
-  let setPref: ReturnType<typeof vi.fn>
-
-  beforeEach(async () => {
-    handlers.clear()
-    vi.resetModules()
-    vi.clearAllMocks()
-    setPref = vi.mocked((await import('@main/prefs')).setPref)
-    ipc = await import('@main/ipc-handlers')
-    ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
-  })
-
-  afterEach(() => {
-    ipc.stopAutoLockTimer()
-  })
-
   it.each(
     (['updatedAt', 'createdAt', 'title'] as const).flatMap((field) =>
       (['asc', 'desc'] as const).map((direction) => ({ field, direction }))

@@ -72,6 +72,20 @@ describe('preload: onReloadRequested', () => {
   })
 })
 
+// Main only enforces the startup opt-out on this channel; routing checkOnStartup to
+// updater:check-now would bypass it.
+describe('preload: updater.checkOnStartup', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('invokes the gated startup channel', () => {
+    void api.updater.checkOnStartup()
+
+    expect(invoke).toHaveBeenLastCalledWith('updater:check-on-startup')
+  })
+})
+
 // The IPC tests call the handlers by channel name, so a typo here would pass them all.
 describe('preload: log channels', () => {
   beforeAll(async () => {
