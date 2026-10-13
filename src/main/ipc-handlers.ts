@@ -1170,7 +1170,7 @@ export function registerIpcHandlers(
 
   // ── Updater ────────────────────────────────────────────────────────────────
 
-  handle('updater:check-now', async () => {
+  const checkForUpdates = async (): Promise<IpcResult<string | null>> => {
     try {
       const result = await autoUpdater.checkForUpdates()
       const available = result?.isUpdateAvailable ?? false
@@ -1178,7 +1178,14 @@ export function registerIpcHandlers(
     } catch (e) {
       return fail(e)
     }
-  })
+  }
+
+  handle('updater:check-now', checkForUpdates)
+
+  // The opt-out is enforced here, not in the renderer, so a renderer bug can't leak the request.
+  handle('updater:check-on-startup', () =>
+    getPref('checkUpdatesOnStartup') ? checkForUpdates() : ok(null)
+  )
 
   handle('updater:download', async () => {
     try {

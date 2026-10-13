@@ -241,6 +241,8 @@ export interface NotvexAPI {
     onUpdateDownloaded(callback: () => void): () => void
     onError(callback: (error: { message: string }) => void): () => void
     checkNow(): Promise<IpcResult<string | null>>
+    /** Like checkNow, but main skips it (data null) when checkUpdatesOnStartup is off. */
+    checkOnStartup(): Promise<IpcResult<string | null>>
     download(): Promise<IpcResult<null>>
     installNow(): Promise<IpcResult<null>>
     getCurrentVersion(): Promise<IpcResult<string>>

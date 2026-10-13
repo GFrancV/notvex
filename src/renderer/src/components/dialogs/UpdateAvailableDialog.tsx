@@ -63,7 +63,7 @@ export function UpdateAvailableDialog(): ReactNode {
       )
     ]
 
-    void notvex.updater.checkNow()
+    void notvex.updater.checkOnStartup()
 
     return (): void => offFns.forEach((off) => off())
   }, [])

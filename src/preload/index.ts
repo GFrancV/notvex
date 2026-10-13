@@ -167,6 +167,7 @@ const api: NotvexAPI = {
       }
     },
     checkNow: () => ipcRenderer.invoke('updater:check-now'),
+    checkOnStartup: () => ipcRenderer.invoke('updater:check-on-startup'),
     download: () => ipcRenderer.invoke('updater:download'),
     installNow: () => ipcRenderer.invoke('updater:install-now'),
     getCurrentVersion: () => ipcRenderer.invoke('updater:get-current-version')
