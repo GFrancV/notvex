@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import type { NoteSort, Prefs } from '@shared/types'
@@ -48,7 +48,11 @@ export function getPrefs(): Prefs {
 
 export function setPrefs(patch: Partial<Prefs>): Prefs {
   const updated = { ...getPrefs(), ...patch }
-  writeFileSync(prefsPath(), JSON.stringify(updated, null, 2))
+  const path = prefsPath()
+  const tmp = `${path}.tmp`
+  // a crash mid-write must leave the old prefs.json, not a truncated one getPrefs reads as defaults
+  writeFileSync(tmp, JSON.stringify(updated, null, 2))
+  renameSync(tmp, path)
   return updated
 }
 
