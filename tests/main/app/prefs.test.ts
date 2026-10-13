@@ -37,3 +37,24 @@ describe('getPrefs noteSort', () => {
     expect(getPrefs().noteSort).toEqual({ field: 'updatedAt', direction: 'desc' })
   })
 })
+
+describe('getPrefs checkUpdatesOnStartup', () => {
+  it('keeps a saved false', () => {
+    fsState.contents = JSON.stringify({ checkUpdatesOnStartup: false })
+    expect(getPrefs().checkUpdatesOnStartup).toBe(false)
+  })
+
+  it('defaults to true for a prefs.json written before the pref existed', () => {
+    fsState.contents = JSON.stringify({ autoLockMinutes: 5 })
+    expect(getPrefs().checkUpdatesOnStartup).toBe(true)
+  })
+
+  it.each([
+    ['a string', 'no'],
+    ['a number', 0],
+    ['null', null]
+  ])('falls back to true for %s', (_label, checkUpdatesOnStartup) => {
+    fsState.contents = JSON.stringify({ checkUpdatesOnStartup })
+    expect(getPrefs().checkUpdatesOnStartup).toBe(true)
+  })
+})

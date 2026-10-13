@@ -7,6 +7,7 @@ import type { NotvexAPI } from '@shared/types'
 
 const on = vi.fn()
 const off = vi.fn()
+const invoke = vi.fn()
 let api: NotvexAPI
 
 vi.mock('electron', () => ({
@@ -15,7 +16,7 @@ vi.mock('electron', () => ({
       api = value
     }
   },
-  ipcRenderer: { on, off, invoke: vi.fn(), send: vi.fn() }
+  ipcRenderer: { on, off, invoke, send: vi.fn() }
 }))
 
 describe('preload: onPackFailed (issue #61)', () => {
@@ -68,5 +69,19 @@ describe('preload: onReloadRequested', () => {
     unsubscribe()
 
     expect(off).toHaveBeenCalledWith('app:reload-requested', listener)
+  })
+})
+
+// Main only enforces the startup opt-out on this channel; routing checkOnStartup to
+// updater:check-now would bypass it.
+describe('preload: updater.checkOnStartup', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('invokes the gated startup channel', () => {
+    void api.updater.checkOnStartup()
+
+    expect(invoke).toHaveBeenLastCalledWith('updater:check-on-startup')
   })
 })

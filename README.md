@@ -57,6 +57,7 @@ Built with Electron + React + TypeScript, for anyone who wants a fast, minimal, 
 
 🛠️ **Updates**
 - Built-in update checking (electron-updater) with download progress and in-app install.
+- On startup, Notvex asks GitHub whether a new release exists, so GitHub sees your IP address, OS and app version. Turn it off in **Security settings → Updates**; you can still check manually from **About**.
 
 🔒 **Security** — see the dedicated section below.
 

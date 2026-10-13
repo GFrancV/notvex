@@ -179,7 +179,8 @@ describe('note list sort sources', () => {
       allowScreenCapture: false,
       lockOnMinimize: false,
       clipboardClearSeconds: 60,
-      noteSort: { field: 'title', direction: 'desc' }
+      noteSort: { field: 'title', direction: 'desc' },
+      checkUpdatesOnStartup: true
     }
     ipc.prefs.get.mockResolvedValue({ success: true, data: saved })
     render(createElement(NoteList))

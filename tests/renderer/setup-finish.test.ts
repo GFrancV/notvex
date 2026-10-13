@@ -21,7 +21,8 @@ const prefsAfterCreate: Prefs = {
   allowScreenCapture: false,
   lockOnMinimize: false,
   clipboardClearSeconds: 60,
-  noteSort: { field: 'updatedAt', direction: 'desc' }
+  noteSort: { field: 'updatedAt', direction: 'desc' },
+  checkUpdatesOnStartup: true
 }
 
 vi.mock('@/lib/ipc', () => ({
