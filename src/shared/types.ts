@@ -31,6 +31,15 @@ export interface Tag {
 // Roughly what fits in the sidebar row before truncating.
 export const TAG_NAME_MAX = 24
 
+// Files are reported by basename only: full paths never go back to the renderer.
+export interface ImportResult {
+  imported: number
+  /** Files that were not imported. */
+  skipped: Array<{ file: string; reason: string }>
+  /** Invalid tag names dropped from a note that was imported. */
+  droppedTags: Array<{ file: string; tag: string }>
+}
+
 // Shared because main colours the tags it creates during a Markdown import.
 export const PRESET_COLORS = [
   '#10b981',
@@ -220,6 +229,8 @@ export interface NotvexAPI {
     export(id: string): Promise<IpcResult<true | null>>
     /** Writes every non-trashed note into a user-chosen folder: the count, or null if canceled. */
     exportAll(): Promise<IpcResult<number | null>>
+    /** Imports user-chosen Markdown files as new notes, all or nothing; null if canceled. */
+    import(): Promise<IpcResult<ImportResult | null>>
   }
   tags: {
     create(input: CreateTagInput): Promise<IpcResult<Tag>>

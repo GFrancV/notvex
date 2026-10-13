@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
-import { PRESET_COLORS, TAG_NAME_MAX } from '@shared/types'
+import { type ImportResult, PRESET_COLORS, TAG_NAME_MAX } from '@shared/types'
 
 import type { MarkdownNote } from '../markdown-io'
 import { decryptField, encryptField } from '../vault/crypto'
@@ -424,12 +424,6 @@ export async function getAllNoteTags(
 // ─── Markdown import ─────────────────────────────────────────────────────────
 
 export type ImportRead = { note: MarkdownNote } | { skip: string }
-
-export interface ImportResult {
-  imported: number
-  skipped: Array<{ file: string; reason: string }>
-  droppedTags: Array<{ file: string; tag: string }>
-}
 
 // One transaction for the whole import, so a failure never leaves part of it behind. Files are
 // read one at a time inside it (via `read`) to keep at most one file in memory. Must run inside

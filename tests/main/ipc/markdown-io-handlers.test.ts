@@ -1,8 +1,9 @@
-import type { BrowserWindow, SaveDialogOptions } from 'electron'
+import type { BrowserWindow, OpenDialogOptions, SaveDialogOptions } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { ImportRead } from '@main/db/queries'
 import { rendererIndexPath } from '@main/url-guard'
 
 // Export and import are the only handlers that write or read user-chosen files, and the only
@@ -24,6 +25,7 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(() => false),
   copyFileSync: vi.fn(),
+  statSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
 vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
@@ -40,17 +42,17 @@ vi.mock('@main/vault/vault', () => ({
   isVaultOpen: vi.fn(() => true),
   withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn())
 }))
-vi.mock('@main/db/queries', () => ({ getNote: vi.fn(), listNotes: vi.fn() }))
+vi.mock('@main/db/queries', () => ({ getNote: vi.fn(), listNotes: vi.fn(), importNotes: vi.fn() }))
 vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { getNote, listNotes } = await import('@main/db/queries')
+const { getNote, importNotes, listNotes } = await import('@main/db/queries')
 const { isVaultOpen } = await import('@main/vault/vault')
 const { memzero } = await import('@main/vault/crypto')
 const { logError } = await import('@main/log')
 const { dialog } = await import('electron')
-const { writeFileSync } = await import('fs')
+const { readFileSync, statSync, writeFileSync } = await import('fs')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 const win = { isDestroyed: () => false, webContents: {} } as unknown as BrowserWindow
@@ -285,5 +287,158 @@ describe('notes:export-all', () => {
       error: 'Export stopped after 1 of 2 notes: a file could not be written'
     })
     expect(logError).toHaveBeenCalled()
+  })
+})
+
+describe('notes:import', () => {
+  const MB = 1024 * 1024
+  // What the handler's reader produced for each file, in order. importNotes itself (the
+  // transaction) is covered against a real database in tests/main/db/import-notes.test.ts.
+  let reads: ImportRead[]
+  // path → file bytes on the fake disk
+  let files: Map<string, Buffer>
+
+  function selecting(paths: string[]): void {
+    vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: false, filePaths: paths })
+  }
+
+  beforeEach(() => {
+    reads = []
+    files = new Map()
+    vi.mocked(statSync).mockImplementation(((path: string) => {
+      const bytes = files.get(path)
+      if (!bytes) throw Object.assign(new Error(`ENOENT: '${path}'`), { code: 'ENOENT' })
+      return { size: bytes.length }
+    }) as unknown as typeof statSync)
+    vi.mocked(readFileSync).mockImplementation(((path: string) => {
+      const bytes = files.get(path)
+      if (!bytes) throw Object.assign(new Error(`ENOENT: '${path}'`), { code: 'ENOENT' })
+      return bytes
+    }) as unknown as typeof readFileSync)
+    vi.mocked(importNotes).mockImplementation(async (_db, paths, _key, read) => {
+      for (const path of paths) reads.push(await read(path))
+      return { imported: reads.filter((r) => 'note' in r).length, skipped: [], droppedTags: [] }
+    })
+  })
+
+  it('opens a multi-select dialog filtered to Markdown and text files', async () => {
+    vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] })
+
+    await invoke('notes:import')
+
+    const [, options] = vi.mocked(dialog.showOpenDialog).mock.calls[0] as unknown as [
+      BrowserWindow,
+      OpenDialogOptions
+    ]
+    expect(options.properties).toEqual(['openFile', 'multiSelections'])
+    expect(options.filters).toEqual([{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }])
+  })
+
+  it('parses each file and returns the import summary', async () => {
+    files.set('/in/a.md', Buffer.from('---\ntags: [work]\n---\n# Alpha\n\nbody'))
+    files.set('/in/b.txt', Buffer.from('plain'))
+    selecting(['/in/a.md', '/in/b.txt'])
+
+    expect(await invoke('notes:import')).toEqual({
+      success: true,
+      data: { imported: 2, skipped: [], droppedTags: [] }
+    })
+    expect(reads).toEqual([
+      { note: { title: 'Alpha', content: 'body', tags: ['work'] } },
+      { note: { title: 'b', content: 'plain', tags: [] } }
+    ])
+  })
+
+  it('skips a file over 5 MB without reading it', async () => {
+    files.set('/in/big.md', Buffer.alloc(5 * MB + 1, 'a'))
+    selecting(['/in/big.md'])
+
+    await invoke('notes:import')
+
+    expect(reads).toEqual([{ skip: 'larger than 5 MB' }])
+    expect(readFileSync).not.toHaveBeenCalled()
+  })
+
+  it('accepts a file of exactly 5 MB', async () => {
+    files.set('/in/max.md', Buffer.alloc(5 * MB, 'a'))
+    selecting(['/in/max.md'])
+
+    await invoke('notes:import')
+
+    expect(reads[0]).toHaveProperty('note')
+  })
+
+  it('skips a file that is not valid UTF-8 and zeroes what it read', async () => {
+    const bytes = Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x41])
+    files.set('/in/binary.md', bytes)
+    selecting(['/in/binary.md'])
+
+    await invoke('notes:import')
+
+    expect(reads).toEqual([{ skip: 'not valid UTF-8' }])
+    expect(bytes.every((b) => b === 0)).toBe(true)
+  })
+
+  it('zeroes the bytes of a file it imported', async () => {
+    const bytes = Buffer.from('# Secret\n\ntext')
+    files.set('/in/s.md', bytes)
+    selecting(['/in/s.md'])
+
+    await invoke('notes:import')
+
+    expect(memzero).toHaveBeenCalledWith(bytes)
+    expect(bytes.every((b) => b === 0)).toBe(true)
+  })
+
+  it('skips a file it cannot read instead of failing the import', async () => {
+    files.set('/in/ok.md', Buffer.from('ok'))
+    selecting(['/in/gone.md', '/in/ok.md'])
+
+    await invoke('notes:import')
+
+    expect(reads).toEqual([{ skip: 'could not be read' }, { note: expect.anything() }])
+    expect(logError).toHaveBeenCalled()
+  })
+
+  it('rejects more than 500 files without reading any', async () => {
+    selecting(Array.from({ length: 501 }, (_, i) => `/in/${i}.md`))
+
+    expect(await invoke('notes:import')).toEqual({
+      success: false,
+      error: 'Select at most 500 files per import'
+    })
+    expect(importNotes).not.toHaveBeenCalled()
+  })
+
+  it('accepts exactly 500 files', async () => {
+    const paths = Array.from({ length: 500 }, (_, i) => `/in/${i}.md`)
+    for (const path of paths) files.set(path, Buffer.from('x'))
+    selecting(paths)
+
+    expect(await invoke('notes:import')).toMatchObject({ success: true, data: { imported: 500 } })
+  })
+
+  it('imports nothing when the dialog is canceled', async () => {
+    vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] })
+
+    expect(await invoke('notes:import')).toEqual({ success: true, data: null })
+    expect(importNotes).not.toHaveBeenCalled()
+  })
+
+  it('refuses a locked vault without opening a dialog', async () => {
+    vi.mocked(isVaultOpen).mockReturnValue(false)
+
+    expect(await invoke('notes:import')).toEqual({ success: false, error: 'Vault is locked' })
+    expect(dialog.showOpenDialog).not.toHaveBeenCalled()
+  })
+
+  it('imports nothing if the vault locked while the dialog was open', async () => {
+    vi.mocked(dialog.showOpenDialog).mockImplementation(async () => {
+      vi.mocked(isVaultOpen).mockReturnValue(false)
+      return { canceled: false, filePaths: ['/in/a.md'] }
+    })
+
+    expect(await invoke('notes:import')).toEqual({ success: false, error: 'Vault is locked' })
+    expect(importNotes).not.toHaveBeenCalled()
   })
 })

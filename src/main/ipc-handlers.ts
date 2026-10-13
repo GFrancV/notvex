@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto'
 import type { BrowserWindow, IpcMainInvokeEvent, WebContents } from 'electron'
 import { app, dialog, ipcMain, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'fs'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
@@ -10,9 +10,16 @@ import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { logError } from './log'
-import { dedupeName, serializeNote, toSafeFilename } from './markdown-io'
+import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './markdown-io'
 import type { SchemaMigrationGate } from './db/migrations'
-import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
+import type {
+  CreateNoteInput,
+  CreateTagInput,
+  ImportRead,
+  NoteFilter,
+  NotePatch,
+  TagPatch
+} from './db/queries'
 import {
   addTagToNote,
   createNote,
@@ -25,6 +32,7 @@ import {
   getNote,
   getNoteCountPerTag,
   getNoteTags,
+  importNotes,
   listNotes,
   listTags,
   removeTagFromNote,
@@ -121,6 +129,36 @@ function writeNewFile(dir: string, base: string, used: Set<string>, bytes: Uint8
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
     }
+  }
+}
+
+// Imported files are untrusted: size is checked before reading (and again after, in case the
+// file grew in between), and decoding is strict so a binary renamed to .md is rejected rather
+// than stored as mojibake. A file that can't be read is skipped, not fatal to the import.
+const IMPORT_MAX_FILES = 500
+const IMPORT_MAX_BYTES = 5 * 1024 * 1024
+const utf8Strict = new TextDecoder('utf-8', { fatal: true })
+
+async function readImportFile(file: string): Promise<ImportRead> {
+  let raw: Buffer
+  try {
+    if (statSync(file).size > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
+    raw = readFileSync(file)
+  } catch (e) {
+    logError('notes:import: read failed:', e)
+    return { skip: 'could not be read' }
+  }
+  try {
+    if (raw.length > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
+    let text: string
+    try {
+      text = utf8Strict.decode(raw)
+    } catch {
+      return { skip: 'not valid UTF-8' }
+    }
+    return { note: parseMarkdownFile(text, basename(file)) }
+  } finally {
+    memzero(raw)
   }
 }
 
@@ -1080,6 +1118,34 @@ export function registerIpcHandlers(
         }
         return ok(written)
       })
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('notes:import', async () => {
+    try {
+      requireVault()
+      touchActivity()
+      const { canceled, filePaths } = await dialog.showOpenDialog(requireWin(), {
+        title: 'Import Markdown',
+        defaultPath: dialogDefaultPath(),
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }]
+      })
+      if (canceled || filePaths.length === 0) return ok(null)
+      rememberDialogDir(filePaths[0])
+      if (filePaths.length > IMPORT_MAX_FILES) {
+        return fail(`Select at most ${IMPORT_MAX_FILES} files per import`)
+      }
+      requireVault()
+
+      // importNotes reads each file inside its transaction, so this holds the vault lock for the
+      // whole import; it's a one-off action the user is waiting on.
+      const result = await withVaultLock(() =>
+        importNotes(getDb(), filePaths, getMasterKey(), readImportFile)
+      )
+      return ok(result)
     } catch (e) {
       return fail(e)
     }
