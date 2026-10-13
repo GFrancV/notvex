@@ -10,7 +10,7 @@ import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
 import { scheduleClipboardClear } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
-import { appendError, readLogTail } from './error-log'
+import { appendError, clearLog, ensureLogDir, readLogTail } from './error-log'
 import { logError } from './log'
 import type { SchemaMigrationGate } from './db/migrations'
 import type { CreateNoteInput, CreateTagInput, NoteFilter, NotePatch, TagPatch } from './db/queries'
@@ -1194,6 +1194,24 @@ export function registerIpcHandlers(
         `**OS:** ${process.platform} ${release()} ${process.arch}`
       ].join(' · ')
       return ok({ environment, log: readLogTail(REPORT_LOG_LINES) })
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('log:open-folder', async () => {
+    try {
+      const result = await shell.openPath(ensureLogDir())
+      return result ? fail(result) : ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('log:clear', () => {
+    try {
+      clearLog()
+      return ok(null)
     } catch (e) {
       return fail(e)
     }

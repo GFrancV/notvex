@@ -41,6 +41,12 @@ export function logDir(): string {
   return join(app.getPath('userData'), 'logs')
 }
 
+export function ensureLogDir(): string {
+  const dir = logDir()
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  return dir
+}
+
 const logFile = (): string => join(logDir(), FILE_NAME)
 
 // An Error's getters can throw (a Proxy, a hostile subclass), and a non-Error value can be
@@ -122,7 +128,7 @@ export function formatEntry(origin: string, event: ErrorLike | CrashDetails): st
 // not replace the crash it was recording, or recurse into itself.
 export function appendError(origin: string, event: ErrorLike | CrashDetails): void {
   try {
-    mkdirSync(logDir(), { recursive: true, mode: 0o700 })
+    ensureLogDir()
     const file = logFile()
     if (existsSync(file) && statSync(file).size > ROTATE_AT_BYTES) renameSync(file, `${file}.1`)
     appendFileSync(file, `${formatEntry(origin, event)}\n`, { mode: 0o600 })

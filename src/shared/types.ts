@@ -238,6 +238,9 @@ export interface NotvexAPI {
     /** Main validates, truncates and rate-limits this; past the limit it is dropped silently. */
     error(payload: { name: string; stack: string }): Promise<IpcResult<null>>
     buildReport(): Promise<IpcResult<BugReportParts>>
+    /** Creates the log folder if needed, then opens it in the OS file manager. */
+    openFolder(): Promise<IpcResult<null>>
+    clear(): Promise<IpcResult<null>>
   }
   app: {
     isDev(): Promise<IpcResult<boolean>>

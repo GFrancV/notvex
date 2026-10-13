@@ -13,7 +13,7 @@ const handlers = new Map<string, Handler>()
 vi.mock('electron', () => ({
   app: { isPackaged: false, getVersion: () => '1.4.0' },
   dialog: {},
-  shell: {},
+  shell: { openPath: vi.fn(async () => '') },
   ipcMain: { handle: (channel: string, fn: Handler): void => void handlers.set(channel, fn) }
 }))
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
@@ -33,11 +33,14 @@ vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 vi.mock('@main/error-log', () => ({
   appendError: vi.fn(),
+  clearLog: vi.fn(),
+  ensureLogDir: vi.fn(() => '/user-data/logs'),
   readLogTail: vi.fn(() => '2026-01-01T00:00:00.000Z [main] v1.4.0 TypeError')
 }))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { appendError, readLogTail } = await import('@main/error-log')
+const { appendError, clearLog, ensureLogDir, readLogTail } = await import('@main/error-log')
+const { shell } = await import('electron')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 
@@ -133,5 +136,35 @@ describe('log:build-report', () => {
     })
 
     expect(await invoke('log:build-report')).toEqual({ success: false, error: 'EACCES' })
+  })
+})
+
+describe('log:open-folder', () => {
+  it('creates the folder first, so it opens even before any error was logged', async () => {
+    expect(await invoke('log:open-folder')).toEqual({ success: true, data: null })
+    expect(ensureLogDir).toHaveBeenCalledTimes(1)
+    expect(shell.openPath).toHaveBeenCalledExactlyOnceWith('/user-data/logs')
+  })
+
+  it('fails with the error openPath reports', async () => {
+    vi.mocked(shell.openPath).mockResolvedValueOnce('Failed to open path')
+    expect(await invoke('log:open-folder')).toEqual({
+      success: false,
+      error: 'Failed to open path'
+    })
+  })
+})
+
+describe('log:clear', () => {
+  it('clears the log', async () => {
+    expect(await invoke('log:clear')).toEqual({ success: true, data: null })
+    expect(clearLog).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails cleanly when the files cannot be removed', async () => {
+    vi.mocked(clearLog).mockImplementationOnce(() => {
+      throw new Error('EBUSY')
+    })
+    expect(await invoke('log:clear')).toEqual({ success: false, error: 'EBUSY' })
   })
 })

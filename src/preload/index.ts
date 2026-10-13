@@ -127,7 +127,9 @@ const api: NotvexAPI = {
   },
   log: {
     error: (payload) => ipcRenderer.invoke('log:error', payload),
-    buildReport: () => ipcRenderer.invoke('log:build-report')
+    buildReport: () => ipcRenderer.invoke('log:build-report'),
+    openFolder: () => ipcRenderer.invoke('log:open-folder'),
+    clear: () => ipcRenderer.invoke('log:clear')
   },
   app: {
     isDev: () => ipcRenderer.invoke('app:is-dev'),

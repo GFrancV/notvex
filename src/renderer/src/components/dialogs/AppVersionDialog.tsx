@@ -1,12 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { DotIcon, Loader2Icon, TagIcon } from 'lucide-react'
+import { FolderOpenIcon, Loader2Icon, TagIcon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
+import { BugReportActions } from '@/components/BugReportActions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Separator } from '@/components/ui/separator'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
 
@@ -32,6 +34,7 @@ export function AppVersionDialog({ open, onClose }: Props): ReactNode {
   const isDev = useIsDev()
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [isCheckingLoading, setIsCheckingLoading] = useState(false)
+  const [confirmingClear, setConfirmingClear] = useState(false)
 
   useEffect(() => {
     notvex.updater.getCurrentVersion().then((result) => {
@@ -50,6 +53,18 @@ export function AppVersionDialog({ open, onClose }: Props): ReactNode {
     }
 
     setIsCheckingLoading(false)
+  }
+
+  // Clearing can't be undone, so the first click only arms the button.
+  const handleClearLogs = async (): Promise<void> => {
+    if (!confirmingClear) {
+      setConfirmingClear(true)
+      return
+    }
+    setConfirmingClear(false)
+    const result = await notvex.log.clear()
+    if (result.success) toast.success('Logs cleared')
+    else toast.error("Couldn't clear the logs")
   }
 
   return (
@@ -94,19 +109,32 @@ export function AppVersionDialog({ open, onClose }: Props): ReactNode {
               </Button>
             </div>
           </section>
-          <ul className="text-muted-foreground mt-8 flex items-center justify-center gap-1 text-sm">
-            <li>
-              <ExternalLink url="https://github.com/GFrancV/notvex">Docs</ExternalLink>
-            </li>
-            <li>
-              <DotIcon className="size-6" />
-            </li>
-            <li>
-              <ExternalLink url="https://github.com/GFrancV/notvex/issues/new">
-                Report Issue
-              </ExternalLink>
-            </li>
-          </ul>
+          <Separator />
+          <section className="space-y-3">
+            <h2 className="text-sm font-medium">Troubleshooting</h2>
+            <BugReportActions />
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                className="flex-1"
+                onClick={() => void notvex.log.openFolder()}
+              >
+                <FolderOpenIcon />
+                Open logs folder
+              </Button>
+              <Button
+                variant={confirmingClear ? 'destructive' : 'ghost'}
+                className="flex-1"
+                onClick={handleClearLogs}
+              >
+                <Trash2Icon />
+                {confirmingClear ? 'Confirm clear' : 'Clear logs'}
+              </Button>
+            </div>
+          </section>
+          <p className="text-muted-foreground flex justify-center text-sm">
+            <ExternalLink url="https://github.com/GFrancV/notvex">Docs</ExternalLink>
+          </p>
         </div>
       </DialogContent>
     </Dialog>
