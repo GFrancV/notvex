@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { DOCS_URL, loadReportParts, openBugReport, reportBody } from '@/lib/bug-report'
+import { DOCS_URL, loadDebugInfo, openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 
 interface Props {
@@ -53,9 +53,7 @@ export function HelpMenu({ onOpenAbout }: Props): ReactNode {
               <BugIcon />
               Report a bug…
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={async () => copyToClipboard(reportBody(await loadReportParts()))}
-            >
+            <DropdownMenuItem onClick={async () => copyToClipboard(await loadDebugInfo())}>
               <CopyIcon />
               Copy debug info
             </DropdownMenuItem>

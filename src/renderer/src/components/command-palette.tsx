@@ -18,7 +18,7 @@ import {
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
-import { loadReportParts, openBugReport, reportBody } from '@/lib/bug-report'
+import { loadDebugInfo, openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
@@ -198,7 +198,7 @@ function PaletteContent(): ReactNode {
           </CommandItem>
           <CommandItem
             keywords={['diagnostics', 'debug', 'version', 'system info']}
-            onSelect={() => run(async () => copyToClipboard(reportBody(await loadReportParts())))}
+            onSelect={() => run(async () => copyToClipboard(await loadDebugInfo()))}
           >
             <CopyIcon />
             <span>Copy Debug Info</span>

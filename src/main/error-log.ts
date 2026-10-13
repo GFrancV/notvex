@@ -29,9 +29,8 @@ const ROTATE_AT_BYTES = 512 * 1024
 const MAX_FRAMES = 50
 
 const SAFE_NAME = /^[A-Za-z_$][\w$.]{0,63}$/
-const SAFE_ORIGIN = /^[a-z][a-z-]{0,31}$/
-// Electron's RenderProcessGoneDetails / Details reasons are all lowercase kebab-case.
-const SAFE_REASON = /^[a-z][a-z-]{0,31}$/
+// Origins and Electron's RenderProcessGoneDetails / Details reasons are all lowercase kebab-case.
+const SAFE_TOKEN = /^[a-z][a-z-]{0,31}$/
 const SAFE_FUNCTION = /^[\w$.<>[\] ]{1,100}$/
 const FRAME = /^\s*at (?:(.+?) \((.+)\)|(.+))$/
 const POSITION = /(?::\d+){1,2}$/
@@ -107,11 +106,11 @@ function trimFrame(line: string): string | null {
 export function formatEntry(origin: string, event: ErrorLike | CrashDetails): string {
   const header = [
     new Date().toISOString(),
-    `[${SAFE_ORIGIN.test(origin) ? origin : 'unknown'}]`,
+    `[${SAFE_TOKEN.test(origin) ? origin : 'unknown'}]`,
     `v${app.getVersion()}`
   ]
   if ('reason' in event) {
-    header.push(`reason=${SAFE_REASON.test(event.reason) ? event.reason : 'unknown'}`)
+    header.push(`reason=${SAFE_TOKEN.test(event.reason) ? event.reason : 'unknown'}`)
     if (Number.isInteger(event.exitCode)) header.push(`exitCode=${event.exitCode}`)
     return header.join(' ')
   }

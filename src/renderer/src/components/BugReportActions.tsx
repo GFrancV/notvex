@@ -4,7 +4,7 @@ import { BugIcon, CheckIcon, CopyIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { loadReportParts, openBugReport, reportBody } from '@/lib/bug-report'
+import { loadDebugInfo, openBugReport } from '@/lib/bug-report'
 
 // Report bug and Copy debug info for the ErrorBoundary fallback, which has no menu to reach.
 // The report is read fresh on every click so it carries the latest log lines.
@@ -20,7 +20,7 @@ export function BugReportActions(): ReactNode {
       <Button
         variant="outline"
         className="flex-1"
-        onClick={async () => copyToClipboard(reportBody(await loadReportParts()))}
+        onClick={async () => copyToClipboard(await loadDebugInfo())}
       >
         {isCopied ? <CheckIcon /> : <CopyIcon />}
         {isCopied ? 'Copied' : 'Copy debug info'}

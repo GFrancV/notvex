@@ -39,9 +39,14 @@ export function issueUrl(parts: BugReportParts): string {
 }
 
 // A report is still worth sending without the log, so a failed read isn't an error here.
-export async function loadReportParts(): Promise<BugReportParts> {
+async function loadReportParts(): Promise<BugReportParts> {
   const result = await notvex.log.buildReport()
   return result.success ? result.data : { environment: '', log: '' }
+}
+
+// The full report text, untrimmed: the clipboard has no URL length limit.
+export async function loadDebugInfo(): Promise<string> {
+  return reportBody(await loadReportParts())
 }
 
 export async function openBugReport(): Promise<void> {

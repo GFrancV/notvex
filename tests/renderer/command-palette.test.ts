@@ -21,8 +21,7 @@ vi.mock('@/lib/ipc', () => ({ notvex: { log: { openFolder: vi.fn() } } }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('@/lib/bug-report', () => ({
   openBugReport: vi.fn(async () => undefined),
-  loadReportParts: vi.fn(async () => ({ environment: 'env', log: '' })),
-  reportBody: vi.fn(() => 'REPORT BODY')
+  loadDebugInfo: vi.fn(async () => 'REPORT BODY')
 }))
 vi.mock('@/lib/reload-window', () => ({ requestReload: vi.fn(async () => undefined) }))
 
