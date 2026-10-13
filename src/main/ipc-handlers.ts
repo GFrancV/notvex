@@ -2,7 +2,17 @@ import { randomBytes } from 'crypto'
 import type { BrowserWindow, IpcMainInvokeEvent, WebContents } from 'electron'
 import { app, dialog, ipcMain, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
-import { copyFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'fs'
+import {
+  closeSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  writeFileSync
+} from 'fs'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
@@ -154,22 +164,40 @@ function decodeUtf8(raw: Uint8Array): string | null {
   }
 }
 
+// Checked and read through one descriptor, so the file that was checked is the file that is read.
 async function readImportFile(file: string): Promise<ImportRead> {
-  let raw: Buffer
+  let fd: number
   try {
-    if (statSync(file).size > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
-    raw = readFileSync(file)
+    // O_NONBLOCK: opening a FIFO would otherwise wait for a writer forever. No-op on Windows.
+    fd = openSync(file, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0))
+  } catch (e) {
+    logError('notes:import: open failed:', e)
+    return { skip: 'could not be read' }
+  }
+  let buf: Buffer | undefined
+  try {
+    const stat = fstatSync(fd)
+    // FIFOs and devices report size 0 and may never reach EOF, so the size cap can't hold.
+    if (!stat.isFile()) return { skip: 'not a regular file' }
+    if (stat.size > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
+    // One byte past the stated size, to notice a file that grew since fstat.
+    buf = Buffer.alloc(stat.size + 1)
+    let length = 0
+    while (length < buf.length) {
+      const n = readSync(fd, buf, length, buf.length - length, length)
+      if (n === 0) break
+      length += n
+    }
+    if (length > stat.size) return { skip: 'changed while being read' }
+    const text = decodeUtf8(buf.subarray(0, length))
+    if (text === null) return { skip: 'not valid UTF-8' }
+    return { note: parseMarkdownFile(text, basename(file)) }
   } catch (e) {
     logError('notes:import: read failed:', e)
     return { skip: 'could not be read' }
-  }
-  try {
-    if (raw.length > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
-    const text = decodeUtf8(raw)
-    if (text === null) return { skip: 'not valid UTF-8' }
-    return { note: parseMarkdownFile(text, basename(file)) }
   } finally {
-    memzero(raw)
+    if (buf) memzero(buf)
+    closeSync(fd)
   }
 }
 

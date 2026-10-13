@@ -22,10 +22,14 @@ vi.mock('electron', () => ({
 }))
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
 vi.mock('fs', () => ({
-  readFileSync: vi.fn(),
-  existsSync: vi.fn(() => false),
+  closeSync: vi.fn(),
+  constants: { O_RDONLY: 0, O_NONBLOCK: 2048 },
   copyFileSync: vi.fn(),
-  statSync: vi.fn(),
+  existsSync: vi.fn(() => false),
+  fstatSync: vi.fn(),
+  openSync: vi.fn(),
+  readFileSync: vi.fn(),
+  readSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
 vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
@@ -52,7 +56,7 @@ const { isVaultOpen } = await import('@main/vault/vault')
 const { memzero } = await import('@main/vault/crypto')
 const { logError } = await import('@main/log')
 const { dialog } = await import('electron')
-const { readFileSync, statSync, writeFileSync } = await import('fs')
+const { closeSync, fstatSync, openSync, readSync, writeFileSync } = await import('fs')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 const win = { isDestroyed: () => false, webContents: {} } as unknown as BrowserWindow
@@ -295,8 +299,15 @@ describe('notes:import', () => {
   // What the handler's reader produced for each file, in order. importNotes itself (the
   // transaction) is covered against a real database in tests/main/db/import-notes.test.ts.
   let reads: ImportRead[]
-  // path → file bytes on the fake disk
+  // The fake disk. `files`: path → bytes. `special`: FIFOs/devices (size 0, not a regular file).
+  // `grown`: what a read returns when the file changed after fstat.
   let files: Map<string, Buffer>
+  let special: Set<string>
+  let grown: Map<string, Buffer>
+  // fd → path, for descriptors that are open; every one must be closed again.
+  let open: Map<number, string>
+  // The buffers the handler read into, so tests can check they were zeroed.
+  let readBuffers: Buffer[]
 
   function selecting(paths: string[]): void {
     vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: false, filePaths: paths })
@@ -305,16 +316,37 @@ describe('notes:import', () => {
   beforeEach(() => {
     reads = []
     files = new Map()
-    vi.mocked(statSync).mockImplementation(((path: string) => {
-      const bytes = files.get(path)
-      if (!bytes) throw Object.assign(new Error(`ENOENT: '${path}'`), { code: 'ENOENT' })
-      return { size: bytes.length }
-    }) as unknown as typeof statSync)
-    vi.mocked(readFileSync).mockImplementation(((path: string) => {
-      const bytes = files.get(path)
-      if (!bytes) throw Object.assign(new Error(`ENOENT: '${path}'`), { code: 'ENOENT' })
-      return bytes
-    }) as unknown as typeof readFileSync)
+    special = new Set()
+    grown = new Map()
+    open = new Map()
+    readBuffers = []
+    let nextFd = 10
+    vi.mocked(openSync).mockImplementation(((path: string) => {
+      if (!files.has(path) && !special.has(path)) {
+        throw Object.assign(new Error(`ENOENT: '${path}'`), { code: 'ENOENT' })
+      }
+      open.set(nextFd, path)
+      return nextFd++
+    }) as unknown as typeof openSync)
+    vi.mocked(fstatSync).mockImplementation(((fd: number) => {
+      const path = open.get(fd)!
+      return { size: files.get(path)?.length ?? 0, isFile: () => !special.has(path) }
+    }) as unknown as typeof fstatSync)
+    vi.mocked(readSync).mockImplementation(((
+      fd: number,
+      buf: Buffer,
+      offset: number,
+      length: number,
+      position: number
+    ) => {
+      const path = open.get(fd)!
+      const source = grown.get(path) ?? files.get(path)!
+      if (!readBuffers.includes(buf)) readBuffers.push(buf)
+      return source.copy(buf, offset, position, Math.min(source.length, position + length))
+    }) as unknown as typeof readSync)
+    vi.mocked(closeSync).mockImplementation(((fd: number) => {
+      open.delete(fd)
+    }) as unknown as typeof closeSync)
     vi.mocked(importNotes).mockImplementation(async (_db, paths, _key, read) => {
       for (const path of paths) reads.push(await read(path))
       return { imported: reads.filter((r) => 'note' in r).length, skipped: [], droppedTags: [] }
@@ -356,7 +388,41 @@ describe('notes:import', () => {
     await invoke('notes:import')
 
     expect(reads).toEqual([{ skip: 'larger than 5 MB' }])
-    expect(readFileSync).not.toHaveBeenCalled()
+    expect(readSync).not.toHaveBeenCalled()
+  })
+
+  it('skips a FIFO or device without reading it', async () => {
+    special.add('/in/fifo.md')
+    selecting(['/in/fifo.md'])
+
+    await invoke('notes:import')
+
+    expect(reads).toEqual([{ skip: 'not a regular file' }])
+    expect(readSync).not.toHaveBeenCalled()
+  })
+
+  it('skips a file that grew after it was checked, and zeroes what it read', async () => {
+    files.set('/in/live.md', Buffer.from('short'))
+    grown.set('/in/live.md', Buffer.from('short, then much longer'))
+    selecting(['/in/live.md'])
+
+    await invoke('notes:import')
+
+    expect(reads).toEqual([{ skip: 'changed while being read' }])
+    expect(readBuffers[0].every((b) => b === 0)).toBe(true)
+  })
+
+  it('closes every file it opened, whatever the outcome', async () => {
+    files.set('/in/ok.md', Buffer.from('ok'))
+    files.set('/in/big.md', Buffer.alloc(5 * MB + 1, 'a'))
+    files.set('/in/bin.md', Buffer.from([0xff]))
+    special.add('/in/fifo.md')
+    selecting(['/in/ok.md', '/in/big.md', '/in/bin.md', '/in/fifo.md'])
+
+    await invoke('notes:import')
+
+    expect(openSync).toHaveBeenCalledTimes(4)
+    expect(open.size).toBe(0)
   })
 
   it('accepts a file of exactly 5 MB', async () => {
@@ -369,25 +435,24 @@ describe('notes:import', () => {
   })
 
   it('skips a file that is not valid UTF-8 and zeroes what it read', async () => {
-    const bytes = Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x41])
-    files.set('/in/binary.md', bytes)
+    files.set('/in/binary.md', Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x41]))
     selecting(['/in/binary.md'])
 
     await invoke('notes:import')
 
     expect(reads).toEqual([{ skip: 'not valid UTF-8' }])
-    expect(bytes.every((b) => b === 0)).toBe(true)
+    expect(readBuffers[0].every((b) => b === 0)).toBe(true)
   })
 
   it('zeroes the bytes of a file it imported', async () => {
-    const bytes = Buffer.from('# Secret\n\ntext')
-    files.set('/in/s.md', bytes)
+    files.set('/in/s.md', Buffer.from('# Secret\n\ntext'))
     selecting(['/in/s.md'])
 
     await invoke('notes:import')
 
-    expect(memzero).toHaveBeenCalledWith(bytes)
-    expect(bytes.every((b) => b === 0)).toBe(true)
+    expect(reads[0]).toHaveProperty('note')
+    expect(memzero).toHaveBeenCalledWith(readBuffers[0])
+    expect(readBuffers[0].every((b) => b === 0)).toBe(true)
   })
 
   it('skips a file it cannot read instead of failing the import', async () => {
