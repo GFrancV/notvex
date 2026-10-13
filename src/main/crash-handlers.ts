@@ -32,6 +32,8 @@ async function lockAndExit(e: unknown): Promise<void> {
 
 export function installCrashHandlers(): void {
   process.on('uncaughtException', (e) => void lockAndExit(e))
+  // Exiting here too costs the editor's unsaved changes (no renderer drain), but a main process
+  // that ignores a failed promise may be left holding the key in a half-done state.
   process.on('unhandledRejection', (e) => void lockAndExit(e))
   app.on('child-process-gone', (_event, details) => {
     appendError(details.type.toLowerCase().replace(/ /g, '-'), {
