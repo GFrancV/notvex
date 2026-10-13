@@ -298,6 +298,7 @@ export function Unlock(): ReactNode {
                   <FieldLabel htmlFor="unlock-password">Master password</FieldLabel>
                   <PasswordInput
                     id="unlock-password"
+                    autoFocus
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
@@ -397,6 +398,7 @@ export function Unlock(): ReactNode {
 
                 <Field>
                   <Textarea
+                    autoFocus
                     value={mnemonic}
                     onChange={(e) => setMnemonic(e.target.value)}
                     placeholder="Enter your 24-word recovery phrase…"
