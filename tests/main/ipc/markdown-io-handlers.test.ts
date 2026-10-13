@@ -127,6 +127,14 @@ describe('notes:export', () => {
     expect(options.defaultPath).toMatch(/Plan_ Q3_\.md$/)
   })
 
+  it('writes the plaintext file readable by its owner only', async () => {
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: false, filePath: '/out/x.md' })
+
+    await invoke('notes:export', 'n1')
+
+    expect(vi.mocked(writeFileSync).mock.calls[0][2]).toMatchObject({ mode: 0o600 })
+  })
+
   it('zeroes the plaintext buffer after writing', async () => {
     vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: false, filePath: '/out/x.md' })
 
@@ -276,6 +284,16 @@ describe('notes:export-all', () => {
     expect(await invoke('notes:export-all')).toEqual({ success: true, data: 1 })
     expect(disk.get(join(DIR, 'Title.md'))).toBe('user file')
     expect(disk.get(join(DIR, 'Title (2).md'))).toBe('# Title\n\nfrom vault')
+  })
+
+  it('creates every file new and readable by its owner only', async () => {
+    exporting([noteWith('a', 'Alpha'), noteWith('b', 'Beta')])
+
+    await invoke('notes:export-all')
+
+    for (const call of vi.mocked(writeFileSync).mock.calls) {
+      expect(call[2]).toEqual({ flag: 'wx', mode: 0o600 })
+    }
   })
 
   it('zeroes every plaintext buffer it wrote', async () => {

@@ -132,6 +132,10 @@ function validTagName(name: unknown): string {
 }
 
 // The caller must memzero the result once written.
+// Exported files are plaintext: on Linux and macOS the default 0644 would let other local
+// accounts read them. Applies when a file is created; Windows ignores it.
+const EXPORT_MODE = 0o600
+
 function toMarkdownBytes(note: Note): Buffer {
   const tags = note.tags.map((t) => t.name)
   return Buffer.from(serializeNote({ ...note, tags }), 'utf8')
@@ -142,7 +146,7 @@ function toMarkdownBytes(note: Note): Buffer {
 function writeNewFile(dir: string, base: string, used: Set<string>, bytes: Uint8Array): void {
   for (;;) {
     try {
-      writeFileSync(join(dir, dedupeName(base, used)), bytes, { flag: 'wx' })
+      writeFileSync(join(dir, dedupeName(base, used)), bytes, { flag: 'wx', mode: EXPORT_MODE })
       return
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
@@ -1107,7 +1111,7 @@ export function registerIpcHandlers(
 
       const bytes = toMarkdownBytes(note)
       try {
-        writeFileSync(filePath, bytes)
+        writeFileSync(filePath, bytes, { mode: EXPORT_MODE })
       } catch (e) {
         logError('notes:export: write failed:', e)
         return fail('Could not write the exported file')
