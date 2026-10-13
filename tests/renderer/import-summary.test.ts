@@ -20,12 +20,16 @@ describe('summarizeImport', () => {
     const summary = summarizeImport({
       imported: 1,
       skipped: [{ file: 'big.md', reason: 'larger than 5 MB' }],
-      droppedTags: [{ file: 'a.md', tag: 'x'.repeat(25) }]
+      droppedTags: [
+        { file: 'a.md', count: 1, reason: 'longer than 24 characters' },
+        { file: 'b.md', count: 10, reason: 'over the 50-tag limit for one note' }
+      ]
     })
 
     expect(summary.details).toEqual([
       'big.md: larger than 5 MB',
-      `a.md: tag "${'x'.repeat(25)}" ignored (invalid name)`
+      'a.md: 1 tag ignored (longer than 24 characters)',
+      'b.md: 10 tags ignored (over the 50-tag limit for one note)'
     ])
   })
 

@@ -36,8 +36,8 @@ export interface ImportResult {
   imported: number
   /** Files that were not imported. */
   skipped: Array<{ file: string; reason: string }>
-  /** Invalid tag names dropped from a note that was imported. */
-  droppedTags: Array<{ file: string; tag: string }>
+  /** Tags left off a note that was imported: one entry per file and reason, with a count. */
+  droppedTags: Array<{ file: string; count: number; reason: string }>
 }
 
 // Shared because main colours the tags it creates during a Markdown import.

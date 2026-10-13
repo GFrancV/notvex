@@ -134,8 +134,42 @@ describe('importNotes', () => {
     )
 
     expect(result.imported).toBe(1)
-    expect(result.droppedTags).toEqual([{ file: 'a.md', tag: tooLong }])
+    expect(result.droppedTags).toEqual([
+      { file: 'a.md', count: 1, reason: 'longer than 24 characters' }
+    ])
     expect((await noteByTitle('A'))?.tags.map((t) => t.name)).toEqual(['ok'])
+  })
+
+  it('keeps at most 50 tags on one note and reports the rest as one entry', async () => {
+    const tags = Array.from({ length: 60 }, (_, i) => `t${i}`)
+    const result = await importNotes(
+      db,
+      ['/in/a.md'],
+      masterKey,
+      fromMap({ '/in/a.md': { title: 'A', content: '', tags } })
+    )
+
+    expect((await noteByTitle('A'))?.tags).toHaveLength(50)
+    expect(result.droppedTags).toEqual([
+      { file: 'a.md', count: 10, reason: 'over the 50-tag limit for one note' }
+    ])
+  })
+
+  it('creates at most 200 new tags per import but still reuses existing ones', async () => {
+    await createTag(db, { name: 'existing', color: '#3b82f6' })
+    const files: Record<string, MarkdownNote> = {}
+    for (let f = 0; f < 5; f++) {
+      const tags = Array.from({ length: 49 }, (_, i) => `f${f}-t${i}`)
+      files[`/in/${f}.md`] = { title: `N${f}`, content: '', tags: [...tags, 'existing'] }
+    }
+
+    const result = await importNotes(db, Object.keys(files), masterKey, fromMap(files))
+
+    expect(await listTags(db)).toHaveLength(201)
+    expect((await noteByTitle('N4'))?.tags.map((t) => t.name)).toContain('existing')
+    expect(result.droppedTags).toEqual([
+      { file: '4.md', count: 45, reason: 'over the 200-new-tag limit for one import' }
+    ])
   })
 
   it('rolls back every note and new tag when a later file fails', async () => {
