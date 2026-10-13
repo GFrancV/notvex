@@ -65,6 +65,6 @@ describe('ErrorBoundary', () => {
     render(createElement(ErrorBoundary, null, createElement(Thrower)))
 
     expect(screen.getByRole('button', { name: /report bug/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /copy report/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /copy debug info/i })).toBeTruthy()
   })
 })

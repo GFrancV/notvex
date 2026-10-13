@@ -17,8 +17,13 @@ const note = (id: string, title: string, isTrashed = false): NoteListItem => ({
   tags: []
 })
 
-vi.mock('@/lib/ipc', () => ({ notvex: {} }))
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('@/lib/ipc', () => ({ notvex: { log: { openFolder: vi.fn() } } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+vi.mock('@/lib/bug-report', () => ({
+  openBugReport: vi.fn(async () => undefined),
+  loadReportParts: vi.fn(async () => ({ environment: 'env', log: '' })),
+  reportBody: vi.fn(() => 'REPORT BODY')
+}))
 vi.mock('@/lib/reload-window', () => ({ requestReload: vi.fn(async () => undefined) }))
 
 const { useCreateNote } = await import('@/hooks/use-create-note')
@@ -225,6 +230,32 @@ describe('command palette reload', () => {
   })
 })
 
+describe('command palette help', () => {
+  const pick = async (name: RegExp): Promise<void> => {
+    openPalette([])
+    await act(async () => fireEvent.click(screen.getByRole('option', { name })))
+  }
+
+  it('opens a prefilled bug report and closes', async () => {
+    const { openBugReport } = await import('@/lib/bug-report')
+    await pick(/^Report a Bug/)
+    expect(openBugReport).toHaveBeenCalledOnce()
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+  })
+
+  it('copies the debug info', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
+    await pick(/^Copy Debug Info/)
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('REPORT BODY')
+  })
+
+  it('opens the logs folder', async () => {
+    const { notvex } = await import('@/lib/ipc')
+    await pick(/^Open Logs Folder/)
+    expect(notvex.log.openFolder).toHaveBeenCalledOnce()
+  })
+})
+
 describe('command palette synonyms', () => {
   it.each([
     ['create note', /^New Note/],
@@ -234,7 +265,11 @@ describe('command palette synonyms', () => {
     ['logout', /^Lock Vault/],
     ['refresh', /^Reload Window/],
     ['assign tag', /^Tag note with/],
-    ['untag', /^Remove tag from note/]
+    ['untag', /^Remove tag from note/],
+    ['issue', /^Report a Bug/],
+    ['feedback', /^Report a Bug/],
+    ['diagnostics', /^Copy Debug Info/],
+    ['logs', /^Open Logs Folder/]
   ])('"%s" finds %s', (query, command) => {
     useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
     openPalette([note('n-1', 'zzz')])

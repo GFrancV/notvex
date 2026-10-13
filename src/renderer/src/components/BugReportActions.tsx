@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { loadReportParts, openBugReport, reportBody } from '@/lib/bug-report'
 
-// Report bug and Copy report, shared by the About dialog and the ErrorBoundary fallback.
+// Report bug and Copy debug info for the ErrorBoundary fallback, which has no menu to reach.
 // The report is read fresh on every click so it carries the latest log lines.
 export function BugReportActions(): ReactNode {
   const { isCopied, copyToClipboard } = useCopyToClipboard()
@@ -23,7 +23,7 @@ export function BugReportActions(): ReactNode {
         onClick={async () => copyToClipboard(reportBody(await loadReportParts()))}
       >
         {isCopied ? <CheckIcon /> : <CopyIcon />}
-        {isCopied ? 'Copied' : 'Copy report'}
+        {isCopied ? 'Copied' : 'Copy debug info'}
       </Button>
     </div>
   )

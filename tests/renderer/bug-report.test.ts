@@ -85,7 +85,7 @@ describe('BugReportActions', () => {
   it('copies the same report text to the clipboard', async () => {
     render(createElement(BugReportActions))
 
-    fireEvent.click(screen.getByRole('button', { name: /copy report/i }))
+    fireEvent.click(screen.getByRole('button', { name: /copy debug info/i }))
 
     await waitFor(() =>
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(

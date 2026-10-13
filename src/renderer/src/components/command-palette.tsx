@@ -3,8 +3,11 @@ import { type JSX, type ReactNode, useCallback, useEffect, useState } from 'reac
 import { toast } from 'sonner'
 
 import {
+  BugIcon,
+  CopyIcon,
   EyeIcon,
   FileTextIcon,
+  FolderOpenIcon,
   LockIcon,
   PlusIcon,
   RotateCwIcon,
@@ -13,7 +16,9 @@ import {
   XIcon
 } from 'lucide-react'
 
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
+import { loadReportParts, openBugReport, reportBody } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
@@ -86,6 +91,8 @@ function PaletteContent(): ReactNode {
   } = useVaultStore()
   const handleNewNote = useCreateNote()
   const [query, setQuery] = useState('')
+
+  const { copyToClipboard } = useCopyToClipboard()
 
   const run = useCallback(
     (action: () => void | Promise<void>): void => {
@@ -179,6 +186,30 @@ function PaletteContent(): ReactNode {
               <span>Remove tag from note...</span>
             </CommandItem>
           )}
+        </CommandGroup>
+
+        <CommandGroup heading="Help">
+          <CommandItem
+            keywords={['bug', 'issue', 'feedback', 'problem', 'support']}
+            onSelect={() => run(openBugReport)}
+          >
+            <BugIcon />
+            <span>Report a Bug…</span>
+          </CommandItem>
+          <CommandItem
+            keywords={['diagnostics', 'debug', 'version', 'system info']}
+            onSelect={() => run(async () => copyToClipboard(reportBody(await loadReportParts())))}
+          >
+            <CopyIcon />
+            <span>Copy Debug Info</span>
+          </CommandItem>
+          <CommandItem
+            keywords={['logs', 'errors', 'diagnostics']}
+            onSelect={() => run(() => void notvex.log.openFolder())}
+          >
+            <FolderOpenIcon />
+            <span>Open Logs Folder</span>
+          </CommandItem>
         </CommandGroup>
 
         {shownNotes.length > 0 && (

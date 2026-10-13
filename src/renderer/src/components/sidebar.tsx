@@ -6,7 +6,6 @@ import {
   CommandIcon,
   CopyIcon,
   FileIcon,
-  InfoIcon,
   LockIcon,
   PinIcon,
   PlusIcon,
@@ -28,6 +27,7 @@ import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
 import { AppVersionDialog } from './dialogs/AppVersionDialog'
+import { HelpMenu } from './HelpMenu'
 import { SecuritySettingsDialog } from './security-settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
@@ -158,16 +158,7 @@ export function Sidebar(): React.ReactNode {
             {isDev && <Badge variant="secondary">Dev</Badge>}
           </span>
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="xs"
-              className="titlebar-no-drag z-50"
-              onClick={() => {
-                setAppVersionOpen(true)
-              }}
-            >
-              <InfoIcon />
-            </Button>
+            <HelpMenu onOpenAbout={() => setAppVersionOpen(true)} />
             <DropdownMenu open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="xs" className="titlebar-no-drag z-50">
