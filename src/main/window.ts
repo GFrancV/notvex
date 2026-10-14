@@ -44,6 +44,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
       webSecurity: true,
       allowRunningInsecureContent: false,
       sandbox: true,
+      spellcheck: false,
       devTools: !app.isPackaged
     }
   })
