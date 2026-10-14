@@ -1,5 +1,9 @@
-import type sqlite3 from '@journeyapps/sqlcipher'
+import { basename } from 'node:path'
 
+import type sqlite3 from '@journeyapps/sqlcipher'
+import { type ImportResult, PRESET_COLORS, TAG_NAME_MAX } from '@shared/types'
+
+import type { MarkdownNote } from '../markdown-io'
 import { decryptField, encryptField } from '../vault/crypto'
 
 // ─── Promise wrappers ───────────────────────────────────────────────────────
@@ -178,6 +182,21 @@ export async function getNote(
     trashedAt: row.trashed_at,
     tags
   }
+}
+
+// The title alone, for callers that must not hold decrypted content yet (export's save dialog).
+export async function getNoteTitle(
+  db: sqlite3.Database,
+  id: string,
+  masterKey: Uint8Array
+): Promise<string | null> {
+  const row = await dbGet<{ title: Buffer; title_iv: Buffer }>(
+    db,
+    'SELECT title, title_iv FROM notes WHERE id = ?',
+    [id]
+  )
+  if (!row) return null
+  return decryptField(new Uint8Array(row.title), new Uint8Array(row.title_iv), masterKey)
 }
 
 // The copy goes through createNote, so it gets fresh nonces and timestamps and starts
@@ -447,4 +466,98 @@ export async function getAllNoteTags(
     `SELECT note_id as noteId, tag_id as tagId FROM note_tags
      WHERE note_id IN (SELECT id FROM notes WHERE is_trashed = 0)`
   )
+}
+
+// ─── Markdown import ─────────────────────────────────────────────────────────
+
+export type ImportRead = { note: MarkdownNote } | { skip: string }
+
+// An imported file is untrusted and could name a million tags; every one would become a row the
+// sidebar loads on each unlock.
+const IMPORT_TAGS_PER_NOTE = 50
+const IMPORT_NEW_TAGS_MAX = 200
+
+interface ImportTagState {
+  /** Keyed by lowercased name: an import should not add "work" next to an existing "Work". */
+  ids: Map<string, string>
+  /** Tags this import has created so far. */
+  created: number
+}
+
+// Returns how many tags were left off the note, per reason.
+async function assignImportedTags(
+  db: sqlite3.Database,
+  noteId: string,
+  names: string[],
+  tags: ImportTagState
+): Promise<Map<string, number>> {
+  const dropped = new Map<string, number>()
+  const drop = (reason: string): void => void dropped.set(reason, (dropped.get(reason) ?? 0) + 1)
+  const onNote = new Set<string>()
+  for (const raw of names) {
+    const name = raw.trim()
+    const key = name.toLowerCase()
+    if (!name || onNote.has(key)) continue
+    if (name.length > TAG_NAME_MAX) {
+      drop(`longer than ${TAG_NAME_MAX} characters`)
+      continue
+    }
+    if (onNote.size >= IMPORT_TAGS_PER_NOTE) {
+      drop(`over the ${IMPORT_TAGS_PER_NOTE}-tag limit for one note`)
+      continue
+    }
+    let tagId = tags.ids.get(key)
+    if (!tagId) {
+      if (tags.created >= IMPORT_NEW_TAGS_MAX) {
+        drop(`over the ${IMPORT_NEW_TAGS_MAX}-new-tag limit for one import`)
+        continue
+      }
+      const color = PRESET_COLORS[tags.created++ % PRESET_COLORS.length]
+      tagId = (await createTag(db, { name, color })).id
+      tags.ids.set(key, tagId)
+    }
+    await addTagToNote(db, noteId, tagId)
+    onNote.add(key)
+  }
+  return dropped
+}
+
+// One transaction for the whole import, so a failure never leaves part of it behind. Files are
+// read one at a time inside it (via `read`) to keep at most one file in memory. Must run inside
+// withVaultLock: the caller's lock is what keeps other writes out of this transaction.
+export async function importNotes(
+  db: sqlite3.Database,
+  files: string[],
+  masterKey: Uint8Array,
+  read: (file: string) => Promise<ImportRead>
+): Promise<ImportResult> {
+  const result: ImportResult = { imported: 0, skipped: [], droppedTags: [] }
+  const tags: ImportTagState = { ids: new Map(), created: 0 }
+  for (const tag of await listTags(db)) {
+    if (!tags.ids.has(tag.name.toLowerCase())) tags.ids.set(tag.name.toLowerCase(), tag.id)
+  }
+
+  await dbRun(db, 'BEGIN TRANSACTION')
+  try {
+    for (const file of files) {
+      const outcome = await read(file)
+      if ('skip' in outcome) {
+        result.skipped.push({ file: basename(file), reason: outcome.skip })
+        continue
+      }
+
+      const { title, content } = outcome.note
+      const note = await createNote(db, { title, content }, masterKey)
+      const dropped = await assignImportedTags(db, note.id, outcome.note.tags, tags)
+      for (const [reason, count] of dropped) {
+        result.droppedTags.push({ file: basename(file), count, reason })
+      }
+      result.imported++
+    }
+    await dbRun(db, 'COMMIT')
+  } catch (err) {
+    await dbRun(db, 'ROLLBACK').catch(() => {})
+    throw err
+  }
+  return result
 }
