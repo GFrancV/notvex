@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // A plain <a href> starts a main-frame navigation, which will-navigate blocks, so links must
@@ -13,7 +13,10 @@ vi.mock('@/lib/ipc', () => ({
   notvex: {
     app: { isDev: vi.fn().mockResolvedValue({ success: true, data: false }) },
     updater: { getCurrentVersion: vi.fn().mockResolvedValue({ success: true, data: '1.0.0' }) },
-    shell: { openExternal }
+    shell: { openExternal },
+    log: {
+      buildReport: vi.fn().mockResolvedValue({ success: true, data: { environment: 'e', log: '' } })
+    }
   }
 }))
 
@@ -25,12 +28,10 @@ describe('AppVersionDialog links (issue #60)', () => {
     vi.clearAllMocks()
   })
 
-  it.each([
-    ['Docs', 'https://github.com/GFrancV/notvex'],
-    ['Report Issue', 'https://github.com/GFrancV/notvex/issues/new']
-  ])('"%s" opens %s in the system browser instead of navigating', (label, url) => {
+  it('"Docs" opens the repo in the system browser instead of navigating', () => {
+    const url = 'https://github.com/GFrancV/notvex'
     render(createElement(AppVersionDialog, { open: true, onClose: () => {} }))
-    const link = screen.getByText(label)
+    const link = screen.getByText('Docs')
 
     fireEvent.click(link)
 
@@ -39,5 +40,18 @@ describe('AppVersionDialog links (issue #60)', () => {
     expect(link.closest('a[href]')).toBeNull()
     expect(document.querySelector(`a[href="${url}"]`)).toBeNull()
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(url)
+  })
+
+  it('"Report Issue" opens a prefilled bug report in the system browser', async () => {
+    render(createElement(AppVersionDialog, { open: true, onClose: () => {} }))
+    const link = screen.getByText('Report Issue')
+
+    fireEvent.click(link)
+
+    expect(link.closest('a[href]')).toBeNull()
+    await waitFor(() => expect(openExternal).toHaveBeenCalledTimes(1))
+    expect(openExternal.mock.calls[0][0]).toMatch(
+      /^https:\/\/github\.com\/GFrancV\/notvex\/issues\/new\?.*body=/
+    )
   })
 })

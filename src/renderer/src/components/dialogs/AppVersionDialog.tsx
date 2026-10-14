@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useIsDev } from '@/hooks/use-is-dev'
+import { DOCS_URL, openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 
 interface Props {
@@ -16,11 +17,17 @@ interface Props {
 }
 
 // A plain <a href> would navigate the window, which main blocks.
-function ExternalLink({ url, children }: { url: string; children: ReactNode }): ReactNode {
+function FooterLink({
+  onOpen,
+  children
+}: {
+  onOpen: () => unknown
+  children: ReactNode
+}): ReactNode {
   return (
     <Button
       variant="link"
-      onClick={() => void notvex.shell.openExternal(url)}
+      onClick={() => void onOpen()}
       className="text-muted-foreground hover:text-foreground h-auto p-0 font-normal underline"
     >
       {children}
@@ -96,15 +103,13 @@ export function AppVersionDialog({ open, onClose }: Props): ReactNode {
           </section>
           <ul className="text-muted-foreground mt-8 flex items-center justify-center gap-1 text-sm">
             <li>
-              <ExternalLink url="https://github.com/GFrancV/notvex">Docs</ExternalLink>
+              <FooterLink onOpen={() => notvex.shell.openExternal(DOCS_URL)}>Docs</FooterLink>
             </li>
             <li>
               <DotIcon className="size-6" />
             </li>
             <li>
-              <ExternalLink url="https://github.com/GFrancV/notvex/issues/new">
-                Report Issue
-              </ExternalLink>
+              <FooterLink onOpen={openBugReport}>Report Issue</FooterLink>
             </li>
           </ul>
         </div>

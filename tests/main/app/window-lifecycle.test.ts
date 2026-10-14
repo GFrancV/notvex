@@ -14,7 +14,8 @@ vi.mock('electron', async () => {
       super()
     }
     webContents = Object.assign(new EventEmitter(), {
-      openDevTools: vi.fn()
+      openDevTools: vi.fn(),
+      reload: vi.fn()
     })
     loadURL = vi.fn(async () => undefined)
     loadFile = vi.fn(async () => undefined)
@@ -39,6 +40,7 @@ vi.mock('@main/ipc-handlers', () => ({
   registerIpcHandlers: vi.fn()
 }))
 
+vi.mock('@main/error-log', () => ({ appendError: vi.fn() }))
 vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => false) }))
 vi.mock('@main/updater', () => ({ initAutoUpdater: vi.fn() }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
@@ -152,7 +154,7 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
       await import('@main/ipc-handlers')
     const win = createWindow(() => null)
 
-    win.webContents.emit('render-process-gone')
+    win.webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
 
     expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
     expect(closeVaultDrained).toHaveBeenCalledExactlyOnceWith(null)
@@ -184,6 +186,94 @@ describe('createWindow: renderer reload / crash (issue #51)', () => {
     expect(cancelPendingConfirmations).not.toHaveBeenCalled()
     expect(closeVaultDrained).not.toHaveBeenCalled()
     expect(markRendererReplaced).not.toHaveBeenCalled()
+  })
+})
+
+// A crashed renderer leaves Chromium's sad-tab page, so the window reloads to Unlock itself.
+describe('createWindow: renderer crash recovery', () => {
+  let createWindow: typeof import('@main/window').createWindow
+
+  const crash = (win: Electron.BrowserWindow, reason = 'crashed'): void => {
+    win.webContents.emit('render-process-gone', {}, { reason, exitCode: 7 })
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    ;({ createWindow } = await import('@main/window'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('logs the crash reason and exit code', async () => {
+    const { appendError } = await import('@main/error-log')
+    crash(createWindow(() => null))
+
+    expect(appendError).toHaveBeenCalledExactlyOnceWith('render-process-gone', {
+      reason: 'crashed',
+      exitCode: 7
+    })
+  })
+
+  it('reloads only once the vault has closed', async () => {
+    const { closeVaultDrained } = await import('@main/ipc-handlers')
+    let finishClose = (): void => {}
+    vi.mocked(closeVaultDrained).mockImplementationOnce(
+      () => new Promise((resolve) => (finishClose = () => resolve({ packFailed: false })))
+    )
+    const win = createWindow(() => null)
+
+    crash(win)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(win.webContents.reload).not.toHaveBeenCalled()
+
+    finishClose()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(win.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reload after a clean exit', async () => {
+    const win = createWindow(() => null)
+    crash(win, 'clean-exit')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(win.webContents.reload).not.toHaveBeenCalled()
+  })
+
+  it('logs but does not reload a second crash within 30 s', async () => {
+    const { appendError } = await import('@main/error-log')
+    const win = createWindow(() => null)
+
+    crash(win)
+    await vi.advanceTimersByTimeAsync(29_999)
+    crash(win)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(appendError).toHaveBeenCalledTimes(2)
+    expect(win.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('reloads again once 30 s have passed', async () => {
+    const win = createWindow(() => null)
+
+    crash(win)
+    await vi.advanceTimersByTimeAsync(30_000)
+    crash(win)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(win.webContents.reload).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not reload a window destroyed while the vault was closing', async () => {
+    const win = createWindow(() => null)
+    vi.mocked(win.isDestroyed).mockReturnValue(true)
+
+    crash(win)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(win.webContents.reload).not.toHaveBeenCalled()
   })
 })
 

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { join } from 'path'
 
+import { appendError } from './error-log'
 import {
   cancelPendingConfirmations,
   closeVaultDrained,
@@ -12,6 +13,8 @@ import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
 import { devRendererUrl, rendererIndexPath } from './url-guard'
 import { isVaultOpen } from './vault/vault'
+
+const CRASH_RELOAD_GUARD_MS = 30_000
 
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
@@ -103,12 +106,29 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
   // one, so settle it like a closed window would or unlock stays wedged. The
   // new renderer starts with no vault UI, so drop the key too — null skips the
   // drain, since there is no renderer left with pending edits.
-  const onRendererGone = (): void => {
+  const dropRenderer = (): Promise<unknown> => {
     markRendererReplaced()
     cancelPendingConfirmations()
-    void closeVaultDrained(null).catch(() => undefined)
+    return closeVaultDrained(null).catch(() => undefined)
   }
-  win.webContents.on('render-process-gone', onRendererGone)
+  const onRendererGone = (): void => {
+    void dropRenderer()
+  }
+
+  // A crash leaves Chromium's error page, so reload to Unlock, but only after the vault has
+  // closed: a new renderer asking vault:status mid-close would come up unlocked. One reload
+  // per window of time, so a renderer that crashes on load can't loop and flood the log.
+  let lastCrashReloadAt = -Infinity
+  win.webContents.on('render-process-gone', (_event, details) => {
+    appendError('render-process-gone', { reason: details.reason, exitCode: details.exitCode })
+    const closed = dropRenderer()
+    if (details.reason === 'clean-exit') return
+    if (Date.now() - lastCrashReloadAt < CRASH_RELOAD_GUARD_MS) return
+    lastCrashReloadAt = Date.now()
+    void closed.then(() => {
+      if (!win.isDestroyed()) win.webContents.reload()
+    })
+  })
   // did-navigate, not did-start-navigation: the latter fires before
   // will-navigate can block the navigation, so the old page may survive it.
   // did-navigate only fires once a main-frame, cross-document load commits.

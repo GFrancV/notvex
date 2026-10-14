@@ -155,6 +155,13 @@ export interface DownloadProgress {
 export const CURRENT_VERSION_MAJ = 1
 export const CURRENT_VERSION_MIN = 0
 
+export interface BugReportParts {
+  /** Markdown line: app version, Electron version, OS. */
+  environment: string
+  /** Last lines of the local error log, already allowlisted; '' when there is no log. */
+  log: string
+}
+
 export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
 
 export type Platform = 'darwin' | 'win32' | 'linux'
@@ -257,6 +264,14 @@ export interface NotvexAPI {
   }
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>
+  }
+  log: {
+    /** Main validates, truncates and rate-limits this; past the limit it is dropped silently. */
+    error(payload: { name: string; stack: string }): Promise<IpcResult<null>>
+    buildReport(): Promise<IpcResult<BugReportParts>>
+    /** Creates the log folder if needed, then opens it in the OS file manager. */
+    openFolder(): Promise<IpcResult<null>>
+    clear(): Promise<IpcResult<null>>
   }
   app: {
     isDev(): Promise<IpcResult<boolean>>

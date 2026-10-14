@@ -61,6 +61,11 @@ vi.mock('@main/app-menu', () => ({
   installAppMenu: vi.fn()
 }))
 
+// A real uncaughtException listener would swallow the test worker's own failures.
+vi.mock('@main/crash-handlers', () => ({
+  installCrashHandlers: vi.fn()
+}))
+
 vi.mock('@main/navigation-guard', () => ({
   installNavigationGuard: vi.fn()
 }))
@@ -125,6 +130,11 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
 
   it('sandboxes every renderer before the app is ready', () => {
     expect(app.enableSandbox).toHaveBeenCalledTimes(1)
+  })
+
+  it('installs the crash handlers once, before the app is ready', async () => {
+    const { installCrashHandlers } = await import('@main/crash-handlers')
+    expect(installCrashHandlers).toHaveBeenCalledTimes(1)
   })
 
   it('before-quit calls event.preventDefault() synchronously', () => {

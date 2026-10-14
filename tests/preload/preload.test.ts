@@ -86,6 +86,28 @@ describe('preload: updater.checkOnStartup', () => {
   })
 })
 
+// The IPC tests call the handlers by channel name, so a typo here would pass them all.
+describe('preload: log channels', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('log.error invokes log:error with the payload', () => {
+    const payload = { name: 'Error', stack: '' }
+    void api.log.error(payload)
+    expect(invoke).toHaveBeenLastCalledWith('log:error', payload)
+  })
+
+  it.each([
+    ['buildReport', 'log:build-report'],
+    ['openFolder', 'log:open-folder'],
+    ['clear', 'log:clear']
+  ] as const)('log.%s invokes %s', (method, channel) => {
+    void api.log[method]()
+    expect(invoke).toHaveBeenLastCalledWith(channel)
+  })
+})
+
 // Channel names are plain strings on both sides: a typo types fine and only fails at runtime.
 // The handlers are asserted in tests/main/ipc/markdown-io-handlers.test.ts.
 describe('preload: Markdown export/import channels', () => {

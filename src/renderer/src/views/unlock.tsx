@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
+import { openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
@@ -493,6 +494,14 @@ export function Unlock(): ReactNode {
           </div>
         )}
       </div>
+      {/* The sidebar's Help menu doesn't exist while the vault is locked. */}
+      <Button
+        variant="link"
+        className="text-muted absolute bottom-6 h-auto p-0 text-xs font-normal"
+        onClick={() => void openBugReport()}
+      >
+        Report a bug
+      </Button>
     </div>
   )
 }

@@ -78,6 +78,7 @@ Notvex is built on the principle that **the vault file, by itself, should never 
 - **Configurable auto-lock** (never / 5 / 15 / 30 / 60 min), plus an immediate forced lock on system sleep, OS lock-screen, or when the window loses focus.
 - **Screen capture protection**: by default, the window is hidden from screenshots and screen sharing (`setContentProtection`), toggleable from settings if you need it.
 - **Progressive delay** after failed unlock attempts.
+- **Local error log, no telemetry**: crashes and unexpected errors are written to a small plaintext log in the app's data folder (`logs/notvex.log`, capped at about 1 MB). It holds only the error type, stack frames inside the app and a timestamp: never error messages, file paths, or note content. Nothing is sent anywhere. **Help → Report a bug…** opens a prefilled GitHub issue in your browser for you to review before submitting, and **Help → Clear logs…** deletes the log.
 
 > [!WARNING]
 > **If you lose your master password AND your recovery key, your notes are unrecoverable.** There is no account, no server, no way to reset access. Store your recovery key in a password manager or somewhere physically safe.

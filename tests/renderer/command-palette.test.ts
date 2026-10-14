@@ -20,9 +20,14 @@ const note = (id: string, title: string, isTrashed = false): NoteListItem => ({
 const duplicate = vi.hoisted(() => vi.fn(async (): Promise<void> => undefined))
 
 vi.mock('@/lib/ipc', () => ({ notvex: {} }))
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 // The duplicate flow itself is covered in duplicate-note.test.ts; here only the wiring matters.
 vi.mock('@/hooks/use-duplicate-note', () => ({ useDuplicateNote: () => duplicate }))
+vi.mock('@/lib/bug-report', () => ({
+  openBugReport: vi.fn(async () => undefined),
+  loadDebugInfo: vi.fn(async () => 'REPORT BODY'),
+  openLogsFolder: vi.fn(async () => undefined)
+}))
 vi.mock('@/lib/reload-window', () => ({ requestReload: vi.fn(async () => undefined) }))
 
 const { useCreateNote } = await import('@/hooks/use-create-note')
@@ -258,6 +263,32 @@ describe('command palette reload', () => {
   })
 })
 
+describe('command palette help', () => {
+  const pick = async (name: RegExp): Promise<void> => {
+    openPalette([])
+    await act(async () => fireEvent.click(screen.getByRole('option', { name })))
+  }
+
+  it('opens a prefilled bug report and closes', async () => {
+    const { openBugReport } = await import('@/lib/bug-report')
+    await pick(/^Report a Bug/)
+    expect(openBugReport).toHaveBeenCalledOnce()
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+  })
+
+  it('copies the debug info', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
+    await pick(/^Copy Debug Info/)
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('REPORT BODY')
+  })
+
+  it('opens the logs folder', async () => {
+    const { openLogsFolder } = await import('@/lib/bug-report')
+    await pick(/^Open Logs Folder/)
+    expect(openLogsFolder).toHaveBeenCalledOnce()
+  })
+})
+
 describe('command palette synonyms', () => {
   it.each([
     ['create note', /^New Note/],
@@ -268,7 +299,11 @@ describe('command palette synonyms', () => {
     ['refresh', /^Reload Window/],
     ['assign tag', /^Tag note with/],
     ['untag', /^Remove tag from note/],
-    ['clone', /^Duplicate Note/]
+    ['clone', /^Duplicate Note/],
+    ['issue', /^Report a Bug/],
+    ['feedback', /^Report a Bug/],
+    ['diagnostics', /^Copy Debug Info/],
+    ['logs', /^Open Logs Folder/]
   ])('"%s" finds %s', (query, command) => {
     useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
     openPalette([note('n-1', 'zzz')])
