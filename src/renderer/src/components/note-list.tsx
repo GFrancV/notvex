@@ -191,23 +191,21 @@ export function NoteList(): ReactNode {
             )}
           </div>
         ) : (
-          <>
-            {displayedNotes.map((note) => (
-              <NoteListRow
-                key={note.id}
-                note={note}
-                isActive={activeNoteId === note.id}
-                inTrash={showTrash}
-                date={noteSort.field === 'createdAt' ? note.createdAt : note.updatedAt}
-                onSelect={setActiveNoteId}
-                onPin={handlePin}
-                onDuplicate={duplicateNote}
-                onTrash={handleTrash}
-                onRestore={handleRestore}
-                onDelete={handleDelete}
-              />
-            ))}
-          </>
+          displayedNotes.map((note) => (
+            <NoteListRow
+              key={note.id}
+              note={note}
+              isActive={activeNoteId === note.id}
+              inTrash={showTrash}
+              date={noteSort.field === 'createdAt' ? note.createdAt : note.updatedAt}
+              onSelect={setActiveNoteId}
+              onPin={handlePin}
+              onDuplicate={duplicateNote}
+              onTrash={handleTrash}
+              onRestore={handleRestore}
+              onDelete={handleDelete}
+            />
+          ))
         )}
       </ScrollArea>
     </div>
