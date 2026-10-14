@@ -90,11 +90,7 @@ export function NoteListRow({
       <ContextMenuContent>
         {!inTrash ? (
           <>
-            <ContextMenuItem
-              onClick={(): void => {
-                void onPin(note)
-              }}
-            >
+            <ContextMenuItem onClick={() => void onPin(note)}>
               {note.isPinned ? (
                 <>
                   <PinOffIcon className="size-4" />
@@ -107,38 +103,23 @@ export function NoteListRow({
                 </>
               )}
             </ContextMenuItem>
-            <ContextMenuItem
-              onClick={(): void => {
-                void onDuplicate(note.id)
-              }}
-            >
+            <ContextMenuItem onClick={() => void onDuplicate(note.id)}>
               <CopyIcon className="size-4" />
               Duplicate
             </ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem
-              variant="destructive"
-              onClick={(): void => {
-                void onTrash(note)
-              }}
-            >
+            <ContextMenuItem variant="destructive" onClick={() => void onTrash(note)}>
               <Trash2Icon className="size-4" /> Move to trash
             </ContextMenuItem>
           </>
         ) : (
           <>
-            <ContextMenuItem
-              onClick={(): void => {
-                void onRestore(note)
-              }}
-            >
+            <ContextMenuItem onClick={() => void onRestore(note)}>
               <RotateCcwIcon className="mr-2 h-4 w-4" /> Restore
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
-              onClick={(): void => {
-                void onDelete(note)
-              }}
+              onClick={() => void onDelete(note)}
               className="text-destructive focus:text-destructive"
             >
               <TrashIcon className="mr-2 h-4 w-4" /> Delete permanently
