@@ -55,6 +55,10 @@ Built with Electron + React + TypeScript, for anyone who wants a fast, minimal, 
 - Create or open multiple vaults and switch between them from a selector with "recent vaults".
 - Export a vault backup ("save a copy as") at any time.
 
+📤 **Markdown export & import**
+- Export the open note, or every note, as plain `.md` files with tags in YAML front matter, the format Obsidian and most Markdown tools read. A warning before every export reminds you that the files are not encrypted, and an existing file is never overwritten.
+- Import `.md`, `.markdown` and `.txt` files as notes, taking the title and tags from front matter or the first heading. Files over 5 MB or not valid UTF-8 are skipped and listed; the import is all or nothing.
+
 🛠️ **Updates**
 - Built-in update checking (electron-updater) with download progress and in-app install.
 - On startup, Notvex asks GitHub whether a new release exists, so GitHub sees your IP address, OS and app version. Turn it off in **Security settings → Updates**; you can still check manually from **About**.

@@ -31,6 +31,29 @@ export interface Tag {
 // Roughly what fits in the sidebar row before truncating.
 export const TAG_NAME_MAX = 24
 
+// Files are reported by basename only: full paths never go back to the renderer.
+export interface ImportResult {
+  imported: number
+  /** Files that were not imported. */
+  skipped: Array<{ file: string; reason: string }>
+  /** Tags left off a note that was imported: one entry per file and reason, with a count. */
+  droppedTags: Array<{ file: string; count: number; reason: string }>
+}
+
+// Shared because main colours the tags it creates during a Markdown import.
+export const PRESET_COLORS = [
+  '#10b981',
+  '#3b82f6',
+  '#8b5cf6',
+  '#f59e0b',
+  '#ef4444',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
+  '#84cc16'
+]
+
 export interface CreateNoteInput {
   title: string
   content: string
@@ -211,6 +234,12 @@ export interface NotvexAPI {
     delete(id: string): Promise<IpcResult<null>>
     emptyTrash(): Promise<IpcResult<null>>
     search(query: string): Promise<IpcResult<NoteListItem[]>>
+    /** Writes the note to a user-chosen .md file in main: true once written, null if canceled. */
+    export(id: string): Promise<IpcResult<true | null>>
+    /** Writes every non-trashed note into a user-chosen folder: the count, or null if canceled. */
+    exportAll(): Promise<IpcResult<number | null>>
+    /** Imports user-chosen Markdown files as new notes, all or nothing; null if canceled. */
+    import(): Promise<IpcResult<ImportResult | null>>
   }
   tags: {
     create(input: CreateTagInput): Promise<IpcResult<Tag>>

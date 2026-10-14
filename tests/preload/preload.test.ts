@@ -107,3 +107,29 @@ describe('preload: log channels', () => {
     expect(invoke).toHaveBeenLastCalledWith(channel)
   })
 })
+
+// Channel names are plain strings on both sides: a typo types fine and only fails at runtime.
+// The handlers are asserted in tests/main/ipc/markdown-io-handlers.test.ts.
+describe('preload: Markdown export/import channels', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('sends notes.export to notes:export with the note id', () => {
+    void api.notes.export('n1')
+
+    expect(invoke).toHaveBeenLastCalledWith('notes:export', 'n1')
+  })
+
+  it('sends notes.exportAll to notes:export-all', () => {
+    void api.notes.exportAll()
+
+    expect(invoke).toHaveBeenLastCalledWith('notes:export-all')
+  })
+
+  it('sends notes.import to notes:import', () => {
+    void api.notes.import()
+
+    expect(invoke).toHaveBeenLastCalledWith('notes:import')
+  })
+})

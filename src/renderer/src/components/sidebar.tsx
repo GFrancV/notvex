@@ -2,9 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 
 import {
   ArrowBigUpIcon,
-  CheckIcon,
   CommandIcon,
-  CopyIcon,
   FileIcon,
   LockIcon,
   PinIcon,
@@ -17,18 +15,19 @@ import {
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
-import { cn, truncatePath } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
 import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { HelpMenu } from './HelpMenu'
+import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { SecuritySettingsDialog } from './security-settings-dialog'
+import { VaultMenuGroup } from './settings/VaultMenuGroup'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
 import { TagItem } from './tags/TagItem'
@@ -39,11 +38,10 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
+import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import { Kbd } from './ui/kbd'
 import {
   Sidebar as ShadcnSidebar,
@@ -61,26 +59,19 @@ import {
 } from './ui/sidebar'
 import { VaultSwitcher } from './VaultSwitcher'
 
-// The dropdown closes as soon as this item is clicked (standard menu
-// behavior), so any loading state on the item itself is never visible — a
-// persistent toast is the only feedback that survives the menu closing.
-const handleSaveCopy = async (): Promise<void> => {
-  const toastId = toast.loading('Saving a copy…')
-  const result = await notvex.vault.saveCopyAs()
+// The warning dialog stays open while this runs, but the OS folder dialog hides it; the
+// toast is what reports progress and the result.
+const handleExportAll = async (): Promise<void> => {
+  const toastId = toast.loading('Exporting notes…')
+  const result = await notvex.notes.exportAll()
   if (!result.success) {
-    toast.error('Failed to save copy', { id: toastId })
-    return
-  }
-  if (result.data) {
-    toast.success('Copy saved successfully', { id: toastId })
+    toast.error(result.error, { id: toastId })
+  } else if (result.data === null) {
+    toast.dismiss(toastId) // user canceled the folder dialog
   } else {
-    toast.dismiss(toastId) // user canceled the save dialog
+    const noun = result.data === 1 ? 'note' : 'notes'
+    toast.success(`Exported ${result.data} ${noun}`, { id: toastId })
   }
-}
-
-const handleOpenBackupsFolder = async (): Promise<void> => {
-  const res = await notvex.vault.openBackupsFolder()
-  if (!res.success) toast.error(res.error)
 }
 
 export function Sidebar(): React.ReactNode {
@@ -107,13 +98,13 @@ export function Sidebar(): React.ReactNode {
   )
 
   const handleNewNote = useCreateNote()
-  const { isCopied, copyToClipboard } = useCopyToClipboard()
   const isDev = useIsDev()
 
   const searchContainerRef = useRef<HTMLDivElement>(null)
   const [appVersionOpen, setAppVersionOpen] = useState(false)
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
   const [securitySettingsOpen, setSecuritySettingsOpen] = useState(false)
+  const [exportAllOpen, setExportAllOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createModalKey, setCreateModalKey] = useState(0)
   const [editingTag, setEditingTag] = useState<Tag | null>(null)
@@ -168,28 +159,13 @@ export function Sidebar(): React.ReactNode {
               <DropdownMenuContent align="start" side="right" sideOffset={4} className="w-64">
                 {currentVaultPath && (
                   <>
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel>Vault Location</DropdownMenuLabel>
-                      <DropdownMenuItem>
-                        <InputGroup onClick={(e) => e.stopPropagation()}>
-                          <InputGroupInput readOnly value={truncatePath(currentVaultPath, 28)} />
-                          <InputGroupAddon align="inline-end">
-                            <InputGroupButton
-                              onClick={() => copyToClipboard(currentVaultPath)}
-                              title="Copy to Clipboard"
-                            >
-                              {isCopied ? <CheckIcon className="text-primary" /> : <CopyIcon />}
-                            </InputGroupButton>
-                          </InputGroupAddon>
-                        </InputGroup>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-primary" onClick={handleSaveCopy}>
-                        Save a vault copy as...
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-primary" onClick={handleOpenBackupsFolder}>
-                        Open backups folder
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
+                    <VaultMenuGroup
+                      vaultPath={currentVaultPath}
+                      onExportAll={() => {
+                        setExportAllOpen(true)
+                        setSettingsPopoverOpen(false)
+                      }}
+                    />
                     <DropdownMenuSeparator />
                   </>
                 )}
@@ -353,6 +329,12 @@ export function Sidebar(): React.ReactNode {
 
       <AppVersionDialog open={appVersionOpen} onClose={() => setAppVersionOpen(false)} />
       <SecuritySettingsDialog open={securitySettingsOpen} onOpenChange={setSecuritySettingsOpen} />
+      <ExportWarningDialog
+        open={exportAllOpen}
+        onOpenChange={setExportAllOpen}
+        title="Export all notes"
+        onConfirm={handleExportAll}
+      />
       <TagCreateModal
         key={createModalKey}
         open={createModalOpen}
