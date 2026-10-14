@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { CopyIcon, PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucide-react'
 
@@ -15,12 +15,12 @@ import { NoteSortMenu } from './note-sort-menu'
 import { TagFilter } from './tags/TagFilter'
 import { Button } from './ui/button'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from './ui/dropdown-menu'
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from './ui/context-menu'
 import { ScrollArea } from './ui/scroll-area'
 
 const SEARCH_DEBOUNCE = 300
@@ -32,8 +32,6 @@ export function NoteList(): ReactNode {
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
 
-  const [contextMenuNote, setContextMenuNote] = useState<NoteListItem | null>(null)
-  const [contextMenuOpen, setContextMenuOpen] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Reload when the trash/pinned view changes
@@ -202,14 +200,8 @@ export function NoteList(): ReactNode {
         ) : (
           <>
             {displayedNotes.map((note) => (
-              <DropdownMenu
-                key={note.id}
-                open={contextMenuOpen && contextMenuNote?.id === note.id}
-                onOpenChange={(open) => {
-                  if (!open) setContextMenuOpen(false)
-                }}
-              >
-                <DropdownMenuTrigger asChild>
+              <ContextMenu key={note.id}>
+                <ContextMenuTrigger asChild>
                   <button
                     type="button"
                     className={cn(
@@ -218,11 +210,6 @@ export function NoteList(): ReactNode {
                       activeNoteId === note.id && 'bg-accent border-l-primary border-l-2'
                     )}
                     onClick={() => setActiveNoteId(note.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      setContextMenuNote(note)
-                      setContextMenuOpen(true)
-                    }}
                   >
                     <div className="mb-1 flex min-w-0 items-center gap-1.5">
                       {note.isPinned && (
@@ -265,12 +252,12 @@ export function NoteList(): ReactNode {
                       )}
                     </div>
                   </button>
-                </DropdownMenuTrigger>
+                </ContextMenuTrigger>
 
-                <DropdownMenuContent align="start">
+                <ContextMenuContent>
                   {!showTrash ? (
                     <>
-                      <DropdownMenuItem
+                      <ContextMenuItem
                         onClick={(): void => {
                           void handlePin(note)
                         }}
@@ -286,47 +273,47 @@ export function NoteList(): ReactNode {
                             Pin
                           </>
                         )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
+                      </ContextMenuItem>
+                      <ContextMenuItem
                         onClick={(): void => {
                           void duplicateNote(note.id)
                         }}
                       >
                         <CopyIcon className="size-4" />
                         Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
                         variant="destructive"
                         onClick={(): void => {
                           void handleTrash(note)
                         }}
                       >
                         <Trash2Icon className="size-4" /> Move to trash
-                      </DropdownMenuItem>
+                      </ContextMenuItem>
                     </>
                   ) : (
                     <>
-                      <DropdownMenuItem
+                      <ContextMenuItem
                         onClick={(): void => {
                           void handleRestore(note)
                         }}
                       >
                         <RotateCcwIcon className="mr-2 h-4 w-4" /> Restore
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
                         onClick={(): void => {
                           void handleDelete(note)
                         }}
                         className="text-destructive focus:text-destructive"
                       >
                         <TrashIcon className="mr-2 h-4 w-4" /> Delete permanently
-                      </DropdownMenuItem>
+                      </ContextMenuItem>
                     </>
                   )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </ContextMenuContent>
+              </ContextMenu>
             ))}
           </>
         )}
