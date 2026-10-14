@@ -43,7 +43,7 @@ const failures = [
 const cancellations = ['MIGRATION_CANCELLED', 'DEV_BUILD_WARNING_CANCELLED'] as const
 
 const passwordInput = (): HTMLElement => screen.getByLabelText('Master password')
-const recoveryTextarea = (): HTMLElement => screen.getByPlaceholderText(/24-word recovery phrase/)
+const recoveryTextarea = (): HTMLElement => screen.getByLabelText('Recovery phrase')
 
 describe('Unlock focus', () => {
   afterEach(cleanup)

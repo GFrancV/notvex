@@ -109,6 +109,18 @@ describe('createWindow: webPreferences', () => {
     })
   })
 
+  // The OS spellchecker would receive every typed word, recovery phrase included,
+  // and on Linux Electron fetches Hunspell dictionaries from a remote CDN.
+  it('disables the spellchecker', async () => {
+    const { createWindow } = await import('@main/window')
+    const win = createWindow(() => null) as Electron.BrowserWindow & {
+      options: Electron.BrowserWindowConstructorOptions
+    }
+    win.emit('closed')
+
+    expect(win.options.webPreferences?.spellcheck).toBe(false)
+  })
+
   // The default app menu's Toggle Developer Tools accelerator stays live even
   // with the menu bar hidden, and a console reaches window.notvex directly.
   describe('devTools', () => {

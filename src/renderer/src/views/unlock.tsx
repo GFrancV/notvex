@@ -414,9 +414,14 @@ export function Unlock(): ReactNode {
                 </p>
 
                 <Field>
+                  <FieldLabel htmlFor="unlock-recovery" className="sr-only">
+                    Recovery phrase
+                  </FieldLabel>
                   <Textarea
+                    id="unlock-recovery"
                     ref={mnemonicRef}
                     autoFocus
+                    autoComplete="off"
                     value={mnemonic}
                     onChange={(e) => setMnemonic(e.target.value)}
                     placeholder="Enter your 24-word recovery phrase…"
