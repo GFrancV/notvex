@@ -310,7 +310,11 @@ function buildDecorations(view: EditorView): DecorationSet {
 
   const entries: DecoEntry[] = []
 
+  // Only what's on screen: walking the whole tree on every keystroke makes typing in a long note
+  // lag. The plugin rebuilds when the viewport moves, so text scrolled into view gets decorated.
   syntaxTree(state).iterate({
+    from: view.viewport.from,
+    to: view.viewport.to,
     enter(node) {
       const { from, to, name } = node
 
@@ -500,7 +504,14 @@ class LivePreviewView {
   }
 
   update(update: ViewUpdate): void {
-    if (update.docChanged || update.selectionSet || update.viewportChanged) {
+    // The parser works through a long note in chunks; without the tree check, text it reaches
+    // after the last edit would stay undecorated until the next one.
+    if (
+      update.docChanged ||
+      update.selectionSet ||
+      update.viewportChanged ||
+      syntaxTree(update.startState) !== syntaxTree(update.state)
+    ) {
       this.decorations = buildDecorations(update.view)
     }
   }
