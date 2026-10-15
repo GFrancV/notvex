@@ -26,7 +26,7 @@ import { AppLogo } from './AppLogo'
 import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { HelpMenu } from './HelpMenu'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
-import { SecuritySettingsDialog } from './security-settings-dialog'
+import { SettingsDialog } from './settings-dialog'
 import { VaultMenuGroup } from './settings/VaultMenuGroup'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
@@ -103,7 +103,7 @@ export function Sidebar(): React.ReactNode {
   const searchContainerRef = useRef<HTMLDivElement>(null)
   const [appVersionOpen, setAppVersionOpen] = useState(false)
   const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
-  const [securitySettingsOpen, setSecuritySettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [exportAllOpen, setExportAllOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createModalKey, setCreateModalKey] = useState(0)
@@ -174,11 +174,11 @@ export function Sidebar(): React.ReactNode {
                     role="button"
                     className="text-primary"
                     onClick={() => {
-                      setSecuritySettingsOpen(true)
+                      setSettingsOpen(true)
                       setSettingsPopoverOpen(false)
                     }}
                   >
-                    Security settings
+                    Settings…
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
@@ -328,7 +328,7 @@ export function Sidebar(): React.ReactNode {
       </SidebarFooter>
 
       <AppVersionDialog open={appVersionOpen} onClose={() => setAppVersionOpen(false)} />
-      <SecuritySettingsDialog open={securitySettingsOpen} onOpenChange={setSecuritySettingsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ExportWarningDialog
         open={exportAllOpen}
         onOpenChange={setExportAllOpen}
