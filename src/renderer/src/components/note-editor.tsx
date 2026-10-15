@@ -70,6 +70,7 @@ const notvexEditorTheme = EditorView.theme({
 
 // Module scope: @uiw/react-codemirror reconfigures the view whenever these props change identity,
 // and each markdown() call builds a new Language, so a reconfigure reparses the whole note.
+// onChange is in the same dependency list, so handleContentChange must stay stable too.
 const editorExtensions = [
   markdown({ base: markdownLanguage, codeLanguages }),
   formattingKeymap,

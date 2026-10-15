@@ -48,14 +48,17 @@ describe('live preview — long notes', () => {
   it('decorates only the visible part of the document', () => {
     const v = mount(longDoc)
     forceParsing(v, v.state.doc.length, 10_000)
-    // Precondition: with a partial tree this would pass no matter what the plugin visits.
+    // Preconditions: with a partial tree, or a viewport covering the whole note, this would pass
+    // no matter what the plugin visits.
     expect(syntaxTree(v.state).length).toBe(v.state.doc.length)
-    // A selection change rebuilds against the complete tree, which covers far past the screen.
+    expect(v.viewport.to).toBeLessThan(v.state.doc.length)
+    // Forces a rebuild against the complete tree, independently of the tree-change check.
     v.dispatch({ selection: { anchor: v.state.doc.length } })
 
     const starts = decorationStarts(v)
     expect(starts.length).toBeGreaterThan(0)
-    // A node that starts on screen may end just past it; nothing starts beyond it.
+    // Holds because the fixture has no multi-line blocks: a fenced block or blockquote crossing
+    // the bottom edge would add line decorations past it.
     expect(starts.every((from) => from <= v.viewport.to)).toBe(true)
   }, 30_000)
 

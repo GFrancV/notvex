@@ -2,6 +2,7 @@
 import { createElement } from 'react'
 
 import { language } from '@codemirror/language'
+import { StateEffect, type TransactionSpec } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -61,11 +62,18 @@ describe('NoteEditor — typing', () => {
 
     const view = editorView()
     const before = view.state.facet(language)
+    const dispatch = vi.spyOn(view, 'dispatch')
     for (const ch of 'abc') {
       act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: ch } }))
     }
 
     expect(view.state.doc.toString()).toBe(`${note.content}abc`)
+    // @uiw/react-codemirror reconfigures when extensions, basicSetup or onChange change identity;
+    // the language check alone would miss the last two.
+    const effects = dispatch.mock.calls.flatMap(([spec]) =>
+      [(spec as TransactionSpec).effects ?? []].flat()
+    )
+    expect(effects.some((e) => e.is(StateEffect.reconfigure))).toBe(false)
     expect(view.state.facet(language)).toBe(before)
   }, 20_000)
 })
