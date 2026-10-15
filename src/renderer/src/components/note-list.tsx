@@ -1,26 +1,19 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
 
-import { CopyIcon, PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucide-react'
+import { TrashIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { notvex } from '@/lib/ipc'
 import { sortNotes } from '@/lib/sort-notes'
-import { cn, formatTimeAgo } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { NoteListItem } from '@shared/types'
+import { NoteListRow } from './note-list-row'
 import { NoteSortMenu } from './note-sort-menu'
 import { TagFilter } from './tags/TagFilter'
 import { Button } from './ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from './ui/dropdown-menu'
 import { ScrollArea } from './ui/scroll-area'
 
 const SEARCH_DEBOUNCE = 300
@@ -32,8 +25,6 @@ export function NoteList(): ReactNode {
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
 
-  const [contextMenuNote, setContextMenuNote] = useState<NoteListItem | null>(null)
-  const [contextMenuOpen, setContextMenuOpen] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Reload when the trash/pinned view changes
@@ -200,135 +191,21 @@ export function NoteList(): ReactNode {
             )}
           </div>
         ) : (
-          <>
-            {displayedNotes.map((note) => (
-              <DropdownMenu
-                key={note.id}
-                open={contextMenuOpen && contextMenuNote?.id === note.id}
-                onOpenChange={(open) => {
-                  if (!open) setContextMenuOpen(false)
-                }}
-              >
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      'mb-1.5 w-full rounded-md px-3 py-3.5 text-left transition-colors',
-                      'hover:bg-accent focus:outline-none',
-                      activeNoteId === note.id && 'bg-accent border-l-primary border-l-2'
-                    )}
-                    onClick={() => setActiveNoteId(note.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      setContextMenuNote(note)
-                      setContextMenuOpen(true)
-                    }}
-                  >
-                    <div className="mb-1 flex min-w-0 items-center gap-1.5">
-                      {note.isPinned && (
-                        <PinIcon className="text-primary fill-primary size-3 shrink-0" />
-                      )}
-                      <h3 className="flex-1 truncate text-sm font-medium text-pretty">
-                        {note.title || 'Untitled'}
-                      </h3>
-                    </div>
-                    <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-                      <span className="shrink-0 whitespace-nowrap">
-                        {formatTimeAgo(
-                          noteSort.field === 'createdAt' ? note.createdAt : note.updatedAt
-                        )}
-                      </span>
-                      {note.tags.length > 0 && (
-                        <>
-                          <span className="shrink-0 opacity-50">·</span>
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span
-                              className="size-1.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: note.tags[0].color }}
-                            />
-                            <span className="truncate" title={note.tags[0].name}>
-                              {note.tags[0].name}
-                            </span>
-                          </span>
-                          {note.tags.length > 1 && (
-                            <span
-                              className="shrink-0"
-                              title={note.tags
-                                .slice(1)
-                                .map((t) => t.name)
-                                .join(', ')}
-                            >
-                              +{note.tags.length - 1}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </button>
-                </DropdownMenuTrigger>
-
-                <DropdownMenuContent align="start">
-                  {!showTrash ? (
-                    <>
-                      <DropdownMenuItem
-                        onClick={(): void => {
-                          void handlePin(note)
-                        }}
-                      >
-                        {note.isPinned ? (
-                          <>
-                            <PinOffIcon className="size-4" />
-                            Unpin
-                          </>
-                        ) : (
-                          <>
-                            <PinIcon className="size-4" />
-                            Pin
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(): void => {
-                          void duplicateNote(note.id)
-                        }}
-                      >
-                        <CopyIcon className="size-4" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={(): void => {
-                          void handleTrash(note)
-                        }}
-                      >
-                        <Trash2Icon className="size-4" /> Move to trash
-                      </DropdownMenuItem>
-                    </>
-                  ) : (
-                    <>
-                      <DropdownMenuItem
-                        onClick={(): void => {
-                          void handleRestore(note)
-                        }}
-                      >
-                        <RotateCcwIcon className="mr-2 h-4 w-4" /> Restore
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={(): void => {
-                          void handleDelete(note)
-                        }}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <TrashIcon className="mr-2 h-4 w-4" /> Delete permanently
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ))}
-          </>
+          displayedNotes.map((note) => (
+            <NoteListRow
+              key={note.id}
+              note={note}
+              isActive={activeNoteId === note.id}
+              inTrash={showTrash}
+              date={noteSort.field === 'createdAt' ? note.createdAt : note.updatedAt}
+              onSelect={setActiveNoteId}
+              onPin={handlePin}
+              onDuplicate={duplicateNote}
+              onTrash={handleTrash}
+              onRestore={handleRestore}
+              onDelete={handleDelete}
+            />
+          ))
         )}
       </ScrollArea>
     </div>

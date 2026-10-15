@@ -46,6 +46,24 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
       h('div', { role: 'menuitem', onClick }, children as never)
   }
 })
+// Same reason as the dropdown mock above; NoteList rows and the editor use the context menu.
+vi.mock('@/components/ui/context-menu', async () => {
+  const { createElement: h, Fragment } = await import('react')
+  const pass = ({ children }: { children?: unknown }): ReturnType<typeof h> =>
+    h(Fragment, null, children as never)
+  return {
+    ContextMenu: pass,
+    ContextMenuTrigger: pass,
+    ContextMenuContent: pass,
+    ContextMenuGroup: pass,
+    ContextMenuSub: pass,
+    ContextMenuSubTrigger: pass,
+    ContextMenuSubContent: pass,
+    ContextMenuSeparator: (): null => null,
+    ContextMenuItem: ({ children, onClick }: { children?: unknown; onClick?: () => void }) =>
+      h('div', { role: 'menuitem', onClick }, children as never)
+  }
+})
 vi.mock('@uiw/react-codemirror', () => ({ default: (): null => null }))
 vi.mock('@/lib/ipc', () => ({
   notvex: {
