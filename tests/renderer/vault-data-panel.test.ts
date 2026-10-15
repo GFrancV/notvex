@@ -22,9 +22,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-const { VaultMenuGroup } = await import('@/components/settings/VaultMenuGroup')
-const { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } =
-  await import('@/components/ui/dropdown-menu')
+const { VaultDataPanel } = await import('@/components/settings/VaultDataPanel')
 const { useVaultStore } = await import('@/store/vault.store')
 const { toast } = await import('sonner')
 
@@ -32,41 +30,35 @@ const refreshAll = vi.fn<() => Promise<void>>()
 const onExportAll = vi.fn()
 
 function renderMenu(): void {
-  render(
-    createElement(
-      DropdownMenu,
-      { open: true },
-      createElement(DropdownMenuTrigger, null, 'Settings'),
-      createElement(
-        DropdownMenuContent,
-        null,
-        createElement(VaultMenuGroup, { vaultPath: '/v/vault.nvx', onExportAll })
-      )
-    )
-  )
+  render(createElement(VaultDataPanel, { onExportAll }))
 }
 
 async function click(name: string): Promise<void> {
-  const item = await screen.findByRole('menuitem', { name })
+  const button = screen.getByRole('button', { name })
   await act(async () => {
-    fireEvent.click(item)
+    fireEvent.click(button)
   })
 }
 
 beforeEach(() => {
-  // Radix's own auto-focus registers as a focus outside the menu in jsdom; see note-list-sort.
-  vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {})
   refreshAll.mockResolvedValue(undefined)
-  useVaultStore.setState({ refreshAll })
+  useVaultStore.setState({ refreshAll, currentVaultPath: '/v/vault.nvx' })
 })
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  vi.restoreAllMocks()
 })
 
-describe('VaultMenuGroup: Import Markdown…', () => {
+describe('VaultDataPanel: vault location', () => {
+  it('shows the open vault path', () => {
+    renderMenu()
+
+    expect(screen.getByDisplayValue('/v/vault.nvx')).not.toBeNull()
+  })
+})
+
+describe('VaultDataPanel: Import Markdown…', () => {
   it('refreshes the notes and reports a clean import', async () => {
     ipc.import.mockResolvedValue({
       success: true,
@@ -133,7 +125,7 @@ describe('VaultMenuGroup: Import Markdown…', () => {
   })
 })
 
-describe('VaultMenuGroup: Export all notes…', () => {
+describe('VaultDataPanel: Export all notes…', () => {
   it('asks the caller to show the warning instead of exporting straight away', async () => {
     renderMenu()
 

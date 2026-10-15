@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
 import {
+  DatabaseIcon,
   KeyIcon,
   LockIcon,
   RefreshCwIcon,
@@ -8,12 +9,16 @@ import {
   ShieldIcon,
   ShieldOffIcon
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
 import { ChangePasswordDialog } from './change-password-dialog'
+import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { KeyFileDialog } from './settings/KeyFileDialog'
+import { SectionTitle, SettingRow } from './settings/SettingRow'
+import { VaultDataPanel } from './settings/VaultDataPanel'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
@@ -28,7 +33,29 @@ import {
 import { Separator } from './ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 
-const PANEL = 'min-h-0 space-y-5 overflow-y-auto py-1 pr-2'
+// The divider lives on the panel, which already spans the dialog's height; stretching the tab
+// list instead would stretch every tab with it.
+const PANEL = 'border-border min-h-0 space-y-5 overflow-y-auto border-l py-1 pr-2 pl-6'
+
+// Active indicator on the left in the primary color; the same variant prefix as the shadcn
+// classes lets tailwind-merge replace them instead of stacking on top.
+const TAB =
+  'pl-3 after:bg-primary group-data-[orientation=vertical]/tabs:after:right-auto group-data-[orientation=vertical]/tabs:after:left-0'
+
+// The warning dialog stays open while this runs, but the OS folder dialog hides it; the
+// toast is what reports progress and the result.
+const handleExportAll = async (): Promise<void> => {
+  const toastId = toast.loading('Exporting notes…')
+  const result = await notvex.notes.exportAll()
+  if (!result.success) {
+    toast.error(result.error, { id: toastId })
+  } else if (result.data === null) {
+    toast.dismiss(toastId) // user canceled the folder dialog
+  } else {
+    const noun = result.data === 1 ? 'note' : 'notes'
+    toast.success(`Exported ${result.data} ${noun}`, { id: toastId })
+  }
+}
 
 interface Props {
   open: boolean
@@ -56,6 +83,7 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [keyFileDialogOpen, setKeyFileDialogOpen] = useState(false)
   const [hasKeyFile, setHasKeyFile] = useState(false)
+  const [exportAllOpen, setExportAllOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -89,15 +117,19 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
         </DialogHeader>
 
         {/* DialogContent unmounts on close, so every open starts on defaultValue. */}
-        <Tabs defaultValue="security" orientation="vertical" className="min-h-0 flex-1 gap-6">
+        <Tabs defaultValue="security" orientation="vertical" className="min-h-0 flex-1 gap-3">
           <TabsList aria-label="Settings sections" variant="line" className="w-44 shrink-0">
-            <TabsTrigger value="security">
+            <TabsTrigger value="security" className={TAB}>
               <ShieldIcon />
               Security
             </TabsTrigger>
-            <TabsTrigger value="updates">
+            <TabsTrigger value="updates" className={TAB}>
               <RefreshCwIcon />
               Updates
+            </TabsTrigger>
+            <TabsTrigger value="vault" className={TAB}>
+              <DatabaseIcon />
+              Vault & Data
             </TabsTrigger>
           </TabsList>
 
@@ -266,7 +298,20 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
               </SettingRow>
             </section>
           </TabsContent>
+
+          <TabsContent value="vault" className={PANEL}>
+            <VaultDataPanel onExportAll={() => setExportAllOpen(true)} />
+          </TabsContent>
         </Tabs>
+
+        {/* Confirmations render inside DialogContent: Radix decides "outside" by React tree, so a
+            sibling dialog's clicks would count as outside this one and dismiss it. */}
+        <ExportWarningDialog
+          open={exportAllOpen}
+          onOpenChange={setExportAllOpen}
+          title="Export all notes"
+          onConfirm={handleExportAll}
+        />
       </DialogContent>
 
       <ChangePasswordDialog
@@ -286,33 +331,5 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
         onHasKeyFileChange={setHasKeyFile}
       />
     </Dialog>
-  )
-}
-
-function SectionTitle({ children }: { children: ReactNode }): ReactNode {
-  return (
-    <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
-      {children}
-    </p>
-  )
-}
-
-function SettingRow({
-  label,
-  description,
-  children
-}: {
-  label: string
-  description?: ReactNode
-  children: React.ReactNode
-}): ReactNode {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex-1 space-y-0.5">
-        <p className="text-sm">{label}</p>
-        {description && <div className="text-muted-foreground text-xs">{description}</div>}
-      </div>
-      <div className="mt-0.5 shrink-0">{children}</div>
-    </div>
   )
 }

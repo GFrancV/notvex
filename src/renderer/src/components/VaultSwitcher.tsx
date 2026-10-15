@@ -1,6 +1,13 @@
 import { type ReactNode, useCallback } from 'react'
 
-import { CheckIcon, ChevronsUpDownIcon, FolderOpenIcon, LockOpenIcon, PlusIcon } from 'lucide-react'
+import {
+  CheckIcon,
+  ChevronsUpDownIcon,
+  FolderOpenIcon,
+  LockIcon,
+  LockOpenIcon,
+  PlusIcon
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { notvex } from '@/lib/ipc'
@@ -56,6 +63,13 @@ export function VaultSwitcher(): ReactNode {
     setActiveNoteId(null)
     setNotes([])
     setStatus('locked')
+  }
+
+  const handleLock = async (): Promise<void> => {
+    await notvex.vault.close()
+    setStatus('locked')
+    setActiveNoteId(null)
+    setNotes([])
   }
 
   const handleOpenOther = async (): Promise<void> => {
@@ -119,6 +133,11 @@ export function VaultSwitcher(): ReactNode {
           <DropdownMenuItem onSelect={handleCreateNew}>
             <PlusIcon className="size-4" />
             Create new vault...
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={handleLock}>
+            <LockIcon className="size-4" />
+            Lock vault
           </DropdownMenuItem>
         </TooltipProvider>
       </DropdownMenuContent>
