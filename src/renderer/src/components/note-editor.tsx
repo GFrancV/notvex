@@ -68,6 +68,34 @@ const notvexEditorTheme = EditorView.theme({
   '.cm-activeLine': { backgroundColor: '#ffffff05' }
 })
 
+// Module scope: @uiw/react-codemirror reconfigures the view whenever these props change identity,
+// and each markdown() call builds a new Language, so a reconfigure reparses the whole note.
+// onChange is in the same dependency list, so handleContentChange must stay stable too.
+const editorExtensions = [
+  markdown({ base: markdownLanguage, codeLanguages }),
+  formattingKeymap,
+  andromeda,
+  notvexEditorTheme,
+  livePreviewPlugin,
+  tablePreviewField,
+  livePreviewTheme,
+  EditorView.lineWrapping
+]
+
+const editorBasicSetup = {
+  lineNumbers: false,
+  foldGutter: false,
+  dropCursor: false,
+  allowMultipleSelections: false,
+  indentOnInput: false,
+  highlightActiveLine: true,
+  highlightSelectionMatches: false,
+  closeBrackets: false,
+  autocompletion: false,
+  crosshairCursor: false,
+  highlightActiveLineGutter: false
+}
+
 const AUTOSAVE_DELAY = 500
 // Recounting scans the whole note, so it waits for a typing pause instead of running per keystroke.
 const COUNT_DELAY = 300
@@ -484,16 +512,7 @@ export function NoteEditor(): ReactNode {
                 key={activeNoteId}
                 value={content}
                 theme="dark"
-                extensions={[
-                  markdown({ base: markdownLanguage, codeLanguages }),
-                  formattingKeymap,
-                  andromeda,
-                  notvexEditorTheme,
-                  livePreviewPlugin,
-                  tablePreviewField,
-                  livePreviewTheme,
-                  EditorView.lineWrapping
-                ]}
+                extensions={editorExtensions}
                 onChange={handleContentChange}
                 onCreateEditor={(view) => {
                   editorViewRef.current = view
@@ -501,19 +520,7 @@ export function NoteEditor(): ReactNode {
                   // Mounted after load, so a title focused for a new note must keep its focus.
                   if (document.activeElement !== titleInputRef.current) view.focus()
                 }}
-                basicSetup={{
-                  lineNumbers: false,
-                  foldGutter: false,
-                  dropCursor: false,
-                  allowMultipleSelections: false,
-                  indentOnInput: false,
-                  highlightActiveLine: true,
-                  highlightSelectionMatches: false,
-                  closeBrackets: false,
-                  autocompletion: false,
-                  crosshairCursor: false,
-                  highlightActiveLineGutter: false
-                }}
+                basicSetup={editorBasicSetup}
                 className="h-full w-full overflow-auto"
               />
             </EditorContextMenu>
