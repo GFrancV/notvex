@@ -7,17 +7,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const ipc = vi.hoisted(() => ({
   getHasKeyFile: vi.fn(),
   openBackupsFolder: vi.fn(),
-  exportAll: vi.fn()
+  exportAll: vi.fn(),
+  openLogsFolder: vi.fn(),
+  clearLogs: vi.fn()
 }))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     vault: { getHasKeyFile: ipc.getHasKeyFile, openBackupsFolder: ipc.openBackupsFolder },
-    notes: { exportAll: ipc.exportAll }
+    notes: { exportAll: ipc.exportAll },
+    log: { openFolder: ipc.openLogsFolder, clear: ipc.clearLogs }
+  }
+}))
+vi.mock('sonner', () => ({
+  toast: {
+    loading: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+    dismiss: vi.fn()
   }
 }))
 
 const { SettingsDialog } = await import('@/components/settings-dialog')
+const { toast } = await import('sonner')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { useVaultStore } = await import('@/store/vault.store')
 
@@ -37,6 +50,8 @@ const currentCrumb = (): Element | null => document.querySelector('[aria-current
 beforeEach(() => {
   ipc.getHasKeyFile.mockResolvedValue({ success: true, data: false })
   ipc.openBackupsFolder.mockResolvedValue({ success: true, data: null })
+  ipc.openLogsFolder.mockResolvedValue({ success: true, data: null })
+  ipc.clearLogs.mockResolvedValue({ success: true, data: null })
   usePrefsStore.setState({ setPref, lockOnMinimize: false, checkUpdatesOnStartup: true })
   useVaultStore.setState({ currentVaultPath: '/v/vault.nvx' })
 })
@@ -61,7 +76,8 @@ describe('SettingsDialog', () => {
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       'Security',
       'Updates',
-      'Vault & Data'
+      'Vault & Data',
+      'Diagnostics'
     ])
   })
 
@@ -167,5 +183,85 @@ describe('SettingsDialog', () => {
 
     expect(currentCrumb()).toBeNull()
     expect(screen.getByRole('tabpanel').textContent).toMatch(/auto-lock/i)
+  })
+})
+
+describe('SettingsDialog: Diagnostics', () => {
+  async function openDiagnostics(): Promise<void> {
+    await renderDialog()
+    fireEvent.mouseDown(tab('Diagnostics'))
+  }
+
+  async function openClearDialog(): Promise<void> {
+    await openDiagnostics()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear logs…' }))
+    await screen.findByRole('heading', { name: 'Clear error logs?' })
+  }
+
+  it('opens the logs folder', async () => {
+    await openDiagnostics()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open logs folder' }))
+
+    expect(ipc.openLogsFolder).toHaveBeenCalledOnce()
+  })
+
+  it('says so when the logs folder cannot be opened', async () => {
+    ipc.openLogsFolder.mockResolvedValue({ success: false, error: 'Failed to open path' })
+    await openDiagnostics()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open logs folder' }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't open the logs folder"))
+  })
+
+  it('asks for confirmation on top of the settings before clearing anything', async () => {
+    await openClearDialog()
+
+    expect(screen.getByText(/can't be undone/i)).toBeTruthy()
+    expect(ipc.clearLogs).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('leaves the logs and the settings alone when cancelled', async () => {
+    await openClearDialog()
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Clear error logs?' })).toBeNull()
+    )
+    expect(ipc.clearLogs).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+  })
+
+  it('clears the logs once confirmed', async () => {
+    await openClearDialog()
+
+    fireEvent.click(screen.getByRole('button', { name: /^clear logs$/i }))
+
+    await waitFor(() => expect(ipc.clearLogs).toHaveBeenCalledOnce())
+    expect(toast.success).toHaveBeenCalledWith('Logs cleared')
+  })
+
+  it('can still be closed when the clear call itself rejects', async () => {
+    ipc.clearLogs.mockRejectedValue(new Error('IPC gone'))
+    await openClearDialog()
+
+    fireEvent.click(screen.getByRole('button', { name: /^clear logs$/i }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't clear the logs"))
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Clear error logs?' })).toBeNull()
+    )
+  })
+
+  it('says so when clearing fails', async () => {
+    ipc.clearLogs.mockResolvedValue({ success: false, error: 'EBUSY' })
+    await openClearDialog()
+
+    fireEvent.click(screen.getByRole('button', { name: /^clear logs$/i }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't clear the logs"))
   })
 })

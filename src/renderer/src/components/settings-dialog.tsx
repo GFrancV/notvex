@@ -1,14 +1,24 @@
 import { useState, type ReactNode } from 'react'
 
-import { DatabaseIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react'
+import {
+  ActivityIcon,
+  DatabaseIcon,
+  FolderOpenIcon,
+  RefreshCwIcon,
+  ShieldIcon,
+  Trash2Icon
+} from 'lucide-react'
 import { toast } from 'sonner'
 
+import { openLogsFolder } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
+import { ClearLogsDialog } from './dialogs/ClearLogsDialog'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { SecurityPanel } from './settings/SecurityPanel'
 import { SectionTitle, SettingRow } from './settings/SettingRow'
 import { VaultDataPanel } from './settings/VaultDataPanel'
+import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
@@ -46,6 +56,7 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
   const setPref = usePrefsStore((s) => s.setPref)
   const checkUpdatesOnStartup = usePrefsStore((s) => s.checkUpdatesOnStartup)
   const [exportAllOpen, setExportAllOpen] = useState(false)
+  const [clearLogsOpen, setClearLogsOpen] = useState(false)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,6 +80,10 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
             <TabsTrigger value="vault" className={TAB}>
               <DatabaseIcon />
               Vault & Data
+            </TabsTrigger>
+            <TabsTrigger value="diagnostics" className={TAB}>
+              <ActivityIcon />
+              Diagnostics
             </TabsTrigger>
           </TabsList>
 
@@ -97,6 +112,33 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
           <TabsContent value="vault" className={PANEL}>
             <VaultDataPanel onExportAll={() => setExportAllOpen(true)} />
           </TabsContent>
+
+          <TabsContent value="diagnostics" className={PANEL}>
+            <section className="space-y-3">
+              <SectionTitle>Error log</SectionTitle>
+
+              <SettingRow
+                label="Logs folder"
+                description="Errors are recorded only on this device, with no note content or file paths. Open the folder to attach the log to a bug report."
+              >
+                <Button variant="secondary" size="sm" onClick={() => void openLogsFolder()}>
+                  <FolderOpenIcon />
+                  Open logs folder
+                </Button>
+              </SettingRow>
+
+              {/* Destructive, so it goes last and confirms first. */}
+              <SettingRow
+                label="Clear logs"
+                description="Delete the local error log. A later bug report won't include the errors recorded so far."
+              >
+                <Button variant="destructive" size="sm" onClick={() => setClearLogsOpen(true)}>
+                  <Trash2Icon />
+                  Clear logs…
+                </Button>
+              </SettingRow>
+            </section>
+          </TabsContent>
         </Tabs>
 
         {/* Confirmations render inside DialogContent: Radix decides "outside" by React tree, so a
@@ -107,6 +149,7 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
           title="Export all notes"
           onConfirm={handleExportAll}
         />
+        <ClearLogsDialog open={clearLogsOpen} onOpenChange={setClearLogsOpen} />
       </DialogContent>
     </Dialog>
   )
