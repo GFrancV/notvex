@@ -261,6 +261,8 @@ export interface NotvexAPI {
   }
   clipboard: {
     scheduleClear(value: string): Promise<IpcResult<null>>
+    /** Main clears it after the auto-clear pref, or after a fixed 30 s when `secret`. */
+    write(text: string, opts?: { secret?: boolean }): Promise<IpcResult<null>>
   }
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>

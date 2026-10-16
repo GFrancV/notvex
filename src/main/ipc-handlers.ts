@@ -17,7 +17,7 @@ import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
-import { scheduleClipboardClear } from './clipboard-guard'
+import { scheduleClipboardClear, writeClipboard } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { appendError, clearLog, ensureLogDir, readLogTail } from './error-log'
@@ -1370,6 +1370,18 @@ export function registerIpcHandlers(
     try {
       if (typeof value !== 'string') return fail('Invalid clipboard value')
       scheduleClipboardClear(value)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('clipboard:write', async (_e, text: unknown, opts: unknown) => {
+    try {
+      if (typeof text !== 'string' || text === '') return fail('Invalid clipboard value')
+      const secret =
+        typeof opts === 'object' && opts !== null && (opts as { secret?: unknown }).secret === true
+      await writeClipboard(text, { secret })
       return ok(null)
     } catch (e) {
       return fail(e)
