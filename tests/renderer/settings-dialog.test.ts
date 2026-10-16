@@ -31,6 +31,8 @@ async function renderDialog(): Promise<void> {
 }
 
 const tab = (name: string): HTMLElement => screen.getByRole('tab', { name })
+// The subpage title is the breadcrumb's current page.
+const currentCrumb = (): Element | null => document.querySelector('[aria-current="page"]')
 
 beforeEach(() => {
   ipc.getHasKeyFile.mockResolvedValue({ success: true, data: false })
@@ -132,12 +134,38 @@ describe('SettingsDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false)
   })
 
-  it('hands off to Change password by closing itself', async () => {
+  it('opens Change password as a subpage and goes back to Security', async () => {
     await renderDialog()
 
     fireEvent.click(screen.getByRole('button', { name: /change password/i }))
 
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(screen.getByRole('heading', { name: 'Change password' })).toBeTruthy()
+    expect(currentCrumb()?.textContent).toBe('Change password')
+    expect(screen.getByLabelText('Current password')).toBeTruthy()
+    expect(onOpenChange).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }))
+
+    expect(screen.getByRole('tabpanel').textContent).toMatch(/auto-lock/i)
+  })
+
+  it('opens key file management as a subpage', async () => {
+    await renderDialog()
+
+    fireEvent.click(screen.getByRole('button', { name: /manage/i }))
+
+    expect(currentCrumb()?.textContent).toBe('Key file')
+    expect(screen.getByRole('button', { name: /generate key file/i })).toBeTruthy()
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('drops an open subpage when switching tabs', async () => {
+    await renderDialog()
+    fireEvent.click(screen.getByRole('button', { name: /change password/i }))
+
+    fireEvent.mouseDown(tab('Updates'))
+    fireEvent.mouseDown(tab('Security'))
+
+    expect(currentCrumb()).toBeNull()
+    expect(screen.getByRole('tabpanel').textContent).toMatch(/auto-lock/i)
   })
 })
