@@ -26,9 +26,7 @@ function Pre({ children }: React.ComponentProps<'pre'>): React.JSX.Element {
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => {
-            void copyToClipboard(preRef.current?.textContent ?? '')
-          }}
+          onClick={() => void copyToClipboard(preRef.current?.textContent ?? '')}
           className="text-muted-foreground size-6"
           title="Copy code"
           aria-label="Copy code"

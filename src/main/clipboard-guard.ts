@@ -3,7 +3,7 @@ import { clipboard, ClipboardItem } from 'electron'
 import { logError } from './log'
 import { getPrefs } from './prefs'
 
-// The recovery phrase grants full access, so it is cleared even when the user turned the
+// The recovery key grants full access, so it is cleared even when the user turned the
 // auto-clear off.
 const SECRET_CLEAR_SECONDS = 30
 

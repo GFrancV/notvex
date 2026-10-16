@@ -1369,8 +1369,7 @@ export function registerIpcHandlers(
   handle('clipboard:write', async (_e, text: unknown, opts: unknown) => {
     try {
       if (typeof text !== 'string' || text === '') return fail('Invalid clipboard value')
-      const secret =
-        typeof opts === 'object' && opts !== null && (opts as { secret?: unknown }).secret === true
+      const secret = (opts as { secret?: unknown } | null | undefined)?.secret === true
       await writeClipboard(text, { secret })
       return ok(null)
     } catch (e) {
