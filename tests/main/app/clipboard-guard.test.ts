@@ -75,7 +75,7 @@ describe('scheduleClipboardClear', () => {
   })
 })
 
-const WINDOWS_FORMAT = (name: string): string => `electron application/osclipboard;format="${name}"`
+const RAW_FORMAT = (name: string): string => `electron application/osclipboard;format="${name}"`
 
 describe('writeClipboard', () => {
   let writeClipboard: typeof import('@main/clipboard-guard').writeClipboard
@@ -105,10 +105,10 @@ describe('writeClipboard', () => {
     expect(Object.keys(items[0].items).sort()).toEqual(
       [
         'text/plain',
-        WINDOWS_FORMAT('ExcludeClipboardContentFromMonitorProcessing'),
-        WINDOWS_FORMAT('CanIncludeInClipboardHistory'),
-        WINDOWS_FORMAT('CanUploadToCloudClipboard'),
-        'application/x-nspasteboard-concealed-type',
+        RAW_FORMAT('ExcludeClipboardContentFromMonitorProcessing'),
+        RAW_FORMAT('CanIncludeInClipboardHistory'),
+        RAW_FORMAT('CanUploadToCloudClipboard'),
+        RAW_FORMAT('org.nspasteboard.ConcealedType'),
         'x-kde-passwordManagerHint'
       ].sort()
     )
@@ -121,7 +121,7 @@ describe('writeClipboard', () => {
 
     const { items } = clipboard.write.mock.calls[0][0][0]
     for (const name of ['CanIncludeInClipboardHistory', 'CanUploadToCloudClipboard']) {
-      const blob = items[WINDOWS_FORMAT(name)] as Blob
+      const blob = items[RAW_FORMAT(name)] as Blob
       expect(new Uint8Array(await blob.arrayBuffer())).toEqual(new Uint8Array([0, 0, 0, 0]))
     }
   })
