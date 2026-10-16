@@ -48,6 +48,38 @@ export default defineConfig(
     rules: { 'local/no-history-comments': 'error' }
   },
   {
+    // Clipboard history and cloud sync are only opted out of when main writes the clipboard.
+    files: ['src/renderer/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'MemberExpression[property.name="clipboard"]:matches([object.name="navigator"], [object.property.name="navigator"])',
+          message: 'Copy through useCopyToClipboard, which writes via main.'
+        }
+      ]
+    }
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/main/clipboard-guard.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'electron',
+              importNames: ['clipboard', 'ClipboardItem'],
+              message: 'Write the clipboard through writeClipboard in clipboard-guard.ts.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     // Main-process errors can carry the vault path; log.ts is the one place that redacts them.
     files: ['src/main/**/*.ts'],
     ignores: ['src/main/log.ts'],

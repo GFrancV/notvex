@@ -14,7 +14,15 @@ const defaultSession = {
 
 vi.mock('electron', () => ({ session: { defaultSession } }))
 
-const DENIED = ['media', 'clipboard-read', 'notifications', 'geolocation', 'not-a-permission']
+// clipboard-sanitized-write is denied too: the renderer copies through main, never navigator.clipboard.
+const DENIED = [
+  'clipboard-sanitized-write',
+  'media',
+  'clipboard-read',
+  'notifications',
+  'geolocation',
+  'not-a-permission'
+]
 
 describe('installPermissionGuard', () => {
   let requestHandler: RequestHandler
@@ -36,11 +44,6 @@ describe('installPermissionGuard', () => {
     expect(callback).toHaveBeenCalledOnce()
     return callback.mock.calls[0]![0]
   }
-
-  it('grants clipboard write, which navigator.clipboard.writeText needs', () => {
-    expect(request('clipboard-sanitized-write')).toBe(true)
-    expect(checkHandler(null, 'clipboard-sanitized-write')).toBe(true)
-  })
 
   it.each(DENIED)('denies %s', (permission) => {
     expect(request(permission)).toBe(false)
