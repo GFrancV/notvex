@@ -68,7 +68,10 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
     setError('')
     setLoading(true)
     onLockChange(true)
-    const res = await notvex.vault.changePassword(currentPw, newPw, keyFileContents ?? undefined)
+    // A rejected call must still release the lock, or the dialog could never be left.
+    const res = await notvex.vault
+      .changePassword(currentPw, newPw, keyFileContents ?? undefined)
+      .catch(() => ({ success: false as const, error: 'Something went wrong. Try again.' }))
     setLoading(false)
     if (!res.success) {
       onLockChange(false)

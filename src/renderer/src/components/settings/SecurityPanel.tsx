@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import {
   FileKeyIcon,
@@ -28,7 +28,7 @@ import { KeyFilePanel, type KeyFileMode } from './KeyFilePanel'
 import { SettingRow, SettingsSection } from './SettingRow'
 
 type Subpage = { kind: 'password' } | { kind: 'key-file'; mode: KeyFileMode } | null
-type SubpageKind = Exclude<Subpage, null>['kind']
+type RowButton = 'password' | 'generate' | 'existing' | 'remove'
 
 // Radix unmounts an inactive tab, so switching tabs or closing Settings drops any open subpage.
 export function SecurityPanel({
@@ -51,19 +51,15 @@ export function SecurityPanel({
   const [hasKeyFile, setHasKeyFile] = useState(false)
 
   // The row button is gone while its subpage is open, so focus would land on the dialog root on the
-  // way back; the remounted button takes it instead.
-  const returnFocusTo = useRef<SubpageKind | null>(null)
-  const openSubpage = (target: Exclude<Subpage, null>): void => {
-    returnFocusTo.current = target.kind
+  // way back; the button that opened it autofocuses as it remounts. Adding or removing a key file
+  // swaps the row's buttons, so each one also takes focus meant for the button it replaced.
+  const [openedFrom, setOpenedFrom] = useState<RowButton | null>(null)
+  const openSubpage = (target: Exclude<Subpage, null>, from: RowButton): void => {
+    setOpenedFrom(from)
     setSubpage(target)
   }
-  const focusOnReturn =
-    (target: SubpageKind) =>
-    (button: HTMLButtonElement | null): void => {
-      if (!button || returnFocusTo.current !== target) return
-      returnFocusTo.current = null
-      button.focus()
-    }
+  const returnsFocusTo = (...accepts: RowButton[]): boolean =>
+    openedFrom !== null && accepts.includes(openedFrom)
 
   // The OS dialog comes first; a cancelled dialog leaves Security as it was.
   const addKeyFile = async (source: 'generate' | 'existing'): Promise<void> => {
@@ -73,10 +69,13 @@ export function SecurityPanel({
         : await notvex.vault.selectKeyFile()
     if (!res.success || !res.data) return
     if ('sizeBytes' in res.data && res.data.sizeBytes === 0) return
-    openSubpage({
-      kind: 'key-file',
-      mode: { kind: 'add', contents: res.data.contents, filename: res.data.filename }
-    })
+    openSubpage(
+      {
+        kind: 'key-file',
+        mode: { kind: 'add', contents: res.data.contents, filename: res.data.filename }
+      },
+      source
+    )
   }
 
   useEffect(() => {
@@ -187,8 +186,8 @@ export function SecurityPanel({
           <Button
             variant="secondary"
             size="sm"
-            ref={focusOnReturn('password')}
-            onClick={() => openSubpage({ kind: 'password' })}
+            autoFocus={returnsFocusTo('password')}
+            onClick={() => openSubpage({ kind: 'password' }, 'password')}
           >
             <LockIcon />
             Change password
@@ -217,8 +216,8 @@ export function SecurityPanel({
             <Button
               variant="destructive"
               size="sm"
-              ref={focusOnReturn('key-file')}
-              onClick={() => openSubpage({ kind: 'key-file', mode: { kind: 'remove' } })}
+              autoFocus={returnsFocusTo('remove', 'generate', 'existing')}
+              onClick={() => openSubpage({ kind: 'key-file', mode: { kind: 'remove' } }, 'remove')}
             >
               <Trash2Icon />
               Remove…
@@ -228,13 +227,18 @@ export function SecurityPanel({
               <Button
                 variant="secondary"
                 size="sm"
-                ref={focusOnReturn('key-file')}
+                autoFocus={returnsFocusTo('generate', 'remove')}
                 onClick={() => void addKeyFile('generate')}
               >
                 <FileKeyIcon />
                 Generate…
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => void addKeyFile('existing')}>
+              <Button
+                variant="secondary"
+                size="sm"
+                autoFocus={returnsFocusTo('existing')}
+                onClick={() => void addKeyFile('existing')}
+              >
                 <FolderOpenIcon />
                 Use existing…
               </Button>

@@ -278,6 +278,7 @@ describe('SettingsDialog: a rekey in progress', () => {
     for (const name of ['Updates', 'Vault & Data', 'Diagnostics', 'About']) {
       expect(tab(name).hasAttribute('disabled')).toBe(true)
     }
+    expect(screen.queryByRole('button', { name: /close/i })).toBeNull()
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     expect(onOpenChange).not.toHaveBeenCalledWith(false)
     expect(currentCrumb()?.textContent).toBe('Change password')

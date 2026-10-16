@@ -106,6 +106,15 @@ describe('KeyFilePanel: locking while the recovery key is at stake', () => {
     expect(onBack).toHaveBeenCalledOnce()
   })
 
+  it('unlocks when the activation call itself rejects', async () => {
+    ipc.configureKeyFile.mockRejectedValue(new Error('IPC gone'))
+    await activate()
+
+    expect(onLockChange.mock.calls).toEqual([[true], [false]])
+    expect(screen.getByText(/something went wrong/i)).toBeTruthy()
+    expect(back().hasAttribute('disabled')).toBe(false)
+  })
+
   it('unlocks and shows the error when activation fails', async () => {
     ipc.configureKeyFile.mockResolvedValue({ success: false, error: 'Incorrect password' })
     await activate()
@@ -118,12 +127,7 @@ describe('KeyFilePanel: locking while the recovery key is at stake', () => {
 })
 
 describe('KeyFilePanel: removing the key file', () => {
-  it('needs both the current key file and the password', async () => {
-    ipc.selectKeyFile.mockResolvedValue({
-      success: true,
-      data: { contents: KEY, filename: 'vault.nvxkey', sizeBytes: 3 }
-    })
-    ipc.removeKeyFile.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+  function renderRemove(): void {
     render(
       createElement(KeyFilePanel, {
         mode: { kind: 'remove' },
@@ -132,6 +136,21 @@ describe('KeyFilePanel: removing the key file', () => {
         onHasKeyFileChange
       })
     )
+  }
+
+  it('puts focus on choosing the current key file when it opens', () => {
+    renderRemove()
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Browse' }))
+  })
+
+  it('needs both the current key file and the password, then stays locked until confirmed', async () => {
+    ipc.selectKeyFile.mockResolvedValue({
+      success: true,
+      data: { contents: KEY, filename: 'vault.nvxkey', sizeBytes: 3 }
+    })
+    ipc.removeKeyFile.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+    renderRemove()
     const remove = (): HTMLElement => screen.getByRole('button', { name: 'Remove' })
 
     fireEvent.change(screen.getByLabelText('Current password'), {
@@ -149,5 +168,13 @@ describe('KeyFilePanel: removing the key file', () => {
     })
     expect(ipc.removeKeyFile).toHaveBeenCalledWith('my password 123', KEY)
     expect(onHasKeyFileChange).toHaveBeenCalledWith(false)
+    expect(onLockChange).toHaveBeenLastCalledWith(true)
+    await screen.findByRole('heading', { name: 'Save your new recovery key' })
+    expect(back().hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(screen.getByLabelText(/i have saved my new recovery key/i))
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+
+    expect(onLockChange).toHaveBeenLastCalledWith(false)
   })
 })

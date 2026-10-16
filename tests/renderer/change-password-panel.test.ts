@@ -79,6 +79,15 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     expect(onBack).toHaveBeenCalledOnce()
   })
 
+  it('unlocks when the change call itself rejects', async () => {
+    ipc.changePassword.mockRejectedValue(new Error('IPC gone'))
+    await submitValidForm()
+
+    expect(onLockChange.mock.calls).toEqual([[true], [false]])
+    expect(screen.getByText(/something went wrong/i)).toBeTruthy()
+    expect(back().hasAttribute('disabled')).toBe(false)
+  })
+
   it('unlocks and shows the error when the change fails', async () => {
     ipc.changePassword.mockResolvedValue({ success: false, error: 'Incorrect password' })
     await submitValidForm()

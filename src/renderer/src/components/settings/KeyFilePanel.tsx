@@ -51,9 +51,12 @@ export function KeyFilePanel({
     setLoading(true)
     setError('')
     onLockChange(true)
-    const res = adding
-      ? await notvex.vault.configureKeyFile(password, keyFile)
-      : await notvex.vault.removeKeyFile(password, keyFile)
+    // A rejected call must still release the lock, or the dialog could never be left.
+    const res = await (
+      adding
+        ? notvex.vault.configureKeyFile(password, keyFile)
+        : notvex.vault.removeKeyFile(password, keyFile)
+    ).catch(() => ({ success: false as const, error: 'Something went wrong. Try again.' }))
     setLoading(false)
     if (!res.success) {
       onLockChange(false)
@@ -119,6 +122,7 @@ export function KeyFilePanel({
               }
               onChange={(contents) => setKeyFile(contents)}
               onClear={() => setKeyFile(null)}
+              autoFocus={!adding}
             />
             {adding && (
               <p className="text-muted-foreground text-xs">

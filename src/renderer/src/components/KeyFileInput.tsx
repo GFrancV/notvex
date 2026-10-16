@@ -12,13 +12,16 @@ interface KeyFileInputProps {
   disabled?: boolean
   /** A file already chosen elsewhere, shown as selected; the user can still clear or replace it. */
   initialFile?: { filename: string; sizeBytes: number }
+  /** Focuses Browse on mount, for when choosing the file is the first thing to do. */
+  autoFocus?: boolean
 }
 
 export function KeyFileInput({
   onChange,
   onClear,
   disabled,
-  initialFile
+  initialFile,
+  autoFocus
 }: KeyFileInputProps): ReactNode {
   const [selectedFile, setSelectedFile] = useState<{
     filename: string
@@ -82,6 +85,7 @@ export function KeyFileInput({
           ) : (
             <InputGroupButton
               variant="outline"
+              autoFocus={autoFocus}
               onClick={(): void => void handleBrowse()}
               disabled={disabled}
             >
