@@ -131,11 +131,6 @@ export function PostRecoveryReset(): ReactNode {
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold tracking-tight">Save your new recovery key</h1>
-                <p className="text-muted mt-1 text-sm">
-                  Your previous recovery key has been invalidated.
-                  <br />
-                  Store this new key somewhere safe — you won&apos;t see it again.
-                </p>
               </div>
             </div>
 
