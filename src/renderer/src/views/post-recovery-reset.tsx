@@ -142,8 +142,9 @@ export function PostRecoveryReset(): ReactNode {
             <Alert className="border-warning/30 bg-warning/10 border">
               <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
               <AlertDescription className="text-warning">
-                Your recovery key has changed. The previous key is no longer valid. Save this new
-                one — it will not be shown again.
+                Your recovery key has changed and the previous one no longer works. Write it down by
+                hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t be
+                shown again.
               </AlertDescription>
             </Alert>
 
@@ -166,7 +167,7 @@ export function PostRecoveryReset(): ReactNode {
                 onCheckedChange={(c) => setConfirmed(c === true)}
               />
               <FieldLabel htmlFor="confirm-recovery">
-                I have saved my recovery key in a safe place. I understand I cannot recover it if
+                I&apos;ve saved my recovery key somewhere safe. I understand I cannot recover it if
                 lost.
               </FieldLabel>
             </Field>
