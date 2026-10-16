@@ -16,8 +16,8 @@ If you're on an older version, please update before reporting — the issue may
 already be fixed.
 
 Notvex checks GitHub for a new version on startup. If you turn that off
-(**Security settings → Updates**), you won't be told about security fixes:
-check manually from **About** to stay on the latest version.
+(**Settings → Updates**), you won't be told about security fixes:
+check manually from **Settings → About** to stay on the latest version.
 
 ## Reporting a Vulnerability
 
