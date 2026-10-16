@@ -18,7 +18,7 @@ import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
 import { ChangePasswordPanel } from './ChangePasswordPanel'
 import { KeyFilePanel } from './KeyFilePanel'
-import { SectionTitle, SettingRow } from './SettingRow'
+import { SettingRow, SettingsSection } from './SettingRow'
 
 type Subpage = 'password' | 'key-file' | null
 
@@ -57,10 +57,7 @@ export function SecurityPanel(): ReactNode {
 
   return (
     <>
-      {/* ── Auto-lock ── */}
-      <section className="space-y-3">
-        <SectionTitle>Auto-lock</SectionTitle>
-
+      <SettingsSection title="Auto-lock">
         <SettingRow
           label="Timeout"
           description="Automatically lock the vault after a period of inactivity."
@@ -94,14 +91,11 @@ export function SecurityPanel(): ReactNode {
             onCheckedChange={(v) => void setPref('lockOnMinimize', v === true)}
           />
         </SettingRow>
-      </section>
+      </SettingsSection>
 
       <Separator />
 
-      {/* ── Clipboard ── */}
-      <section className="space-y-3">
-        <SectionTitle>Clipboard</SectionTitle>
-
+      <SettingsSection title="Clipboard">
         <SettingRow
           label="Auto-clear"
           description="Automatically clear the clipboard after copying text from the note editor."
@@ -125,14 +119,11 @@ export function SecurityPanel(): ReactNode {
             </SelectContent>
           </Select>
         </SettingRow>
-      </section>
+      </SettingsSection>
 
       <Separator />
 
-      {/* ── Privacy ── */}
-      <section className="space-y-3">
-        <SectionTitle>Privacy</SectionTitle>
-
+      <SettingsSection title="Privacy">
         <SettingRow
           label="Prevent screen capture"
           description="Hides Notvex from screenshots and screen sharing. Requires restart."
@@ -143,13 +134,11 @@ export function SecurityPanel(): ReactNode {
             onCheckedChange={(v) => void setPref('allowScreenCapture', !(v === true))}
           />
         </SettingRow>
-      </section>
+      </SettingsSection>
 
       <Separator />
 
-      {/* ── Authentication ── */}
-      <section className="space-y-3">
-        <SectionTitle>Authentication</SectionTitle>
+      <SettingsSection title="Authentication">
         <SettingRow label="Password" description="Change the password used to unlock this vault.">
           <Button variant="secondary" size="sm" onClick={() => setSubpage('password')}>
             <LockIcon />
@@ -175,19 +164,17 @@ export function SecurityPanel(): ReactNode {
             Manage
           </Button>
         </SettingRow>
-      </section>
+      </SettingsSection>
 
       <Separator />
 
-      {/* ── Always-on protections ── */}
-      <section className="space-y-3">
-        <SectionTitle>Always-on protections</SectionTitle>
+      <SettingsSection title="Always-on protections">
         <p className="text-muted-foreground text-xs">
           Notvex always locks the vault when the system sleeps or the screen locks, and applies a
           progressive delay after repeated failed unlock attempts. These protections are built in
           and cannot be turned off.
         </p>
-      </section>
+      </SettingsSection>
     </>
   )
 }

@@ -18,7 +18,7 @@ import { ClearLogsDialog } from './dialogs/ClearLogsDialog'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { AboutPanel } from './settings/AboutPanel'
 import { SecurityPanel } from './settings/SecurityPanel'
-import { SectionTitle, SettingRow } from './settings/SettingRow'
+import { SettingRow, SettingsSection } from './settings/SettingRow'
 import { VaultDataPanel } from './settings/VaultDataPanel'
 import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
@@ -102,9 +102,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
           </TabsContent>
 
           <TabsContent value="updates" className={PANEL}>
-            <section className="space-y-3">
-              <SectionTitle>Updates</SectionTitle>
-
+            <SettingsSection title="Updates">
               <SettingRow
                 label="Check for updates on startup"
                 description="Contacts GitHub when Notvex starts. GitHub sees your IP address, OS and app version. You can still check manually from About."
@@ -115,7 +113,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
                   onCheckedChange={(v) => void setPref('checkUpdatesOnStartup', v === true)}
                 />
               </SettingRow>
-            </section>
+            </SettingsSection>
           </TabsContent>
 
           <TabsContent value="vault" className={PANEL}>
@@ -123,9 +121,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
           </TabsContent>
 
           <TabsContent value="diagnostics" className={PANEL}>
-            <section className="space-y-3">
-              <SectionTitle>Error log</SectionTitle>
-
+            <SettingsSection title="Error log">
               <SettingRow
                 label="Logs folder"
                 description="Errors are recorded only on this device, with no note content or file paths. Open the folder to attach the log to a bug report."
@@ -146,7 +142,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
                   Clear logs…
                 </Button>
               </SettingRow>
-            </section>
+            </SettingsSection>
           </TabsContent>
 
           <TabsContent value="about" className={PANEL}>

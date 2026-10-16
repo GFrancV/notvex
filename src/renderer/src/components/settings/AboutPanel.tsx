@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { DOCS_URL, openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
-import { SectionTitle, SettingRow } from './SettingRow'
+import { SettingRow, SettingsSection } from './SettingRow'
 
 export function AboutPanel(): ReactNode {
   const isDev = useIsDev()
@@ -52,8 +52,7 @@ export function AboutPanel(): ReactNode {
 
       <Separator />
 
-      <section className="space-y-3">
-        <SectionTitle>Updates</SectionTitle>
+      <SettingsSection title="Updates">
         <SettingRow
           label={appVersion ? `Version ${appVersion}` : 'Version'}
           description="Asks GitHub whether a newer release exists."
@@ -68,13 +67,12 @@ export function AboutPanel(): ReactNode {
             {checking ? 'Checking…' : 'Check for updates'}
           </Button>
         </SettingRow>
-      </section>
+      </SettingsSection>
 
       <Separator />
 
       {/* Buttons, not <a href>: a link would navigate the window, which main blocks. */}
-      <section className="space-y-3">
-        <SectionTitle>Help & feedback</SectionTitle>
+      <SettingsSection title="Help & feedback">
         <SettingRow label="Documentation" description="Guides and answers on GitHub.">
           <Button
             variant="secondary"
@@ -94,7 +92,7 @@ export function AboutPanel(): ReactNode {
             Report a bug…
           </Button>
         </SettingRow>
-      </section>
+      </SettingsSection>
     </>
   )
 }

@@ -44,11 +44,20 @@ export function SubpageHeader({
   )
 }
 
-export function SectionTitle({ children }: { children: ReactNode }): ReactNode {
+export function SettingsSection({
+  title,
+  children
+}: {
+  title: string
+  children: ReactNode
+}): ReactNode {
   return (
-    <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+    <section className="space-y-3">
+      <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+        {title}
+      </p>
       {children}
-    </p>
+    </section>
   )
 }
 

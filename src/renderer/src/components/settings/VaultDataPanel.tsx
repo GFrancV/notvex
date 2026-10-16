@@ -16,7 +16,7 @@ import { summarizeImport } from '@/lib/import-summary'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
 import { useVaultStore } from '@/store/vault.store'
-import { SectionTitle, SettingRow } from './SettingRow'
+import { SettingRow, SettingsSection } from './SettingRow'
 
 // The OS file dialogs hide the settings window while they're open, so a persistent toast is the
 // only feedback that survives until the action finishes.
@@ -80,9 +80,7 @@ export function VaultDataPanel({ onExportAll }: Props): ReactNode {
 
   return (
     <>
-      <section className="space-y-3">
-        <SectionTitle>Vault</SectionTitle>
-
+      <SettingsSection title="Vault">
         {vaultPath && (
           <div className="space-y-1.5">
             <p className="text-sm">Location</p>
@@ -122,13 +120,11 @@ export function VaultDataPanel({ onExportAll }: Props): ReactNode {
             Open backups folder
           </Button>
         </SettingRow>
-      </section>
+      </SettingsSection>
 
       <Separator />
 
-      <section className="space-y-3">
-        <SectionTitle>Notes</SectionTitle>
-
+      <SettingsSection title="Notes">
         <SettingRow
           label="Export"
           description="Write every note to a folder as Markdown. Exported files are not encrypted."
@@ -143,7 +139,7 @@ export function VaultDataPanel({ onExportAll }: Props): ReactNode {
             Import Markdown…
           </Button>
         </SettingRow>
-      </section>
+      </SettingsSection>
     </>
   )
 }
