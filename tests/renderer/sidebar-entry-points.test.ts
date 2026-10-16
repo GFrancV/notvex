@@ -23,8 +23,8 @@ vi.mock('@/lib/ipc', () => ({
 // The dialog itself is covered by settings-dialog.test.ts; here only the wiring matters, and
 // mounting the real dialog on top of the whole sidebar is slow enough to time out.
 vi.mock('@/components/settings-dialog', () => ({
-  SettingsDialog: ({ open }: { open: boolean }) =>
-    open ? createElement('h2', null, 'Settings') : null
+  SettingsDialog: ({ open, initialTab }: { open: boolean; initialTab?: string }) =>
+    open ? createElement('h2', null, `Settings: ${initialTab ?? 'security'}`) : null
 }))
 
 const { Sidebar } = await import('@/components/sidebar')
@@ -81,7 +81,16 @@ describe('Sidebar entry points', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
-    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Settings: security' })).toBeTruthy()
+  })
+
+  it('opens Settings on About from the Help menu', async () => {
+    await renderSidebar()
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Help' }), { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'About Notvex' }))
+
+    expect(await screen.findByRole('heading', { name: 'Settings: about' })).toBeTruthy()
   })
 
   it('locks the vault from the vault menu', async () => {

@@ -16,7 +16,9 @@ vi.mock('@/lib/ipc', () => ({
   notvex: {
     vault: { getHasKeyFile: ipc.getHasKeyFile, openBackupsFolder: ipc.openBackupsFolder },
     notes: { exportAll: ipc.exportAll },
-    log: { openFolder: ipc.openLogsFolder, clear: ipc.clearLogs }
+    log: { openFolder: ipc.openLogsFolder, clear: ipc.clearLogs },
+    app: { isDev: async () => ({ success: true, data: false }) },
+    updater: { getCurrentVersion: async () => ({ success: true, data: '1.2.3' }) }
   }
 }))
 vi.mock('sonner', () => ({
@@ -37,9 +39,9 @@ const { useVaultStore } = await import('@/store/vault.store')
 const setPref = vi.fn(async () => undefined)
 const onOpenChange = vi.fn()
 
-async function renderDialog(): Promise<void> {
+async function renderDialog(initialTab?: 'about'): Promise<void> {
   await act(async () => {
-    render(createElement(SettingsDialog, { open: true, onOpenChange }))
+    render(createElement(SettingsDialog, { open: true, onOpenChange, initialTab }))
   })
 }
 
@@ -77,8 +79,16 @@ describe('SettingsDialog', () => {
       'Security',
       'Updates',
       'Vault & Data',
-      'Diagnostics'
+      'Diagnostics',
+      'About'
     ])
+  })
+
+  it('opens on About when asked to', async () => {
+    await renderDialog('about')
+
+    expect(tab('About').getAttribute('aria-selected')).toBe('true')
+    expect(await screen.findByText('v1.2.3')).toBeTruthy()
   })
 
   it('switches sections with the arrow keys', async () => {

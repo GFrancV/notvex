@@ -4,6 +4,7 @@ import {
   ActivityIcon,
   DatabaseIcon,
   FolderOpenIcon,
+  InfoIcon,
   RefreshCwIcon,
   ShieldIcon,
   Trash2Icon
@@ -15,6 +16,7 @@ import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
 import { ClearLogsDialog } from './dialogs/ClearLogsDialog'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
+import { AboutPanel } from './settings/AboutPanel'
 import { SecurityPanel } from './settings/SecurityPanel'
 import { SectionTitle, SettingRow } from './settings/SettingRow'
 import { VaultDataPanel } from './settings/VaultDataPanel'
@@ -47,12 +49,15 @@ const handleExportAll = async (): Promise<void> => {
   }
 }
 
+export type SettingsTab = 'security' | 'updates' | 'vault' | 'diagnostics' | 'about'
+
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialTab?: SettingsTab
 }
 
-export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
+export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: Props): ReactNode {
   const setPref = usePrefsStore((s) => s.setPref)
   const checkUpdatesOnStartup = usePrefsStore((s) => s.checkUpdatesOnStartup)
   const [exportAllOpen, setExportAllOpen] = useState(false)
@@ -67,7 +72,7 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
         </DialogHeader>
 
         {/* DialogContent unmounts on close, so every open starts on defaultValue. */}
-        <Tabs defaultValue="security" orientation="vertical" className="min-h-0 flex-1 gap-3">
+        <Tabs defaultValue={initialTab} orientation="vertical" className="min-h-0 flex-1 gap-3">
           <TabsList aria-label="Settings sections" variant="line" className="w-44 shrink-0">
             <TabsTrigger value="security" className={TAB}>
               <ShieldIcon />
@@ -84,6 +89,10 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
             <TabsTrigger value="diagnostics" className={TAB}>
               <ActivityIcon />
               Diagnostics
+            </TabsTrigger>
+            <TabsTrigger value="about" className={TAB}>
+              <InfoIcon />
+              About
             </TabsTrigger>
           </TabsList>
 
@@ -138,6 +147,10 @@ export function SettingsDialog({ open, onOpenChange }: Props): ReactNode {
                 </Button>
               </SettingRow>
             </section>
+          </TabsContent>
+
+          <TabsContent value="about" className={PANEL}>
+            <AboutPanel />
           </TabsContent>
         </Tabs>
 

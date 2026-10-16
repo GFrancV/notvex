@@ -20,31 +20,30 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
-const { AppVersionDialog } = await import('@/components/dialogs/AppVersionDialog')
+const { AboutPanel } = await import('@/components/settings/AboutPanel')
 
-describe('AppVersionDialog links (issue #60)', () => {
+describe('AboutPanel links', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
   })
 
-  it('"Docs" opens the repo in the system browser instead of navigating', () => {
+  it('"Open docs" opens the repo in the system browser instead of navigating', () => {
     const url = 'https://github.com/GFrancV/notvex'
-    render(createElement(AppVersionDialog, { open: true, onClose: () => {} }))
-    const link = screen.getByText('Docs')
+    render(createElement(AboutPanel))
+    const link = screen.getByRole('button', { name: 'Open docs' })
 
     fireEvent.click(link)
 
-    // Nothing that could start a main-frame navigation (the dialog renders in a
-    // portal, so look at the whole document).
+    // Nothing in the document that could start a main-frame navigation.
     expect(link.closest('a[href]')).toBeNull()
     expect(document.querySelector(`a[href="${url}"]`)).toBeNull()
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(url)
   })
 
-  it('"Report Issue" opens a prefilled bug report in the system browser', async () => {
-    render(createElement(AppVersionDialog, { open: true, onClose: () => {} }))
-    const link = screen.getByText('Report Issue')
+  it('"Report a bug…" opens a prefilled bug report in the system browser', async () => {
+    render(createElement(AboutPanel))
+    const link = screen.getByRole('button', { name: 'Report a bug…' })
 
     fireEvent.click(link)
 

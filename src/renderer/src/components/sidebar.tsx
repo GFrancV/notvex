@@ -21,9 +21,8 @@ import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
-import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { HelpMenu } from './HelpMenu'
-import { SettingsDialog } from './settings-dialog'
+import { SettingsDialog, type SettingsTab } from './settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
 import { TagItem } from './tags/TagItem'
@@ -73,8 +72,8 @@ export function Sidebar(): React.ReactNode {
   const isDev = useIsDev()
 
   const searchContainerRef = useRef<HTMLDivElement>(null)
-  const [appVersionOpen, setAppVersionOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // null = closed; the value is the tab it opens on.
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createModalKey, setCreateModalKey] = useState(0)
   const [editingTag, setEditingTag] = useState<Tag | null>(null)
@@ -112,14 +111,14 @@ export function Sidebar(): React.ReactNode {
             {isDev && <Badge variant="secondary">Dev</Badge>}
           </span>
           <div className="flex items-center gap-1">
-            <HelpMenu onOpenAbout={() => setAppVersionOpen(true)} />
+            <HelpMenu onOpenAbout={() => setSettingsTab('about')} />
             <Button
               variant="ghost"
               size="xs"
               className="titlebar-no-drag z-50"
               aria-label="Settings"
               title="Settings"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => setSettingsTab('security')}
             >
               <SettingsIcon />
             </Button>
@@ -254,8 +253,11 @@ export function Sidebar(): React.ReactNode {
         <VaultSwitcher />
       </SidebarFooter>
 
-      <AppVersionDialog open={appVersionOpen} onClose={() => setAppVersionOpen(false)} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsTab !== null}
+        initialTab={settingsTab ?? undefined}
+        onOpenChange={(open) => !open && setSettingsTab(null)}
+      />
       <TagCreateModal
         key={createModalKey}
         open={createModalOpen}
