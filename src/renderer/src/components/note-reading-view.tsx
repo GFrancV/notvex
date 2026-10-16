@@ -28,9 +28,7 @@ function Pre({ children }: React.ComponentProps<'pre'>): React.JSX.Element {
           variant="ghost"
           size="icon-sm"
           onClick={() => {
-            const text = preRef.current?.textContent ?? ''
-            void copyToClipboard(text)
-            void notvex.clipboard.scheduleClear(text)
+            void copyToClipboard(preRef.current?.textContent ?? '')
           }}
           className="text-muted-foreground size-6"
           title="Copy code"

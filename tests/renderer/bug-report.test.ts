@@ -7,12 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // The report is opened in the user's browser, who reviews it before submitting: nothing is sent
 // from the app. Browsers and GitHub reject very long URLs, hence the 8 KB fit.
 
-const ipc = vi.hoisted(() => ({ buildReport: vi.fn(), openExternal: vi.fn() }))
+const ipc = vi.hoisted(() => ({
+  buildReport: vi.fn(),
+  openExternal: vi.fn(),
+  clipboardWrite: vi.fn()
+}))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     log: { buildReport: ipc.buildReport },
-    shell: { openExternal: ipc.openExternal }
+    shell: { openExternal: ipc.openExternal },
+    clipboard: { write: ipc.clipboardWrite }
   }
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -65,7 +70,7 @@ describe('BugReportActions', () => {
       .mockReset()
       .mockResolvedValue({ success: true, data: { environment: ENVIRONMENT, log: LOG } })
     ipc.openExternal.mockReset().mockResolvedValue({ success: true, data: null })
-    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
+    ipc.clipboardWrite.mockReset().mockResolvedValue({ success: true, data: null })
   })
 
   afterEach(cleanup)
@@ -88,8 +93,9 @@ describe('BugReportActions', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy debug info/i }))
 
     await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-        reportBody({ environment: ENVIRONMENT, log: LOG })
+      expect(ipc.clipboardWrite).toHaveBeenCalledWith(
+        reportBody({ environment: ENVIRONMENT, log: LOG }),
+        { secret: false }
       )
     )
     // The ErrorBoundary fallback has no Toaster, so the button itself confirms.
