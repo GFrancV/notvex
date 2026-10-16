@@ -1,6 +1,6 @@
 import { type JSX } from 'react'
 
-import { CheckIcon, CopyIcon, ShieldIcon } from 'lucide-react'
+import { CheckIcon, CopyIcon, ExternalLinkIcon, ShieldIcon } from 'lucide-react'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { notvex } from '@/lib/ipc'
@@ -54,10 +54,12 @@ export function RecoveryWordsGrid({ mnemonic }: RecoveryWordsGridProps): JSX.Ele
             30&nbsp;s and keeps it out of clipboard history where supported.{' '}
             <Button
               variant="link"
-              className="h-auto p-0 text-xs font-normal"
+              className="h-auto gap-1 p-0 text-xs font-normal"
               onClick={() => void notvex.shell.openExternal(SECURITY_PRACTICES_URL)}
+              aria-label="How Notvex protects copies (opens in your browser)"
             >
               How Notvex protects copies
+              <ExternalLinkIcon className="size-3" aria-hidden />
             </Button>
           </span>
         </p>

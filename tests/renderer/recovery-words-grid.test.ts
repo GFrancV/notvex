@@ -47,10 +47,12 @@ describe('RecoveryWordsGrid', () => {
     expect(screen.getByText(/clears it after 30 s/i)).toBeTruthy()
   })
 
-  it('links to the security practices page', () => {
+  it('links to the security practices page and says it leaves the app', () => {
     render(createElement(RecoveryWordsGrid, { mnemonic: MNEMONIC }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'How Notvex protects copies' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'How Notvex protects copies (opens in your browser)' })
+    )
 
     expect(ipc.openExternal).toHaveBeenCalledExactlyOnceWith(
       'https://notvex.vercel.app/docs/security-practices'
