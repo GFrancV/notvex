@@ -1,4 +1,4 @@
-import { isValidElement, useRef, useState } from 'react'
+import { isValidElement, useRef } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 
@@ -7,7 +7,6 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 
-import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { notvex } from '@/lib/ipc'
 import { Button } from './ui/button'
@@ -77,12 +76,9 @@ interface NoteReadingViewProps {
 }
 
 export function NoteReadingView({ content }: NoteReadingViewProps): React.JSX.Element {
-  const [container, setContainer] = useState<HTMLDivElement | null>(null)
-  useClipboardAutoClear(container)
-
   return (
     <div className="h-full overflow-auto">
-      <div ref={setContainer} className="prose prose-invert prose-sm max-w-none p-6">
+      <div className="prose prose-invert prose-sm max-w-none p-6">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSanitize, rehypeHighlight]}

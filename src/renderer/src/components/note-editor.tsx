@@ -19,7 +19,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { useClipboardAutoClear } from '@/hooks/use-clipboard-auto-clear'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
 import { formattingKeymap } from '@/lib/editor/formatting'
@@ -317,8 +316,6 @@ export function NoteEditor(): ReactNode {
   }
 
   const duplicateNote = useDuplicateNote()
-
-  useClipboardAutoClear(editorView?.dom ?? null)
 
   // Derive assigned tags from noteTagsMap (kept in sync by optimistic store)
   const assignedTagIds = activeNoteId ? (noteTagsMap[activeNoteId] ?? []) : []
