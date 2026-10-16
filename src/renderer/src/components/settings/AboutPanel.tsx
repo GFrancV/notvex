@@ -41,11 +41,11 @@ export function AboutPanel(): ReactNode {
       <div className="flex items-center gap-3">
         <AppLogo className="size-10 rounded-lg" />
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <h3 className="flex items-center gap-2 text-lg font-semibold">
             Notvex
             {appVersion && <span className="text-muted-foreground text-sm">v{appVersion}</span>}
             {isDev && <Badge variant="secondary">Dev</Badge>}
-          </h2>
+          </h3>
           <p className="text-muted-foreground text-xs">Encrypted notes, fully local.</p>
         </div>
       </div>

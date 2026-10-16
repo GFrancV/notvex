@@ -135,7 +135,7 @@ export function VaultSwitcher(): ReactNode {
             Create new vault...
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={handleLock}>
+          <DropdownMenuItem variant="destructive" onSelect={() => void handleLock()}>
             <LockIcon className="size-4" />
             Lock vault
           </DropdownMenuItem>

@@ -62,11 +62,17 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
   const checkUpdatesOnStartup = usePrefsStore((s) => s.checkUpdatesOnStartup)
   const [exportAllOpen, setExportAllOpen] = useState(false)
   const [clearLogsOpen, setClearLogsOpen] = useState(false)
+  // While a rekey runs or its new recovery key is unconfirmed, leaving the subpage would discard
+  // that key for good, so the other tabs and every way of closing the dialog are switched off.
+  const [locked, setLocked] = useState(false)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => (locked && !next ? undefined : onOpenChange(next))}>
       {/* A fixed size keeps the tab list still while switching between short and long panels. */}
-      <DialogContent className="flex h-[min(640px,85vh)] flex-col sm:max-w-4xl">
+      <DialogContent
+        className="flex h-[min(640px,85vh)] flex-col sm:max-w-4xl"
+        showCloseButton={!locked}
+      >
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
@@ -78,19 +84,19 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
               <ShieldIcon />
               Security
             </TabsTrigger>
-            <TabsTrigger value="updates" className={TAB}>
+            <TabsTrigger value="updates" className={TAB} disabled={locked}>
               <RefreshCwIcon />
               Updates
             </TabsTrigger>
-            <TabsTrigger value="vault" className={TAB}>
+            <TabsTrigger value="vault" className={TAB} disabled={locked}>
               <DatabaseIcon />
               Vault & Data
             </TabsTrigger>
-            <TabsTrigger value="diagnostics" className={TAB}>
+            <TabsTrigger value="diagnostics" className={TAB} disabled={locked}>
               <ActivityIcon />
               Diagnostics
             </TabsTrigger>
-            <TabsTrigger value="about" className={TAB}>
+            <TabsTrigger value="about" className={TAB} disabled={locked}>
               <InfoIcon />
               About
             </TabsTrigger>
@@ -98,7 +104,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
 
           {/* Scrolls only past the fixed height, e.g. at high zoom; at the default size it fits. */}
           <TabsContent value="security" className={PANEL}>
-            <SecurityPanel />
+            <SecurityPanel onLockChange={setLocked} />
           </TabsContent>
 
           <TabsContent value="updates" className={PANEL}>

@@ -93,7 +93,22 @@ describe('Sidebar entry points', () => {
     expect(await screen.findByRole('heading', { name: 'Settings: about' })).toBeTruthy()
   })
 
-  it('locks the vault from the vault menu', async () => {
+  it('locks the vault from the vault menu and drops the decrypted note list', async () => {
+    useVaultStore.setState({
+      notes: [
+        {
+          id: 'n1',
+          title: 'secret plan',
+          isPinned: false,
+          isTrashed: false,
+          createdAt: 0,
+          updatedAt: 0,
+          trashedAt: null,
+          tags: []
+        }
+      ],
+      activeNoteId: 'n1'
+    })
     await renderSidebar()
 
     fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
@@ -101,5 +116,7 @@ describe('Sidebar entry points', () => {
 
     await waitFor(() => expect(useVaultStore.getState().status).toBe('locked'))
     expect(ipc.close).toHaveBeenCalledOnce()
+    expect(useVaultStore.getState().notes).toEqual([])
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
   })
 })

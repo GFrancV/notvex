@@ -5,7 +5,6 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator
 } from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
@@ -15,11 +14,13 @@ import { Button } from '@/components/ui/button'
 export function SubpageHeader({
   parent,
   title,
-  onBack
+  onBack,
+  backDisabled = false
 }: {
   parent: string
   title: string
   onBack: () => void
+  backDisabled?: boolean
 }): ReactNode {
   return (
     <Breadcrumb>
@@ -29,6 +30,7 @@ export function SubpageHeader({
             <Button
               variant="link"
               onClick={onBack}
+              disabled={backDisabled}
               className="text-muted-foreground hover:text-foreground h-auto p-0 text-base font-normal"
             >
               {parent}
@@ -37,7 +39,11 @@ export function SubpageHeader({
         </BreadcrumbItem>
         <BreadcrumbSeparator />
         <BreadcrumbItem>
-          <BreadcrumbPage className="font-semibold">{title}</BreadcrumbPage>
+          {/* A heading rather than BreadcrumbPage, so the subpage title is reachable by heading
+              navigation like the dialog title it replaces. */}
+          <h3 aria-current="page" className="text-foreground text-base font-semibold">
+            {title}
+          </h3>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
@@ -53,9 +59,9 @@ export function SettingsSection({
 }): ReactNode {
   return (
     <section className="space-y-3">
-      <p className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
         {title}
-      </p>
+      </h3>
       {children}
     </section>
   )

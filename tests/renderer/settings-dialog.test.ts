@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipc = vi.hoisted(() => ({
   getHasKeyFile: vi.fn(),
+  changePassword: vi.fn(),
   openBackupsFolder: vi.fn(),
   exportAll: vi.fn(),
   openLogsFolder: vi.fn(),
@@ -14,7 +15,11 @@ const ipc = vi.hoisted(() => ({
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
-    vault: { getHasKeyFile: ipc.getHasKeyFile, openBackupsFolder: ipc.openBackupsFolder },
+    vault: {
+      getHasKeyFile: ipc.getHasKeyFile,
+      changePassword: ipc.changePassword,
+      openBackupsFolder: ipc.openBackupsFolder
+    },
     notes: { exportAll: ipc.exportAll },
     log: { openFolder: ipc.openLogsFolder, clear: ipc.clearLogs },
     app: { isDev: async () => ({ success: true, data: false }) },
@@ -84,6 +89,30 @@ describe('SettingsDialog', () => {
     ])
   })
 
+  it('starts fresh on every open: the requested tab, no subpage left over', async () => {
+    const props = { onOpenChange }
+    const { rerender } = render(createElement(SettingsDialog, { ...props, open: true }))
+    fireEvent.click(screen.getByRole('button', { name: /manage/i }))
+    expect(currentCrumb()).not.toBeNull()
+
+    rerender(createElement(SettingsDialog, { ...props, open: false }))
+    rerender(createElement(SettingsDialog, { ...props, open: true, initialTab: 'about' }))
+    expect(tab('About').getAttribute('aria-selected')).toBe('true')
+
+    rerender(createElement(SettingsDialog, { ...props, open: false }))
+    rerender(createElement(SettingsDialog, { ...props, open: true }))
+    expect(tab('Security').getAttribute('aria-selected')).toBe('true')
+    expect(currentCrumb()).toBeNull()
+  })
+
+  it('asks main once whether a key file is configured, and shows it', async () => {
+    ipc.getHasKeyFile.mockResolvedValue({ success: true, data: true })
+    await renderDialog()
+
+    expect(await screen.findByText('Configured')).toBeTruthy()
+    expect(ipc.getHasKeyFile).toHaveBeenCalledOnce()
+  })
+
   it('opens on About when asked to', async () => {
     await renderDialog('about')
 
@@ -147,6 +176,8 @@ describe('SettingsDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
+  // A behavior spec, not a regression proof: jsdom can't reproduce the Radix outside-click that
+  // dismissed Settings when the warning rendered beside DialogContent, so this passes either way.
   it('stays open when the export warning is cancelled', async () => {
     await renderDialog()
     fireEvent.mouseDown(tab('Vault & Data'))
@@ -166,7 +197,6 @@ describe('SettingsDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /change password/i }))
 
     expect(currentCrumb()?.textContent).toBe('Change password')
-    expect(screen.getByLabelText('Current password')).toBeTruthy()
     expect(onOpenChange).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Security' }))
@@ -174,14 +204,19 @@ describe('SettingsDialog', () => {
     expect(screen.getByRole('tabpanel').textContent).toMatch(/auto-lock/i)
   })
 
-  it('opens key file management as a subpage', async () => {
+  it('opens key file management as a subpage and hands focus back on the way out', async () => {
     await renderDialog()
 
     fireEvent.click(screen.getByRole('button', { name: /manage/i }))
 
     expect(currentCrumb()?.textContent).toBe('Key file')
-    expect(screen.getByRole('button', { name: /generate key file/i })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /generate key file/i }))
     expect(onOpenChange).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }))
+
+    // Back returns focus to the row that opened the subpage, not to the dialog root.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /manage/i }))
   })
 
   it('drops an open subpage when switching tabs', async () => {
@@ -193,6 +228,40 @@ describe('SettingsDialog', () => {
 
     expect(currentCrumb()).toBeNull()
     expect(screen.getByRole('tabpanel').textContent).toMatch(/auto-lock/i)
+  })
+})
+
+// The lock's full lifecycle (mnemonic step, Done, failure) is in change-password-panel.test.ts;
+// this checks the dialog honours it.
+describe('SettingsDialog: a rekey in progress', () => {
+  // Starts a password change whose IPC call never settles.
+  async function startPasswordChange(): Promise<void> {
+    ipc.changePassword.mockReturnValue(new Promise(() => {}))
+    await renderDialog()
+    fireEvent.click(screen.getByRole('button', { name: /change password/i }))
+    fireEvent.change(screen.getByLabelText('Current password'), {
+      target: { value: 'old password 123' }
+    })
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'new password 456' }
+    })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), {
+      target: { value: 'new password 456' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
+    await screen.findByRole('button', { name: /re-encrypting/i })
+  }
+
+  it('cannot be left while the vault is re-encrypting', async () => {
+    await startPasswordChange()
+
+    expect(screen.getByRole('button', { name: 'Security' }).hasAttribute('disabled')).toBe(true)
+    for (const name of ['Updates', 'Vault & Data', 'Diagnostics', 'About']) {
+      expect(tab(name).hasAttribute('disabled')).toBe(true)
+    }
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+    expect(currentCrumb()?.textContent).toBe('Change password')
   })
 })
 
@@ -233,6 +302,7 @@ describe('SettingsDialog: Diagnostics', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
+  // Same limit as the export warning's cancel test: a behavior spec for the nested layout.
   it('leaves the logs and the settings alone when cancelled', async () => {
     await openClearDialog()
 

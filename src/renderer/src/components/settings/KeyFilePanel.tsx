@@ -32,13 +32,16 @@ interface KeyFilePanelProps {
   onBack: () => void
   hasKeyFile: boolean
   onHasKeyFileChange: (hasKeyFile: boolean) => void
+  /** True while leaving would discard the new recovery key; see SettingsDialog. */
+  onLockChange: (locked: boolean) => void
 }
 
 // Mounted only while the subpage is open, so leaving it discards the pending key file and mnemonic.
 export function KeyFilePanel({
   onBack,
   hasKeyFile,
-  onHasKeyFileChange
+  onHasKeyFileChange,
+  onLockChange
 }: KeyFilePanelProps): ReactNode {
   const pendingKeyFileContentsRef = useRef<Uint8Array | null>(null)
   const [keyFileStep, setKeyFileStep] = useState<KeyFileStep>('idle')
@@ -79,12 +82,14 @@ export function KeyFilePanel({
     if (!pendingKeyFileContentsRef.current || !pendingKeyFilePassword) return
     setPendingKeyFileLoading(true)
     setPendingKeyFileError('')
+    onLockChange(true)
     const res = await notvex.vault.configureKeyFile(
       pendingKeyFilePassword,
       pendingKeyFileContentsRef.current
     )
     setPendingKeyFileLoading(false)
     if (!res.success) {
+      onLockChange(false)
       setPendingKeyFileError(res.error)
       return
     }
@@ -101,9 +106,11 @@ export function KeyFilePanel({
     if (!removeKeyFileContents || !removePassword) return
     setRemoveLoading(true)
     setRemoveError('')
+    onLockChange(true)
     const res = await notvex.vault.removeKeyFile(removePassword, removeKeyFileContents)
     setRemoveLoading(false)
     if (!res.success) {
+      onLockChange(false)
       setRemoveError(res.error)
       return
     }
@@ -115,9 +122,21 @@ export function KeyFilePanel({
     setKeyFileStep('post-remove-mnemonic')
   }
 
+  // Main has already re-keyed the vault by the time the mnemonic arrives, so it must be seen.
+  const locked =
+    pendingKeyFileLoading ||
+    removeLoading ||
+    keyFileStep === 'post-activate-mnemonic' ||
+    keyFileStep === 'post-remove-mnemonic'
+
+  const finish = (): void => {
+    onLockChange(false)
+    onBack()
+  }
+
   return (
     <div className="space-y-2">
-      <SubpageHeader parent="Security" title="Key file" onBack={onBack} />
+      <SubpageHeader parent="Security" title="Key file" onBack={onBack} backDisabled={locked} />
 
       <div className="mt-2 space-y-4">
         {keyFileStep === 'idle' && (
@@ -141,6 +160,7 @@ export function KeyFilePanel({
                 <Button
                   variant="secondary"
                   size="sm"
+                  autoFocus
                   onClick={(): void => void handleGenerateKeyFile()}
                 >
                   <FileKeyIcon className="h-3.5 w-3.5" />
@@ -159,6 +179,7 @@ export function KeyFilePanel({
               <Button
                 variant="destructive"
                 size="sm"
+                autoFocus
                 onClick={() => {
                   setKeyFileStep('confirm-remove')
                   setRemoveKeyFileContents(null)
@@ -262,7 +283,7 @@ export function KeyFilePanel({
                 I have saved my new recovery key in a secure location.
               </FieldLabel>
             </Field>
-            <Button size="sm" className="w-full" disabled={!mnemonicConfirmed} onClick={onBack}>
+            <Button size="sm" className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
               Done
             </Button>
           </div>
@@ -338,7 +359,7 @@ export function KeyFilePanel({
                 I have saved my new recovery key in a secure location.
               </FieldLabel>
             </Field>
-            <Button size="sm" className="w-full" disabled={!mnemonicConfirmed} onClick={onBack}>
+            <Button size="sm" className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
               Done
             </Button>
           </div>

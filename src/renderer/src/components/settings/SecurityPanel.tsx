@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { KeyIcon, LockIcon, ShieldCheckIcon, ShieldOffIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -23,7 +23,11 @@ import { SettingRow, SettingsSection } from './SettingRow'
 type Subpage = 'password' | 'key-file' | null
 
 // Radix unmounts an inactive tab, so switching tabs or closing Settings drops any open subpage.
-export function SecurityPanel(): ReactNode {
+export function SecurityPanel({
+  onLockChange
+}: {
+  onLockChange: (locked: boolean) => void
+}): ReactNode {
   const { setPref } = usePrefsStore()
   const { autoLockMinutes, lockOnMinimize, allowScreenCapture, clipboardClearSeconds } =
     usePrefsStore(
@@ -38,19 +42,37 @@ export function SecurityPanel(): ReactNode {
   const [subpage, setSubpage] = useState<Subpage>(null)
   const [hasKeyFile, setHasKeyFile] = useState(false)
 
+  // The row button is gone while its subpage is open, so focus would land on the dialog root on the
+  // way back; the remounted button takes it instead.
+  const returnFocusTo = useRef<Subpage>(null)
+  const openSubpage = (target: Exclude<Subpage, null>): void => {
+    returnFocusTo.current = target
+    setSubpage(target)
+  }
+  const focusOnReturn =
+    (target: Exclude<Subpage, null>) =>
+    (button: HTMLButtonElement | null): void => {
+      if (!button || returnFocusTo.current !== target) return
+      returnFocusTo.current = null
+      button.focus()
+    }
+
   useEffect(() => {
     void notvex.vault.getHasKeyFile().then((r) => {
       setHasKeyFile(r.success ? r.data : false)
     })
   }, [])
 
-  if (subpage === 'password') return <ChangePasswordPanel onBack={() => setSubpage(null)} />
+  if (subpage === 'password') {
+    return <ChangePasswordPanel onBack={() => setSubpage(null)} onLockChange={onLockChange} />
+  }
   if (subpage === 'key-file') {
     return (
       <KeyFilePanel
         onBack={() => setSubpage(null)}
         hasKeyFile={hasKeyFile}
         onHasKeyFileChange={setHasKeyFile}
+        onLockChange={onLockChange}
       />
     )
   }
@@ -140,7 +162,12 @@ export function SecurityPanel(): ReactNode {
 
       <SettingsSection title="Authentication">
         <SettingRow label="Password" description="Change the password used to unlock this vault.">
-          <Button variant="secondary" size="sm" onClick={() => setSubpage('password')}>
+          <Button
+            variant="secondary"
+            size="sm"
+            ref={focusOnReturn('password')}
+            onClick={() => openSubpage('password')}
+          >
             <LockIcon />
             Change password
           </Button>
@@ -159,7 +186,12 @@ export function SecurityPanel(): ReactNode {
             </span>
           }
         >
-          <Button variant="secondary" size="sm" onClick={() => setSubpage('key-file')}>
+          <Button
+            variant="secondary"
+            size="sm"
+            ref={focusOnReturn('key-file')}
+            onClick={() => openSubpage('key-file')}
+          >
             <KeyIcon />
             Manage
           </Button>

@@ -15,12 +15,14 @@ import { SubpageHeader } from './SettingRow'
 
 interface ChangePasswordPanelProps {
   onBack: () => void
+  /** True while leaving would discard the new recovery key; see SettingsDialog. */
+  onLockChange: (locked: boolean) => void
 }
 
 type Step = 'form' | 'mnemonic'
 
 // Mounted only while the subpage is open, so leaving it discards every field and the mnemonic.
-export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps): ReactNode {
+export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPanelProps): ReactNode {
   const [step, setStep] = useState<Step>('form')
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -49,6 +51,14 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps): React
 
   const canSubmit = !loading && !validationError()
 
+  // Main has already re-keyed the vault by the time the mnemonic arrives, so it must be seen.
+  const locked = loading || step === 'mnemonic'
+
+  const finish = (): void => {
+    onLockChange(false)
+    onBack()
+  }
+
   const handleSubmit = async (): Promise<void> => {
     const ve = validationError()
     if (ve) {
@@ -57,9 +67,11 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps): React
     }
     setError('')
     setLoading(true)
+    onLockChange(true)
     const res = await notvex.vault.changePassword(currentPw, newPw, keyFileContents ?? undefined)
     setLoading(false)
     if (!res.success) {
+      onLockChange(false)
       setError(res.error)
       return
     }
@@ -69,7 +81,12 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps): React
 
   return (
     <div className="space-y-2">
-      <SubpageHeader parent="Security" title="Change password" onBack={onBack} />
+      <SubpageHeader
+        parent="Security"
+        title="Change password"
+        onBack={onBack}
+        backDisabled={locked}
+      />
 
       {step === 'form' && (
         <div className="mt-2 space-y-4">
@@ -78,6 +95,7 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps): React
             <FieldLabel htmlFor="current-password">Current password</FieldLabel>
             <PasswordInput
               id="current-password"
+              autoFocus
               value={currentPw}
               onChange={(e) => setCurrentPw(e.target.value)}
               placeholder="Your current password"
@@ -164,7 +182,7 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps): React
             </FieldLabel>
           </Field>
 
-          <Button className="w-full" disabled={!mnemonicConfirmed} onClick={onBack}>
+          <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
             Done
           </Button>
         </div>

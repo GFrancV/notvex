@@ -117,7 +117,6 @@ export function Sidebar(): React.ReactNode {
               size="xs"
               className="titlebar-no-drag z-50"
               aria-label="Settings"
-              title="Settings"
               onClick={() => setSettingsTab('security')}
             >
               <SettingsIcon />
