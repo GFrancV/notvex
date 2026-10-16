@@ -141,7 +141,7 @@ export function SecurityPanel({
       <SettingsSection title="Clipboard">
         <SettingRow
           label="Auto-clear"
-          description="Automatically clear the clipboard after copying text from the note editor."
+          description="Automatically clear text copied from Notvex. Your recovery key is always cleared after 30 seconds."
         >
           <Select
             value={String(clipboardClearSeconds)}
