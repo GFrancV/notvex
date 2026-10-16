@@ -4,7 +4,6 @@ import {
   ArrowBigUpIcon,
   CommandIcon,
   FileIcon,
-  LockIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,
@@ -12,7 +11,6 @@ import {
   TrashIcon,
   XIcon
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
 import { useCreateNote } from '@/hooks/use-create-note'
@@ -23,24 +21,13 @@ import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
-import { AppVersionDialog } from './dialogs/AppVersionDialog'
 import { HelpMenu } from './HelpMenu'
-import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
-import { SecuritySettingsDialog } from './security-settings-dialog'
-import { VaultMenuGroup } from './settings/VaultMenuGroup'
+import { SettingsDialog, type SettingsTab } from './settings-dialog'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
 import { TagItem } from './tags/TagItem'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from './ui/dropdown-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import { Kbd } from './ui/kbd'
 import {
@@ -59,29 +46,13 @@ import {
 } from './ui/sidebar'
 import { VaultSwitcher } from './VaultSwitcher'
 
-// The warning dialog stays open while this runs, but the OS folder dialog hides it; the
-// toast is what reports progress and the result.
-const handleExportAll = async (): Promise<void> => {
-  const toastId = toast.loading('Exporting notes…')
-  const result = await notvex.notes.exportAll()
-  if (!result.success) {
-    toast.error(result.error, { id: toastId })
-  } else if (result.data === null) {
-    toast.dismiss(toastId) // user canceled the folder dialog
-  } else {
-    const noun = result.data === 1 ? 'note' : 'notes'
-    toast.success(`Exported ${result.data} ${noun}`, { id: toastId })
-  }
-}
-
 export function Sidebar(): React.ReactNode {
-  const { loadTags, loadTagCounts, setStatus, setActiveNoteId, setNotes } = useVaultStore()
-  const { tags, tagCounts, notes, currentVaultPath } = useVaultStore(
+  const { loadTags, loadTagCounts } = useVaultStore()
+  const { tags, tagCounts, notes } = useVaultStore(
     useShallow((s) => ({
       tags: s.tags,
       tagCounts: s.tagCounts,
-      notes: s.notes,
-      currentVaultPath: s.currentVaultPath
+      notes: s.notes
     }))
   )
 
@@ -101,10 +72,8 @@ export function Sidebar(): React.ReactNode {
   const isDev = useIsDev()
 
   const searchContainerRef = useRef<HTMLDivElement>(null)
-  const [appVersionOpen, setAppVersionOpen] = useState(false)
-  const [settingsPopoverOpen, setSettingsPopoverOpen] = useState(false)
-  const [securitySettingsOpen, setSecuritySettingsOpen] = useState(false)
-  const [exportAllOpen, setExportAllOpen] = useState(false)
+  // null = closed; the value is the tab it opens on.
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createModalKey, setCreateModalKey] = useState(0)
   const [editingTag, setEditingTag] = useState<Tag | null>(null)
@@ -119,13 +88,6 @@ export function Sidebar(): React.ReactNode {
     void loadTags()
     void loadTagCounts()
   }, [loadTags, loadTagCounts])
-
-  const handleLock = async (): Promise<void> => {
-    await notvex.vault.close()
-    setStatus('locked')
-    setActiveNoteId(null)
-    setNotes([])
-  }
 
   const allNotesCount = notes.filter((n) => !n.isTrashed).length
   const pinnedCount = notes.filter((n) => n.isPinned && !n.isTrashed).length
@@ -149,53 +111,16 @@ export function Sidebar(): React.ReactNode {
             {isDev && <Badge variant="secondary">Dev</Badge>}
           </span>
           <div className="flex items-center gap-1">
-            <HelpMenu onOpenAbout={() => setAppVersionOpen(true)} />
-            <DropdownMenu open={settingsPopoverOpen} onOpenChange={setSettingsPopoverOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="xs" className="titlebar-no-drag z-50">
-                  <SettingsIcon />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" sideOffset={4} className="w-64">
-                {currentVaultPath && (
-                  <>
-                    <VaultMenuGroup
-                      vaultPath={currentVaultPath}
-                      onExportAll={() => {
-                        setExportAllOpen(true)
-                        setSettingsPopoverOpen(false)
-                      }}
-                    />
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    role="button"
-                    className="text-primary"
-                    onClick={() => {
-                      setSecuritySettingsOpen(true)
-                      setSettingsPopoverOpen(false)
-                    }}
-                  >
-                    Security settings
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={(): void => {
-                      void handleLock()
-                    }}
-                    className="justify-center"
-                  >
-                    <LockIcon />
-                    Lock vault
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <HelpMenu onOpenAbout={() => setSettingsTab('about')} />
+            <Button
+              variant="ghost"
+              size="xs"
+              className="titlebar-no-drag z-50"
+              aria-label="Settings"
+              onClick={() => setSettingsTab('security')}
+            >
+              <SettingsIcon />
+            </Button>
           </div>
         </div>
 
@@ -327,13 +252,10 @@ export function Sidebar(): React.ReactNode {
         <VaultSwitcher />
       </SidebarFooter>
 
-      <AppVersionDialog open={appVersionOpen} onClose={() => setAppVersionOpen(false)} />
-      <SecuritySettingsDialog open={securitySettingsOpen} onOpenChange={setSecuritySettingsOpen} />
-      <ExportWarningDialog
-        open={exportAllOpen}
-        onOpenChange={setExportAllOpen}
-        title="Export all notes"
-        onConfirm={handleExportAll}
+      <SettingsDialog
+        open={settingsTab !== null}
+        initialTab={settingsTab ?? undefined}
+        onOpenChange={(open) => !open && setSettingsTab(null)}
       />
       <TagCreateModal
         key={createModalKey}

@@ -8,15 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipc = vi.hoisted(() => ({
   openExternal: vi.fn(),
-  buildReport: vi.fn(),
-  openFolder: vi.fn(),
-  clear: vi.fn()
+  buildReport: vi.fn()
 }))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     shell: { openExternal: ipc.openExternal },
-    log: { buildReport: ipc.buildReport, openFolder: ipc.openFolder, clear: ipc.clear }
+    log: { buildReport: ipc.buildReport }
   }
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -42,8 +40,6 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {})
   ipc.openExternal.mockResolvedValue({ success: true, data: null })
   ipc.buildReport.mockResolvedValue({ success: true, data: PARTS })
-  ipc.openFolder.mockResolvedValue({ success: true, data: null })
-  ipc.clear.mockResolvedValue({ success: true, data: null })
   Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
 })
 
@@ -54,18 +50,11 @@ afterEach(() => {
 })
 
 describe('HelpMenu', () => {
-  it('lists help, diagnostics and About, with About last', async () => {
+  it('lists help and About, with About last; the log actions live in Settings', async () => {
     await openMenu()
 
     const labels = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim())
-    expect(labels).toEqual([
-      'Documentation',
-      'Report a bug…',
-      'Copy debug info',
-      'Open logs folder',
-      'Clear logs…',
-      'About Notvex'
-    ])
+    expect(labels).toEqual(['Documentation', 'Report a bug…', 'Copy debug info', 'About Notvex'])
   })
 
   it('opens the documentation in the system browser', async () => {
@@ -91,19 +80,6 @@ describe('HelpMenu', () => {
     )
   })
 
-  it('opens the logs folder', async () => {
-    await openMenu()
-    fireEvent.click(item(/open logs folder/i))
-    expect(ipc.openFolder).toHaveBeenCalledTimes(1)
-  })
-
-  it('says so when the logs folder cannot be opened', async () => {
-    ipc.openFolder.mockResolvedValue({ success: false, error: 'Failed to open path' })
-    await openMenu()
-    fireEvent.click(item(/open logs folder/i))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't open the logs folder"))
-  })
-
   it('says so when the browser cannot be opened for a bug report', async () => {
     ipc.openExternal.mockResolvedValue({ success: false, error: 'no browser' })
     await openMenu()
@@ -115,57 +91,5 @@ describe('HelpMenu', () => {
     await openMenu()
     fireEvent.click(item(/about notvex/i))
     expect(onOpenAbout).toHaveBeenCalledTimes(1)
-  })
-
-  describe('Clear logs', () => {
-    async function openClearDialog(): Promise<void> {
-      await openMenu()
-      fireEvent.click(item(/clear logs/i))
-      await screen.findByRole('dialog')
-    }
-
-    it('asks for confirmation before clearing anything', async () => {
-      await openClearDialog()
-
-      expect(ipc.clear).not.toHaveBeenCalled()
-      expect(screen.getByRole('dialog').textContent).toMatch(/can't be undone/i)
-    })
-
-    it('leaves the logs alone when cancelled', async () => {
-      await openClearDialog()
-
-      fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-      expect(ipc.clear).not.toHaveBeenCalled()
-    })
-
-    it('clears the logs once confirmed', async () => {
-      await openClearDialog()
-
-      fireEvent.click(screen.getByRole('button', { name: /^clear logs$/i }))
-
-      await waitFor(() => expect(ipc.clear).toHaveBeenCalledTimes(1))
-      expect(toast.success).toHaveBeenCalledWith('Logs cleared')
-    })
-
-    it('can still be closed when the clear call itself rejects', async () => {
-      ipc.clear.mockRejectedValue(new Error('IPC gone'))
-      await openClearDialog()
-
-      fireEvent.click(screen.getByRole('button', { name: /^clear logs$/i }))
-
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't clear the logs"))
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    })
-
-    it('says so when clearing fails', async () => {
-      ipc.clear.mockResolvedValue({ success: false, error: 'EBUSY' })
-      await openClearDialog()
-
-      fireEvent.click(screen.getByRole('button', { name: /^clear logs$/i }))
-
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't clear the logs"))
-    })
   })
 })
