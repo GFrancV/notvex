@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-import { KeyIcon, LockIcon, ShieldCheckIcon, ShieldOffIcon } from 'lucide-react'
+import {
+  FileKeyIcon,
+  FolderOpenIcon,
+  LockIcon,
+  ShieldCheckIcon,
+  ShieldOffIcon,
+  Trash2Icon
+} from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
 import { Button } from '@/components/ui/button'
@@ -17,10 +24,11 @@ import { Separator } from '@/components/ui/separator'
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
 import { ChangePasswordPanel } from './ChangePasswordPanel'
-import { KeyFilePanel } from './KeyFilePanel'
+import { KeyFilePanel, type KeyFileMode } from './KeyFilePanel'
 import { SettingRow, SettingsSection } from './SettingRow'
 
-type Subpage = 'password' | 'key-file' | null
+type Subpage = { kind: 'password' } | { kind: 'key-file'; mode: KeyFileMode } | null
+type SubpageKind = Exclude<Subpage, null>['kind']
 
 // Radix unmounts an inactive tab, so switching tabs or closing Settings drops any open subpage.
 export function SecurityPanel({
@@ -44,18 +52,32 @@ export function SecurityPanel({
 
   // The row button is gone while its subpage is open, so focus would land on the dialog root on the
   // way back; the remounted button takes it instead.
-  const returnFocusTo = useRef<Subpage>(null)
+  const returnFocusTo = useRef<SubpageKind | null>(null)
   const openSubpage = (target: Exclude<Subpage, null>): void => {
-    returnFocusTo.current = target
+    returnFocusTo.current = target.kind
     setSubpage(target)
   }
   const focusOnReturn =
-    (target: Exclude<Subpage, null>) =>
+    (target: SubpageKind) =>
     (button: HTMLButtonElement | null): void => {
       if (!button || returnFocusTo.current !== target) return
       returnFocusTo.current = null
       button.focus()
     }
+
+  // The OS dialog comes first; a cancelled dialog leaves Security as it was.
+  const addKeyFile = async (source: 'generate' | 'existing'): Promise<void> => {
+    const res =
+      source === 'generate'
+        ? await notvex.vault.generateKeyFile()
+        : await notvex.vault.selectKeyFile()
+    if (!res.success || !res.data) return
+    if ('sizeBytes' in res.data && res.data.sizeBytes === 0) return
+    openSubpage({
+      kind: 'key-file',
+      mode: { kind: 'add', contents: res.data.contents, filename: res.data.filename }
+    })
+  }
 
   useEffect(() => {
     void notvex.vault.getHasKeyFile().then((r) => {
@@ -63,14 +85,14 @@ export function SecurityPanel({
     })
   }, [])
 
-  if (subpage === 'password') {
+  if (subpage?.kind === 'password') {
     return <ChangePasswordPanel onBack={() => setSubpage(null)} onLockChange={onLockChange} />
   }
-  if (subpage === 'key-file') {
+  if (subpage?.kind === 'key-file') {
     return (
       <KeyFilePanel
+        mode={subpage.mode}
         onBack={() => setSubpage(null)}
-        hasKeyFile={hasKeyFile}
         onHasKeyFileChange={setHasKeyFile}
         onLockChange={onLockChange}
       />
@@ -166,7 +188,7 @@ export function SecurityPanel({
             variant="secondary"
             size="sm"
             ref={focusOnReturn('password')}
-            onClick={() => openSubpage('password')}
+            onClick={() => openSubpage({ kind: 'password' })}
           >
             <LockIcon />
             Change password
@@ -176,25 +198,48 @@ export function SecurityPanel({
         <SettingRow
           label="Key file"
           description={
-            <span className="flex items-center gap-1.5">
-              {hasKeyFile ? (
-                <ShieldCheckIcon className="text-primary h-3.5 w-3.5" />
-              ) : (
-                <ShieldOffIcon className="h-3.5 w-3.5" />
-              )}
-              {hasKeyFile ? 'Configured' : 'Not configured'}
-            </span>
+            <div className="space-y-1">
+              <p>
+                A second factor: with one set, you need both your password and the file to unlock.
+              </p>
+              <span className="flex items-center gap-1.5">
+                {hasKeyFile ? (
+                  <ShieldCheckIcon className="text-primary h-3.5 w-3.5" />
+                ) : (
+                  <ShieldOffIcon className="h-3.5 w-3.5" />
+                )}
+                {hasKeyFile ? 'Configured' : 'Not configured'}
+              </span>
+            </div>
           }
         >
-          <Button
-            variant="secondary"
-            size="sm"
-            ref={focusOnReturn('key-file')}
-            onClick={() => openSubpage('key-file')}
-          >
-            <KeyIcon />
-            Manage
-          </Button>
+          {hasKeyFile ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              ref={focusOnReturn('key-file')}
+              onClick={() => openSubpage({ kind: 'key-file', mode: { kind: 'remove' } })}
+            >
+              <Trash2Icon />
+              Remove…
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                ref={focusOnReturn('key-file')}
+                onClick={() => void addKeyFile('generate')}
+              >
+                <FileKeyIcon />
+                Generate…
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => void addKeyFile('existing')}>
+                <FolderOpenIcon />
+                Use existing…
+              </Button>
+            </div>
+          )}
         </SettingRow>
       </SettingsSection>
 

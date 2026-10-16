@@ -10,13 +10,20 @@ interface KeyFileInputProps {
   onChange: (contents: Uint8Array, filename: string) => void
   onClear?: () => void
   disabled?: boolean
+  /** A file already chosen elsewhere, shown as selected; the user can still clear or replace it. */
+  initialFile?: { filename: string; sizeBytes: number }
 }
 
-export function KeyFileInput({ onChange, onClear, disabled }: KeyFileInputProps): ReactNode {
+export function KeyFileInput({
+  onChange,
+  onClear,
+  disabled,
+  initialFile
+}: KeyFileInputProps): ReactNode {
   const [selectedFile, setSelectedFile] = useState<{
     filename: string
     sizeBytes: number
-  } | null>(null)
+  } | null>(initialFile ?? null)
 
   const handleBrowse = async (): Promise<void> => {
     const res = await notvex.vault.selectKeyFile()
@@ -69,7 +76,7 @@ export function KeyFileInput({ onChange, onClear, disabled }: KeyFileInputProps)
         </InputGroupAddon>
         <InputGroupAddon align="inline-end">
           {selectedFile ? (
-            <InputGroupButton onClick={handleClear} disabled={disabled}>
+            <InputGroupButton onClick={handleClear} disabled={disabled} aria-label="Clear key file">
               <XIcon />
             </InputGroupButton>
           ) : (

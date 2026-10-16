@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const ipc = vi.hoisted(() => ({
   getHasKeyFile: vi.fn(),
   changePassword: vi.fn(),
+  generateKeyFile: vi.fn(),
   openBackupsFolder: vi.fn(),
   exportAll: vi.fn(),
   openLogsFolder: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('@/lib/ipc', () => ({
     vault: {
       getHasKeyFile: ipc.getHasKeyFile,
       changePassword: ipc.changePassword,
+      generateKeyFile: ipc.generateKeyFile,
       openBackupsFolder: ipc.openBackupsFolder
     },
     notes: { exportAll: ipc.exportAll },
@@ -92,7 +94,7 @@ describe('SettingsDialog', () => {
   it('starts fresh on every open: the requested tab, no subpage left over', async () => {
     const props = { onOpenChange }
     const { rerender } = render(createElement(SettingsDialog, { ...props, open: true }))
-    fireEvent.click(screen.getByRole('button', { name: /manage/i }))
+    fireEvent.click(screen.getByRole('button', { name: /change password/i }))
     expect(currentCrumb()).not.toBeNull()
 
     rerender(createElement(SettingsDialog, { ...props, open: false }))
@@ -204,19 +206,36 @@ describe('SettingsDialog', () => {
     expect(screen.getByRole('tabpanel').textContent).toMatch(/auto-lock/i)
   })
 
-  it('opens key file management as a subpage and hands focus back on the way out', async () => {
+  it('adds a key file straight from its row and hands focus back on the way out', async () => {
+    ipc.generateKeyFile.mockResolvedValue({
+      success: true,
+      data: { contents: new Uint8Array([1]), filename: 'vault.nvxkey' }
+    })
     await renderDialog()
 
-    fireEvent.click(screen.getByRole('button', { name: /manage/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Generate…' }))
+    })
 
-    expect(currentCrumb()?.textContent).toBe('Key file')
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: /generate key file/i }))
+    expect(currentCrumb()?.textContent).toBe('Add key file')
+    expect(document.activeElement).toBe(screen.getByLabelText('Current password'))
     expect(onOpenChange).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Security' }))
 
     // Back returns focus to the row that opened the subpage, not to the dialog root.
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: /manage/i }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Generate…' }))
+  })
+
+  it('stays on Security when the key file dialog is cancelled', async () => {
+    ipc.generateKeyFile.mockResolvedValue({ success: true, data: null })
+    await renderDialog()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Generate…' }))
+    })
+
+    expect(currentCrumb()).toBeNull()
   })
 
   it('drops an open subpage when switching tabs', async () => {
