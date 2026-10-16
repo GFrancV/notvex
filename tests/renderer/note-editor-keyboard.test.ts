@@ -16,8 +16,7 @@ vi.mock('@/lib/ipc', () => {
       platform: 'win32',
       notes: { get: ipc.get, create: ipc.create, update: ok, list: ok, trash: ok },
       tags: { list: ok },
-      noteTags: { counts: ok, all: ok },
-      clipboard: { scheduleClear: ok }
+      noteTags: { counts: ok, all: ok }
     }
   }
 })

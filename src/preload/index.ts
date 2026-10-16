@@ -124,7 +124,6 @@ const api: NotvexAPI = {
     set: (key, value) => ipcRenderer.invoke('prefs:set', key, value)
   },
   clipboard: {
-    scheduleClear: (value) => ipcRenderer.invoke('clipboard:schedule-clear', value),
     write: (text, opts) => ipcRenderer.invoke('clipboard:write', text, opts)
   },
   shell: {

@@ -29,10 +29,7 @@ vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({
-  scheduleClipboardClear: vi.fn(),
-  writeClipboard: vi.fn(async () => undefined)
-}))
+vi.mock('@main/clipboard-guard', () => ({ writeClipboard: vi.fn(async () => undefined) }))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
