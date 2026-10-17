@@ -71,6 +71,9 @@ export default function App(): ReactNode {
     })
   }, [clearSession, setPendingOpenVaultPath])
 
+  // Lives here, not in Main: an unlocked session can also be showing PostRecoveryReset
+  useEffect(() => notvex.onAutoLocked(clearSession), [clearSession])
+
   // Lives here, not in Main: Main unmounts when the vault locks, which is when this fires
   useEffect(() => {
     return notvex.onPackFailed(() => {

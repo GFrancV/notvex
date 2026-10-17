@@ -90,7 +90,14 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   setActiveNoteId: (activeNoteId): void => set({ activeNoteId }),
 
   clearSession: (): void => {
-    set({ notes: [], activeNoteId: null, tags: [], tagCounts: {}, noteTagsMap: {} })
+    set({
+      notes: [],
+      activeNoteId: null,
+      tags: [],
+      tagCounts: {},
+      noteTagsMap: {},
+      needsRecoveryReset: false
+    })
     get().setStatus('locked')
     useUiStore.getState().resetFilters()
   },

@@ -13,7 +13,7 @@ import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 
 export function Main(): ReactNode {
-  const { refreshAll, clearSession, lock } = useVaultStore()
+  const { refreshAll, lock } = useVaultStore()
   const { setShowTrash, toggleEditorMode, requestFocusSearch } = useUiStore()
   const handleNewNote = useCreateNote()
 
@@ -26,9 +26,6 @@ export function Main(): ReactNode {
   useEffect(() => {
     return notvex.onWillLock(() => flushAllPending())
   }, [])
-
-  // Listen for auto-lock events from main process
-  useEffect(() => notvex.onAutoLocked(clearSession), [clearSession])
 
   // Global keyboard shortcuts
   useEffect(() => {

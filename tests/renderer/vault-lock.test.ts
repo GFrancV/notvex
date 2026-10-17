@@ -31,7 +31,8 @@ const fillSession = (): void => {
     tags: [tag],
     tagCounts: { t1: 1 },
     noteTagsMap: { n1: ['t1'] },
-    activeNoteId: 'n1'
+    activeNoteId: 'n1',
+    needsRecoveryReset: true
   })
   useUiStore.setState({
     activeTags: ['t1'],
@@ -52,6 +53,7 @@ const expectCleared = (): void => {
   expect(v.status).toBe('locked')
   expect(v.currentVaultPath).toBeNull()
   expect(v.vaultVersion).toBeNull()
+  expect(v.needsRecoveryReset).toBe(false)
 
   const ui = useUiStore.getState()
   expect(ui.activeTags).toEqual([])

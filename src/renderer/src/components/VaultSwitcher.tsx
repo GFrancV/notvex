@@ -58,9 +58,13 @@ export function VaultSwitcher(): ReactNode {
     }
 
     // Main process already closed the vault and zeroed the master key.
-    // Reload prefs so recentVaults reflects the switch.
-    await loadPrefs()
-    clearSession()
+    // Reload prefs first so Unlock mounts with the switched-to vault at the top of recentVaults,
+    // but clear even if that reload fails.
+    try {
+      await loadPrefs()
+    } finally {
+      clearSession()
+    }
   }
 
   const handleOpenOther = async (): Promise<void> => {
