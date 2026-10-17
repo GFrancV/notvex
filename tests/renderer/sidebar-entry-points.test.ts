@@ -93,8 +93,11 @@ describe('Sidebar entry points', () => {
     expect(await screen.findByRole('heading', { name: 'Settings: about' })).toBeTruthy()
   })
 
-  it('locks the vault from the vault menu and drops the decrypted note list', async () => {
+  it('locks the vault from the vault menu and drops the decrypted notes and tags', async () => {
     useVaultStore.setState({
+      tags: [{ id: 't1', name: 'secret tag', color: '#888888', createdAt: 0 }],
+      tagCounts: { t1: 1 },
+      noteTagsMap: { n1: ['t1'] },
       notes: [
         {
           id: 'n1',
@@ -118,5 +121,8 @@ describe('Sidebar entry points', () => {
     expect(ipc.close).toHaveBeenCalledOnce()
     expect(useVaultStore.getState().notes).toEqual([])
     expect(useVaultStore.getState().activeNoteId).toBeNull()
+    expect(useVaultStore.getState().tags).toEqual([])
+    expect(useVaultStore.getState().tagCounts).toEqual({})
+    expect(useVaultStore.getState().noteTagsMap).toEqual({})
   })
 })
