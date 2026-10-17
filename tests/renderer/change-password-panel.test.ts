@@ -72,7 +72,7 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     expect(back().hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(true)
 
-    fireEvent.click(screen.getByLabelText(/i have saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(onLockChange).toHaveBeenLastCalledWith(false)

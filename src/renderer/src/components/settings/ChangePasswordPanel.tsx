@@ -167,8 +167,9 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
           <Alert className="border-warning/30 bg-warning/10 border">
             <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
             <AlertDescription className="text-warning">
-              Your recovery key has changed. The previous key is no longer valid. Save this new one
-              — it will not be shown again.
+              Your recovery key has changed and the previous one no longer works. Write it down by
+              hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t be
+              shown again.
             </AlertDescription>
           </Alert>
 
@@ -181,7 +182,7 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
               onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
             />
             <FieldLabel htmlFor="cpd-confirm-recovery">
-              I have saved my new recovery key in a secure location.
+              I&apos;ve saved my new recovery key somewhere safe.
             </FieldLabel>
           </Field>
 

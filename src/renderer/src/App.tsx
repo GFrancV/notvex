@@ -8,6 +8,7 @@ import { MigrationRequiredDialog } from '@/components/dialogs/MigrationRequiredD
 import { ReloadWindowDialog } from '@/components/dialogs/ReloadWindowDialog'
 import { UpdateAvailableDialog } from '@/components/dialogs/UpdateAvailableDialog'
 import { Toaster } from '@/components/ui/sonner'
+import { useClipboardGuard } from '@/hooks/use-clipboard-guard'
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -27,6 +28,8 @@ export default function App(): ReactNode {
   )
 
   const { load: loadPrefs } = usePrefsStore()
+
+  useClipboardGuard()
 
   useEffect(() => {
     const init = async (): Promise<void> => {

@@ -99,7 +99,7 @@ describe('KeyFilePanel: locking while the recovery key is at stake', () => {
     await screen.findByRole('heading', { name: 'Save your new recovery key' })
     expect(back().hasAttribute('disabled')).toBe(true)
 
-    fireEvent.click(screen.getByLabelText(/i have saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(onLockChange).toHaveBeenLastCalledWith(false)
@@ -172,7 +172,7 @@ describe('KeyFilePanel: removing the key file', () => {
     await screen.findByRole('heading', { name: 'Save your new recovery key' })
     expect(back().hasAttribute('disabled')).toBe(true)
 
-    fireEvent.click(screen.getByLabelText(/i have saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(onLockChange).toHaveBeenLastCalledWith(false)

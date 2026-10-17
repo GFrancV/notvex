@@ -17,7 +17,7 @@ import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
-import { scheduleClipboardClear } from './clipboard-guard'
+import { writeClipboard } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { appendError, clearLog, ensureLogDir, readLogTail } from './error-log'
@@ -162,6 +162,8 @@ function writeNewFile(dir: string, base: string, used: Set<string>, bytes: Uint8
 // than stored as mojibake. A file that can't be read is skipped, not fatal to the import.
 const IMPORT_MAX_FILES = 500
 const IMPORT_MAX_BYTES = 5 * 1024 * 1024
+// Far above any real note; only bounds what an untrusted renderer can push onto the clipboard.
+const CLIPBOARD_MAX_CHARS = 10_000_000
 const utf8Strict = new TextDecoder('utf-8', { fatal: true })
 
 function decodeUtf8(raw: Uint8Array): string | null {
@@ -1366,10 +1368,13 @@ export function registerIpcHandlers(
 
   // ── Clipboard ────────────────────────────────────────────────────────────
 
-  handle('clipboard:schedule-clear', (_e, value: unknown) => {
+  handle('clipboard:write', async (_e, text: unknown, opts: unknown) => {
     try {
-      if (typeof value !== 'string') return fail('Invalid clipboard value')
-      scheduleClipboardClear(value)
+      if (typeof text !== 'string' || text === '' || text.length > CLIPBOARD_MAX_CHARS) {
+        return fail('Invalid clipboard value')
+      }
+      const secret = (opts as { secret?: unknown } | null | undefined)?.secret === true
+      await writeClipboard(text, { secret })
       return ok(null)
     } catch (e) {
       return fail(e)

@@ -8,13 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipc = vi.hoisted(() => ({
   openExternal: vi.fn(),
-  buildReport: vi.fn()
+  buildReport: vi.fn(),
+  clipboardWrite: vi.fn()
 }))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     shell: { openExternal: ipc.openExternal },
-    log: { buildReport: ipc.buildReport }
+    log: { buildReport: ipc.buildReport },
+    clipboard: { write: ipc.clipboardWrite }
   }
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -40,7 +42,7 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {})
   ipc.openExternal.mockResolvedValue({ success: true, data: null })
   ipc.buildReport.mockResolvedValue({ success: true, data: PARTS })
-  Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
+  ipc.clipboardWrite.mockResolvedValue({ success: true, data: null })
 })
 
 afterEach(() => {
@@ -76,7 +78,7 @@ describe('HelpMenu', () => {
     fireEvent.click(item(/copy debug info/i))
 
     await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(reportBody(PARTS))
+      expect(ipc.clipboardWrite).toHaveBeenCalledWith(reportBody(PARTS), { secret: false })
     )
   })
 

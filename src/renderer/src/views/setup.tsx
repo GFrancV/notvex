@@ -229,7 +229,8 @@ export function Setup(): ReactNode {
               <AlertTitle className="text-warning">Save your recovery key</AlertTitle>
               <AlertDescription className="text-warning/70">
                 If you lose your password, this is the only way to recover your notes. Write it down
-                or store it in a password manager. It will never be shown again.
+                by hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t
+                be shown again.
               </AlertDescription>
             </Alert>
 
@@ -242,8 +243,8 @@ export function Setup(): ReactNode {
                 onCheckedChange={(c) => setConfirmed(c === true)}
               />
               <FieldLabel htmlFor="setup-confirm-recovery">
-                I have saved my recovery key in a secure location. I understand that if I lose both
-                my password and this key, my notes are irrecoverable.
+                I&apos;ve saved my recovery key somewhere safe. I understand that if I lose both my
+                password and this key, my notes are irrecoverable.
               </FieldLabel>
             </Field>
 

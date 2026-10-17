@@ -169,8 +169,9 @@ export function KeyFilePanel({
             <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4" />
             <AlertDescription className="text-warning">
               <p>
-                Key file {adding ? 'activated' : 'removed'}. Your recovery key has changed — save it
-                now. It won&apos;t be shown again.
+                Key file {adding ? 'activated' : 'removed'}. Your recovery key has changed and the
+                previous one no longer works. Write it down by hand or copy it on a device you
+                trust, and keep it somewhere safe. It won&apos;t be shown again.
               </p>
             </AlertDescription>
           </Alert>
@@ -182,7 +183,7 @@ export function KeyFilePanel({
               onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
             />
             <FieldLabel htmlFor="kf-confirm">
-              I have saved my new recovery key in a secure location.
+              I&apos;ve saved my new recovery key somewhere safe.
             </FieldLabel>
           </Field>
           <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>

@@ -66,6 +66,10 @@ vi.mock('@main/crash-handlers', () => ({
   installCrashHandlers: vi.fn()
 }))
 
+vi.mock('@main/clipboard-guard', () => ({
+  clearPendingSecret: vi.fn().mockResolvedValue(undefined)
+}))
+
 vi.mock('@main/navigation-guard', () => ({
   installNavigationGuard: vi.fn()
 }))
@@ -141,6 +145,15 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     const event = { preventDefault: vi.fn() }
     app.emit('before-quit', event)
     expect(event.preventDefault).toHaveBeenCalledTimes(1)
+  })
+
+  // The clear timer dies with the process, so a recovery key copied just before quitting
+  // must be cleared on the way out.
+  it('before-quit clears a pending secret before the app quits', async () => {
+    const { clearPendingSecret } = await import('@main/clipboard-guard')
+    app.emit('before-quit', { preventDefault: vi.fn() })
+    await vi.waitFor(() => expect(quit).toHaveBeenCalled())
+    expect(clearPendingSecret).toHaveBeenCalledTimes(1)
   })
 
   it('firing before-quit twice invokes closeVault() only once', async () => {
