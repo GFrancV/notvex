@@ -18,6 +18,7 @@ Range.prototype.getClientRects = (): DOMRectList => [] as unknown as DOMRectList
 Range.prototype.getBoundingClientRect = (): DOMRect => new DOMRect()
 
 const { useClipboardGuard } = await import('@/hooks/use-clipboard-guard')
+const { toast } = await import('sonner')
 
 interface FakeClipboardData {
   getData: (type: string) => string
@@ -58,9 +59,16 @@ function editor(doc: string, selection: EditorSelection): EditorView {
   return view
 }
 
+// jsdom has no editing commands; every test gets a fresh stand-in.
+const execCommand = vi.fn(() => true)
+let unmountGuard: () => void
+
 beforeEach(() => {
   write.mockReset().mockResolvedValue({ success: true, data: null })
-  renderHook(() => useClipboardGuard())
+  execCommand.mockClear()
+  vi.mocked(toast.error).mockClear()
+  document.execCommand = execCommand
+  unmountGuard = renderHook(() => useClipboardGuard()).unmount
 })
 
 afterEach(() => {
@@ -97,6 +105,7 @@ describe('copy and cut in the editor', () => {
 
     expect(write).toHaveBeenCalledExactlyOnceWith('cut')
     expect(view.state.doc.toString()).toBe('keep ')
+    expect(execCommand).not.toHaveBeenCalled()
     view.destroy()
   })
 })
@@ -126,13 +135,22 @@ describe('copy and cut in plain fields', () => {
   })
 
   it('still removes the text on cut, which the cancelled native cut no longer does', () => {
-    document.execCommand = vi.fn(() => true)
     const el = field('input', 'note title', 5, 10)
 
     fire(el, 'cut')
 
     expect(write).toHaveBeenCalledExactlyOnceWith('title')
-    expect(document.execCommand).toHaveBeenCalledExactlyOnceWith('delete')
+    expect(execCommand).toHaveBeenCalledExactlyOnceWith('delete')
+  })
+
+  it('leaves a cut with nothing selected alone', () => {
+    const el = field('input', 'note title', 3, 3)
+
+    const { event } = fire(el, 'cut')
+
+    expect(write).not.toHaveBeenCalled()
+    expect(execCommand).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
   })
 
   it('leaves password fields alone', () => {
@@ -170,6 +188,51 @@ describe('copy in rendered content', () => {
     window.getSelection()!.removeAllRanges()
 
     const { event } = fire(document.body, 'copy')
+
+    expect(write).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+})
+
+// The native write is already cancelled when main answers, so a failure must be visible: the
+// text is on neither the clipboard nor, after a cut, in the field (undo brings it back).
+describe('a copy main could not write', () => {
+  function copyInField(): void {
+    const el = document.createElement('input')
+    el.value = 'note title'
+    document.body.append(el)
+    el.focus()
+    el.setSelectionRange(5, 10)
+    fire(el, 'copy')
+  }
+
+  it('shows an error when main refuses it', async () => {
+    write.mockResolvedValue({ success: false, error: 'Invalid clipboard value' })
+
+    copyInField()
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledOnce())
+  })
+
+  it('shows an error when the IPC call itself fails', async () => {
+    write.mockRejectedValue(new Error('No handler registered'))
+
+    copyInField()
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledOnce())
+  })
+})
+
+describe('after unmount', () => {
+  it('stops guarding copies', () => {
+    unmountGuard()
+    const el = document.createElement('input')
+    el.value = 'note title'
+    document.body.append(el)
+    el.focus()
+    el.setSelectionRange(5, 10)
+
+    const { event } = fire(el, 'copy')
 
     expect(write).not.toHaveBeenCalled()
     expect(event.defaultPrevented).toBe(false)

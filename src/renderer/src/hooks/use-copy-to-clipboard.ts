@@ -23,7 +23,9 @@ export function useCopyToClipboard(): UseCopyToClipboardReturn {
     async (content: string, { secret = false } = {}): Promise<void> => {
       if (content === '') return
 
-      const result = await notvex.clipboard.write(content, { secret })
+      const result = await notvex.clipboard
+        .write(content, { secret })
+        .catch(() => ({ success: false }) as const)
       if (!result.success) {
         toast.error('Failed to copy to clipboard')
         return

@@ -29,9 +29,10 @@ function guardCopy(event: ClipboardEvent): void {
   // Cancelling a native cut also cancels its deletion; execCommand keeps it on the undo stack.
   if (event.type === 'cut' && !handled) document.execCommand('delete')
 
+  const failed = (): void => void toast.error('Failed to copy to clipboard')
   void notvex.clipboard.write(text).then((result) => {
-    if (!result.success) toast.error('Failed to copy to clipboard')
-  })
+    if (!result.success) failed()
+  }, failed)
 }
 
 export function useClipboardGuard(): void {

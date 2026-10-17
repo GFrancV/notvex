@@ -48,6 +48,17 @@ describe('useCopyToClipboard', () => {
     expect(result.current.isCopied).toBe(false)
   })
 
+  // Callers fire and forget the copy, so a rejected invoke would otherwise be unhandled and silent.
+  it('reports a rejected IPC call as a failed copy', async () => {
+    write.mockRejectedValue(new Error('No handler registered'))
+    const { result } = renderHook(() => useCopyToClipboard())
+
+    await act(() => result.current.copyToClipboard('hello'))
+
+    expect(toast.error).toHaveBeenCalledOnce()
+    expect(result.current.isCopied).toBe(false)
+  })
+
   it('does nothing for empty text', async () => {
     const { result } = renderHook(() => useCopyToClipboard())
 
