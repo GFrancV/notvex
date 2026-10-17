@@ -18,6 +18,7 @@ interface UiStore {
   setSearchQuery: (q: string) => void
   toggleActiveTag: (id: string, multi: boolean) => void
   clearActiveTags: () => void
+  resetFilters: () => void
   setShowTrash: (v: boolean) => void
   setShowPinned: (v: boolean) => void
   setCommandPaletteOpen: (v: boolean) => void
@@ -57,6 +58,8 @@ export const useUiStore = create<UiStore>((set) => ({
       return { activeTags: [id], showTrash: false, showPinned: false }
     }),
   clearActiveTags: (): void => set({ activeTags: [] }),
+  resetFilters: (): void =>
+    set({ activeTags: [], searchQuery: '', showTrash: false, showPinned: false }),
   setShowTrash: (showTrash): void => set({ showTrash, activeTags: [], showPinned: false }),
   setShowPinned: (showPinned): void => set({ showPinned, activeTags: [], showTrash: false }),
   setCommandPaletteOpen: (commandPaletteOpen): void => set({ commandPaletteOpen }),
