@@ -13,7 +13,7 @@ import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 
 export function Main(): ReactNode {
-  const { refreshAll, setActiveNoteId, setStatus, setNotes } = useVaultStore()
+  const { refreshAll, setActiveNoteId, setStatus, setNotes, lock } = useVaultStore()
   const { setShowTrash, toggleEditorMode, requestFocusSearch } = useUiStore()
   const handleNewNote = useCreateNote()
 
@@ -65,12 +65,7 @@ export function Main(): ReactNode {
       switch (e.key.toLowerCase()) {
         case 'l':
           e.preventDefault()
-          void (async (): Promise<void> => {
-            await notvex.vault.close()
-            setStatus('locked')
-            setActiveNoteId(null)
-            setNotes([])
-          })()
+          void lock()
           break
         case 'n':
           e.preventDefault()
@@ -86,15 +81,7 @@ export function Main(): ReactNode {
 
     window.addEventListener('keydown', handler)
     return (): void => window.removeEventListener('keydown', handler)
-  }, [
-    handleNewNote,
-    setStatus,
-    setActiveNoteId,
-    setNotes,
-    toggleEditorMode,
-    setShowTrash,
-    requestFocusSearch
-  ])
+  }, [handleNewNote, lock, toggleEditorMode, setShowTrash, requestFocusSearch])
 
   return (
     <div className="bg-background flex h-screen flex-col overflow-hidden">

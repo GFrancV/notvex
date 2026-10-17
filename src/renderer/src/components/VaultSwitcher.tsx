@@ -36,7 +36,7 @@ function isSamePath(a: string | null, b: string): boolean {
 }
 
 export function VaultSwitcher(): ReactNode {
-  const { setStatus, setActiveNoteId, setNotes, setPendingNewVaultPath } = useVaultStore()
+  const { setStatus, setActiveNoteId, setNotes, setPendingNewVaultPath, lock } = useVaultStore()
   const currentVaultPath = useVaultStore((s) => s.currentVaultPath)
 
   const { load: loadPrefs } = usePrefsStore()
@@ -65,13 +65,6 @@ export function VaultSwitcher(): ReactNode {
     setStatus('locked')
   }
 
-  const handleLock = async (): Promise<void> => {
-    await notvex.vault.close()
-    setStatus('locked')
-    setActiveNoteId(null)
-    setNotes([])
-  }
-
   const handleOpenOther = async (): Promise<void> => {
     const res = await notvex.vault.chooseFile('existing')
     if (!res.success || !res.data) return
@@ -81,9 +74,7 @@ export function VaultSwitcher(): ReactNode {
   const handleCreateNew = async (): Promise<void> => {
     const res = await notvex.vault.chooseFile('new')
     if (!res.success || !res.data) return
-    await notvex.vault.close()
-    setActiveNoteId(null)
-    setNotes([])
+    await lock()
     setPendingNewVaultPath(res.data)
   }
 
@@ -135,7 +126,7 @@ export function VaultSwitcher(): ReactNode {
             Create new vault...
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => void handleLock()}>
+          <DropdownMenuItem variant="destructive" onSelect={() => void lock()}>
             <LockIcon className="size-4" />
             Lock vault
           </DropdownMenuItem>

@@ -20,7 +20,6 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { loadDebugInfo, openBugReport, openLogsFolder } from '@/lib/bug-report'
-import { notvex } from '@/lib/ipc'
 import { requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -81,15 +80,7 @@ function PaletteContent(): ReactNode {
     setTagSelectorNoteId,
     setRemoveTagNoteId
   } = useUiStore()
-  const {
-    notes,
-    setStatus,
-    setActiveNoteId,
-    setNotes,
-    setActiveNoteId: selectNote,
-    activeNoteId,
-    noteTagsMap
-  } = useVaultStore()
+  const { notes, lock, setActiveNoteId: selectNote, activeNoteId, noteTagsMap } = useVaultStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
   const [query, setQuery] = useState('')
@@ -103,13 +94,6 @@ function PaletteContent(): ReactNode {
     },
     [setCommandPaletteOpen]
   )
-
-  const handleLock = async (): Promise<void> => {
-    await notvex.vault.close()
-    setStatus('locked')
-    setActiveNoteId(null)
-    setNotes([])
-  }
 
   const handleCreate = async (title?: string): Promise<void> => {
     try {
@@ -161,7 +145,7 @@ function PaletteContent(): ReactNode {
           </CommandItem>
           <CommandItem
             keywords={['close vault', 'logout', 'sign out', 'exit']}
-            onSelect={() => run(handleLock)}
+            onSelect={() => run(lock)}
           >
             <LockIcon />
             <span>Lock Vault</span>
