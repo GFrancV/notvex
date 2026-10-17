@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 import { notvex } from '@/lib/ipc'
+import { useUiStore } from '@/store/ui.store'
 import type {
   CreateNoteInput,
   CreateTagInput,
@@ -35,6 +36,13 @@ interface VaultStore {
   setTagCounts: (counts: Record<string, number>) => void
   setNoteTagsMap: (map: Record<string, string[]>) => void
   setActiveNoteId: (id: string | null) => void
+  /**
+   * The one place that drops decrypted vault state. Call it directly when main has already
+   * closed the vault (auto-lock, switch, open-file); otherwise call `lock()`. Any new piece of
+   * vault-derived state must be cleared here.
+   */
+  clearSession: () => void
+  lock: () => Promise<void>
   loadNotes: (filter?: { trashed?: boolean; tagId?: string }) => Promise<void>
   createNote: (input?: CreateNoteInput) => Promise<NoteListItem>
   duplicateNote: (id: string) => Promise<NoteListItem>
@@ -80,6 +88,28 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   setTagCounts: (tagCounts): void => set({ tagCounts }),
   setNoteTagsMap: (noteTagsMap): void => set({ noteTagsMap }),
   setActiveNoteId: (activeNoteId): void => set({ activeNoteId }),
+
+  clearSession: (): void => {
+    set({
+      notes: [],
+      activeNoteId: null,
+      tags: [],
+      tagCounts: {},
+      noteTagsMap: {},
+      needsRecoveryReset: false
+    })
+    get().setStatus('locked')
+    useUiStore.getState().resetFilters()
+  },
+
+  lock: async (): Promise<void> => {
+    // Clearing even when close fails is the fail-safe side: the worst case is a re-unlock
+    try {
+      await notvex.vault.close()
+    } finally {
+      get().clearSession()
+    }
+  },
 
   loadNotes: async (filter = {}): Promise<void> => {
     const res = await notvex.notes.list(filter)
