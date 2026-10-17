@@ -19,7 +19,8 @@ export function RecoveryWordsGrid({ mnemonic }: RecoveryWordsGridProps): JSX.Ele
 
   return (
     <div className="space-y-3">
-      <div className="bg-input/30 rounded-lg border p-4">
+      {/* Unselectable: a hand-selected copy would skip the secret copy's forced clear. */}
+      <div className="bg-input/30 rounded-lg border p-4 select-none">
         <div className="grid grid-cols-6 gap-2">
           {words.map((word, i) => (
             <div key={i} className="flex flex-col items-center gap-0.5">

@@ -40,6 +40,13 @@ describe('RecoveryWordsGrid', () => {
     expect(await screen.findByRole('button', { name: /copied/i })).toBeTruthy()
   })
 
+  // A hand-selected copy would go out as plain text, skipping the forced 30 s clear.
+  it('keeps the words unselectable so the Copy button is the only way out', () => {
+    render(createElement(RecoveryWordsGrid, { mnemonic: MNEMONIC }))
+
+    expect(screen.getByText('alpha').closest('.select-none')).not.toBeNull()
+  })
+
   it('tells the user what copying risks and what Notvex does about it', () => {
     render(createElement(RecoveryWordsGrid, { mnemonic: MNEMONIC }))
 
