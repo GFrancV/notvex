@@ -76,7 +76,18 @@ describe('clipboard:write', () => {
     expect(writeClipboard).toHaveBeenCalledExactlyOnceWith('words', { secret: false })
   })
 
+  it('reports a failed clipboard write instead of claiming success', async () => {
+    writeClipboard.mockRejectedValueOnce(new Error('clipboard busy'))
+
+    await expect(write('hello')).resolves.toEqual({ success: false, error: 'clipboard busy' })
+  })
+
+  it('accepts text up to the size limit', async () => {
+    await expect(write('x'.repeat(10_000_000))).resolves.toEqual({ success: true, data: null })
+  })
+
   it.each([
+    ['larger than the size limit', 'x'.repeat(10_000_001)],
     ['an empty string', ''],
     ['a number', 42],
     ['an object', { text: 'x' }],
