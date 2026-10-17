@@ -36,7 +36,7 @@ function isSamePath(a: string | null, b: string): boolean {
 }
 
 export function VaultSwitcher(): ReactNode {
-  const { setStatus, setActiveNoteId, setNotes, setPendingNewVaultPath, lock } = useVaultStore()
+  const { clearSession, setPendingNewVaultPath, lock } = useVaultStore()
   const currentVaultPath = useVaultStore((s) => s.currentVaultPath)
 
   const { load: loadPrefs } = usePrefsStore()
@@ -60,9 +60,7 @@ export function VaultSwitcher(): ReactNode {
     // Main process already closed the vault and zeroed the master key.
     // Reload prefs so recentVaults reflects the switch.
     await loadPrefs()
-    setActiveNoteId(null)
-    setNotes([])
-    setStatus('locked')
+    clearSession()
   }
 
   const handleOpenOther = async (): Promise<void> => {

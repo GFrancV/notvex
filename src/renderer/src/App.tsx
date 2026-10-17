@@ -17,7 +17,7 @@ import { Setup } from '@/views/setup'
 import { Unlock } from '@/views/unlock'
 
 export default function App(): ReactNode {
-  const { setStatus, setCurrentVaultPath, setPendingOpenVaultPath } = useVaultStore()
+  const { setStatus, setCurrentVaultPath, setPendingOpenVaultPath, clearSession } = useVaultStore()
   const { status, needsRecoveryReset, pendingNewVaultPath } = useVaultStore(
     useShallow((s) => ({
       status: s.status,
@@ -62,13 +62,14 @@ export default function App(): ReactNode {
     void init()
   }, [setStatus, setCurrentVaultPath, loadPrefs, setPendingOpenVaultPath])
 
-  // Subscribe to vault:open-file push events (second-instance / open-file while running)
+  // Subscribe to vault:open-file push events (second-instance / open-file while running).
+  // Main has already closed any open vault by the time this arrives.
   useEffect(() => {
     return notvex.onOpenFile((filePath) => {
+      clearSession()
       setPendingOpenVaultPath(filePath)
-      setStatus('locked')
     })
-  }, [setStatus, setPendingOpenVaultPath])
+  }, [clearSession, setPendingOpenVaultPath])
 
   // Lives here, not in Main: Main unmounts when the vault locks, which is when this fires
   useEffect(() => {

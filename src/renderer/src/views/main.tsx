@@ -13,7 +13,7 @@ import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 
 export function Main(): ReactNode {
-  const { refreshAll, setActiveNoteId, setStatus, setNotes, lock } = useVaultStore()
+  const { refreshAll, clearSession, lock } = useVaultStore()
   const { setShowTrash, toggleEditorMode, requestFocusSearch } = useUiStore()
   const handleNewNote = useCreateNote()
 
@@ -28,14 +28,7 @@ export function Main(): ReactNode {
   }, [])
 
   // Listen for auto-lock events from main process
-  useEffect(() => {
-    const unsubscribe = notvex.onAutoLocked(() => {
-      setStatus('locked')
-      setActiveNoteId(null)
-      setNotes([])
-    })
-    return unsubscribe
-  }, [setStatus, setActiveNoteId, setNotes])
+  useEffect(() => notvex.onAutoLocked(clearSession), [clearSession])
 
   // Global keyboard shortcuts
   useEffect(() => {
