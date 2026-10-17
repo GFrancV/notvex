@@ -79,6 +79,7 @@ const RAW_FORMAT = (name: string): string => `electron application/osclipboard;f
 
 describe('writeClipboard', () => {
   let writeClipboard: typeof import('@main/clipboard-guard').writeClipboard
+  let clearPendingSecret: typeof import('@main/clipboard-guard').clearPendingSecret
 
   beforeEach(async () => {
     vi.useFakeTimers()
@@ -87,7 +88,76 @@ describe('writeClipboard', () => {
     clipboard.clear.mockReset()
     clipboard.write.mockReset().mockResolvedValue(undefined)
     prefs.clipboardClearSeconds = 10
-    ;({ writeClipboard } = await import('@main/clipboard-guard'))
+    ;({ writeClipboard, clearPendingSecret } = await import('@main/clipboard-guard'))
+  })
+
+  it('keeps the 30 s clear when the same secret is copied again as plain text', async () => {
+    prefs.clipboardClearSeconds = 0
+    await writeClipboard('secret', { secret: true })
+    await writeClipboard('secret')
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(clipboard.clear).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the pending secret clear when a later write fails', async () => {
+    prefs.clipboardClearSeconds = 0
+    await writeClipboard('secret', { secret: true })
+    clipboard.write.mockRejectedValueOnce(new Error('clipboard busy'))
+    await expect(writeClipboard('other')).rejects.toThrow()
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(clipboard.clear).toHaveBeenCalledOnce()
+  })
+
+  // The clear timer dies with the process, so quitting must not leave the recovery key behind.
+  describe('clearPendingSecret', () => {
+    it('clears a secret still on the clipboard', async () => {
+      await writeClipboard('secret', { secret: true })
+
+      await clearPendingSecret()
+
+      expect(clipboard.clear).toHaveBeenCalledOnce()
+    })
+
+    it('leaves the clipboard alone once the user copied something else elsewhere', async () => {
+      await writeClipboard('secret', { secret: true })
+      clipboard.readText.mockResolvedValue('copied in another app')
+
+      await clearPendingSecret()
+
+      expect(clipboard.clear).not.toHaveBeenCalled()
+    })
+
+    it('does nothing when the last copy was not a secret', async () => {
+      await writeClipboard('secret', { secret: true })
+      await writeClipboard('note text')
+
+      await clearPendingSecret()
+
+      expect(clipboard.clear).not.toHaveBeenCalled()
+    })
+
+    it('does nothing once the timed clear already ran', async () => {
+      await writeClipboard('secret', { secret: true })
+      await vi.advanceTimersByTimeAsync(30_000)
+      clipboard.clear.mockClear()
+
+      await clearPendingSecret()
+
+      expect(clipboard.clear).not.toHaveBeenCalled()
+    })
+
+    it('never throws, so it cannot block quitting', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await writeClipboard('secret', { secret: true })
+      clipboard.readText.mockRejectedValue(new Error('clipboard unavailable'))
+
+      await expect(clearPendingSecret()).resolves.toBeUndefined()
+      error.mockRestore()
+    })
   })
 
   afterEach(() => {
