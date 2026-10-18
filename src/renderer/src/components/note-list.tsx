@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { TrashIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
@@ -105,7 +106,13 @@ export function NoteList(): ReactNode {
 
   const handleRestore = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.restore(note.id)
+      const res = await notvex.notes
+        .restore(note.id)
+        .catch(() => ({ success: false as const, error: 'Failed to restore note' }))
+      if (!res.success) {
+        toast.error(res.error)
+        return
+      }
       void loadNotes({ trashed: true })
     },
     [loadNotes]
@@ -113,7 +120,13 @@ export function NoteList(): ReactNode {
 
   const handleDelete = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.delete(note.id)
+      const res = await notvex.notes
+        .delete(note.id)
+        .catch(() => ({ success: false as const, error: 'Failed to delete note' }))
+      if (!res.success) {
+        toast.error(res.error)
+        return
+      }
       if (activeNoteId === note.id) setActiveNoteId(null)
       void loadNotes({ trashed: true })
     },
@@ -121,7 +134,13 @@ export function NoteList(): ReactNode {
   )
 
   const handleEmptyTrash = async (): Promise<void> => {
-    await notvex.notes.emptyTrash()
+    const res = await notvex.notes
+      .emptyTrash()
+      .catch(() => ({ success: false as const, error: 'Failed to empty trash' }))
+    if (!res.success) {
+      toast.error(res.error)
+      return
+    }
     setActiveNoteId(null)
     void loadNotes({ trashed: true })
   }

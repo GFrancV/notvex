@@ -257,6 +257,50 @@ describe('NoteEditor — trash', () => {
   })
 })
 
+describe('NoteList — trash view actions', () => {
+  beforeEach(() => {
+    const trashed = listItem('a', { isTrashed: true })
+    ipc.list.mockResolvedValue({ success: true, data: [trashed] })
+    useVaultStore.setState({ notes: [trashed] })
+    useUiStore.setState({ showTrash: true })
+  })
+
+  it('shows the error when restore fails', async () => {
+    ipc.restore.mockResolvedValue({ success: false, error: 'DB locked' })
+    render(createElement(NoteList))
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Restore/ }))
+    })
+
+    expect(toastError).toHaveBeenCalledWith('DB locked')
+  })
+
+  it('keeps the open note when delete fails', async () => {
+    ipc.delete.mockResolvedValue({ success: false, error: 'DB locked' })
+    render(createElement(NoteList))
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
+    })
+
+    expect(toastError).toHaveBeenCalledWith('DB locked')
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+
+  it('keeps the open note when empty trash fails', async () => {
+    ipc.emptyTrash.mockRejectedValue(new Error('channel closed'))
+    render(createElement(NoteList))
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
+    })
+
+    expect(toastError).toHaveBeenCalledWith('Failed to empty trash')
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+})
+
 describe('NoteList — trash', () => {
   it('keeps the open note when the trash fails', async () => {
     ipc.list.mockResolvedValue({ success: true, data: [listItem('a')] })
