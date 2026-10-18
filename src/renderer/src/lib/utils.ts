@@ -1,11 +1,7 @@
-import { clsx, type ClassValue } from 'clsx'
 import { format, formatDistanceToNow } from 'date-fns'
 import millify from 'millify'
-import { twMerge } from 'tailwind-merge'
 
-export function cn(...inputs: ClassValue[]): string {
-  return twMerge(clsx(inputs))
-}
+export { cn } from 'cn'
 
 export function formatTimeAgo(timestamp: number): string {
   return formatDistanceToNow(new Date(timestamp), { addSuffix: true })
