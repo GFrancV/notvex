@@ -5,6 +5,7 @@ import { TrashIcon } from 'lucide-react'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
+import { useTrashNote } from '@/hooks/use-trash-note'
 import { notvex } from '@/lib/ipc'
 import { sortNotes } from '@/lib/sort-notes'
 import { usePrefsStore } from '@/store/prefs.store'
@@ -20,8 +21,7 @@ import { ScrollArea } from './ui/scroll-area'
 const SEARCH_DEBOUNCE = 300
 
 export function NoteList(): ReactNode {
-  const { notes, activeNoteId, setActiveNoteId, loadNotes, loadTagCounts, noteTagsMap } =
-    useVaultStore()
+  const { notes, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } = useVaultStore()
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
@@ -95,14 +95,12 @@ export function NoteList(): ReactNode {
     [togglePin]
   )
 
+  const trashNote = useTrashNote()
   const handleTrash = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.trash(note.id)
-      if (activeNoteId === note.id) setActiveNoteId(null)
-      void loadNotes({ trashed: showTrash })
-      void loadTagCounts()
+      await trashNote(note.id)
     },
-    [showTrash, activeNoteId, loadNotes, loadTagCounts, setActiveNoteId]
+    [trashNote]
   )
 
   const handleRestore = useCallback(

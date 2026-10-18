@@ -74,6 +74,7 @@ vi.mock('@/lib/ipc', () => ({
 }))
 
 const { useTogglePin } = await import('@/hooks/use-toggle-pin')
+const { useTrashNote } = await import('@/hooks/use-trash-note')
 const { NoteEditor } = await import('@/components/note-editor')
 const { NoteList } = await import('@/components/note-list')
 const { useVaultStore } = await import('@/store/vault.store')
@@ -182,5 +183,91 @@ describe('NoteList — pin', () => {
     })
 
     expect(toastError).toHaveBeenCalledWith('DB locked')
+  })
+})
+
+describe('useTrashNote', () => {
+  it('trashes, closes the open note and reloads the current view', async () => {
+    ipc.trash.mockResolvedValue({ success: true, data: null })
+    const { result } = renderHook(() => useTrashNote())
+
+    let ok = false
+    await act(async () => {
+      ok = await result.current('a')
+    })
+
+    expect(ok).toBe(true)
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
+    expect(ipc.list).toHaveBeenCalledWith({ trashed: false })
+    expect(ipc.counts).toHaveBeenCalled()
+  })
+
+  it('leaves another open note alone', async () => {
+    ipc.trash.mockResolvedValue({ success: true, data: null })
+    const { result } = renderHook(() => useTrashNote())
+
+    await act(async () => {
+      await result.current('b')
+    })
+
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+
+  it('shows the error and keeps the note open when main refuses', async () => {
+    ipc.trash.mockResolvedValue({ success: false, error: 'DB locked' })
+    const { result } = renderHook(() => useTrashNote())
+
+    let ok = true
+    await act(async () => {
+      ok = await result.current('a')
+    })
+
+    expect(ok).toBe(false)
+    expect(toastError).toHaveBeenCalledWith('DB locked')
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+    expect(ipc.list).not.toHaveBeenCalled()
+  })
+
+  it('treats a rejected invoke as a failure', async () => {
+    ipc.trash.mockRejectedValue(new Error('channel closed'))
+    const { result } = renderHook(() => useTrashNote())
+
+    await act(async () => {
+      await result.current('a')
+    })
+
+    expect(toastError).toHaveBeenCalledWith('Failed to move note to trash')
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+})
+
+describe('NoteEditor — trash', () => {
+  it('keeps the note open when the trash fails', async () => {
+    ipc.get.mockResolvedValue({ success: true, data: note('a') })
+    ipc.trash.mockResolvedValue({ success: false, error: 'DB locked' })
+    render(createElement(NoteEditor))
+    await screen.findByDisplayValue('A')
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete file' }))
+    })
+
+    expect(toastError).toHaveBeenCalledWith('DB locked')
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+})
+
+describe('NoteList — trash', () => {
+  it('keeps the open note when the trash fails', async () => {
+    ipc.list.mockResolvedValue({ success: true, data: [listItem('a')] })
+    ipc.trash.mockResolvedValue({ success: false, error: 'DB locked' })
+    render(createElement(NoteList))
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to trash' }))
+    })
+
+    expect(toastError).toHaveBeenCalledWith('DB locked')
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
   })
 })
