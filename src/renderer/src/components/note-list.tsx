@@ -4,6 +4,7 @@ import { TrashIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { notvex } from '@/lib/ipc'
 import { sortNotes } from '@/lib/sort-notes'
 import { usePrefsStore } from '@/store/prefs.store'
@@ -86,12 +87,12 @@ export function NoteList(): ReactNode {
     [showPinned, activeTags.length, filteredNotes, notes, noteSort]
   )
 
+  const togglePin = useTogglePin()
   const handlePin = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.update(note.id, { isPinned: !note.isPinned })
-      void loadNotes({ trashed: showTrash })
+      await togglePin(note)
     },
-    [showTrash, loadNotes]
+    [togglePin]
   )
 
   const handleTrash = useCallback(

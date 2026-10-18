@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner'
 
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { usePendingSave } from '@/hooks/use-pending-save'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
@@ -293,11 +294,10 @@ export function NoteEditor(): ReactNode {
     editorView.focus()
   }
 
+  const togglePin = useTogglePin()
   const handlePin = async (): Promise<void> => {
-    if (!activeNoteId || !note) return
-    await notvex.notes.update(activeNoteId, { isPinned: !note.isPinned })
-    setNote({ ...note, isPinned: !note.isPinned })
-    void loadNotes()
+    if (!note) return
+    if (await togglePin(note)) setNote({ ...note, isPinned: !note.isPinned })
   }
 
   const handleExport = async (): Promise<void> => {
