@@ -73,6 +73,10 @@ export default defineConfig(
               name: 'electron',
               importNames: ['clipboard', 'ClipboardItem'],
               message: 'Write the clipboard through writeClipboard in clipboard-guard.ts.'
+            },
+            {
+              name: 'cn',
+              message: "Import cn from '@/lib/utils'; the 'cn' npm package is not a dependency."
             }
           ]
         }
