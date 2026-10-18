@@ -280,8 +280,9 @@ describe('NoteList — trash view actions', () => {
     ipc.delete.mockResolvedValue({ success: false, error: 'DB locked' })
     render(createElement(NoteList))
 
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
     await act(async () => {
-      fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
     })
 
     expect(toastError).toHaveBeenCalledWith('DB locked')
@@ -292,12 +293,47 @@ describe('NoteList — trash view actions', () => {
     ipc.emptyTrash.mockRejectedValue(new Error('channel closed'))
     render(createElement(NoteList))
 
+    fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
     await act(async () => {
-      fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Empty trash' }))
     })
 
     expect(toastError).toHaveBeenCalledWith('Failed to empty trash')
     expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+
+  it('deletes nothing until the delete is confirmed', async () => {
+    ipc.delete.mockResolvedValue({ success: true, data: null })
+    render(createElement(NoteList))
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
+    expect(ipc.delete).not.toHaveBeenCalled()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
+    })
+
+    expect(ipc.delete).toHaveBeenCalledWith('a')
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
+  })
+
+  it('cancelling the delete keeps the note', async () => {
+    render(createElement(NoteList))
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(ipc.delete).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('cancelling empty trash keeps the notes', async () => {
+    render(createElement(NoteList))
+
+    fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+
+    expect(ipc.emptyTrash).not.toHaveBeenCalled()
   })
 })
 

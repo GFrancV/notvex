@@ -71,8 +71,7 @@ describe('NoteList row context menu', () => {
     { item: 'Pin', inTrash: false, isPinned: false, call: ['update', 'n1', { isPinned: true }] },
     { item: 'Unpin', inTrash: false, isPinned: true, call: ['update', 'n1', { isPinned: false }] },
     { item: 'Move to trash', inTrash: false, isPinned: false, call: ['trash', 'n1'] },
-    { item: 'Restore', inTrash: true, isPinned: false, call: ['restore', 'n1'] },
-    { item: 'Delete permanently', inTrash: true, isPinned: false, call: ['delete', 'n1'] }
+    { item: 'Restore', inTrash: true, isPinned: false, call: ['restore', 'n1'] }
   ] as const)(
     'right-click → $item calls the matching IPC',
     async ({ item, inTrash, isPinned, call }) => {
@@ -91,6 +90,20 @@ describe('NoteList row context menu', () => {
       }
     }
   )
+
+  it('right-click → Delete permanently calls delete once confirmed', async () => {
+    renderList(note({ isTrashed: true }), true)
+
+    fireEvent.contextMenu(row())
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete permanently' }))
+    expect(ipc.notes.delete).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
+    })
+
+    expect(ipc.notes.delete).toHaveBeenCalledExactlyOnceWith('n1')
+    expect(ipc.notes.trash).not.toHaveBeenCalled()
+  })
 
   it('opens the note on left click without opening the menu', () => {
     renderList(note(), false)
