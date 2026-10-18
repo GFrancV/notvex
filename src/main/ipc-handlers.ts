@@ -1272,8 +1272,11 @@ export function registerIpcHandlers(
   handle('tags:update', async (_e, id: string, patch: TagPatch) => {
     try {
       requireVault()
-      const checked =
-        patch?.name === undefined ? patch : { ...patch, name: validTagName(patch.name) }
+      const checked = {
+        ...patch,
+        ...(patch?.name !== undefined && { name: validTagName(patch.name) }),
+        ...(patch?.color !== undefined && { color: validTagColor(patch.color) })
+      }
       touchActivity()
       await withVaultLock(() => updateTag(getDb(), id, checked))
       return ok(null)

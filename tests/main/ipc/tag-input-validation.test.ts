@@ -192,3 +192,39 @@ describe('tags:update without a name', () => {
     expect(updateTag).toHaveBeenCalledWith(expect.anything(), 't1', patch)
   })
 })
+
+describe('tags:update tag color validation', () => {
+  // An undefined color on update means "leave it unchanged", so it is not an invalid value here.
+  const invalid = INVALID_COLORS.filter(([, color]) => color !== undefined)
+
+  it.each(invalid)('rejects %s before taking the vault lock', async (_label, color) => {
+    expect(await invoke('tags:update', 't1', { color })).toEqual(BAD_COLOR)
+    expect(withVaultLock).not.toHaveBeenCalled()
+    expect(updateTag).not.toHaveBeenCalled()
+  })
+
+  it('stores a custom hex lower-cased', async () => {
+    expect(await invoke('tags:update', 't1', { color: '#ABCdef' })).toMatchObject({
+      success: true
+    })
+    expect(vi.mocked(updateTag).mock.calls[0][2].color).toBe('#abcdef')
+  })
+
+  it('sends a name-only patch without a color key', async () => {
+    expect(await invoke('tags:update', 't1', { name: 'work' })).toMatchObject({ success: true })
+    expect(vi.mocked(updateTag).mock.calls[0][2]).not.toHaveProperty('color')
+  })
+
+  it('reports a locked vault before judging the color', async () => {
+    vi.mocked(isVaultOpen).mockReturnValueOnce(false)
+    expect(await invoke('tags:update', 't1', { color: 'red' })).toEqual({
+      success: false,
+      error: 'Vault is locked'
+    })
+    expect(updateTag).not.toHaveBeenCalled()
+  })
+
+  it('reports an invalid name before an invalid color', async () => {
+    expect(await invoke('tags:update', 't1', { name: '', color: 'red' })).toEqual(EMPTY)
+  })
+})
