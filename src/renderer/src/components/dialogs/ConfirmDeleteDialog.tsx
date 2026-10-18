@@ -32,9 +32,13 @@ export function ConfirmDeleteDialog({
 
   const confirm = async (): Promise<void> => {
     setDeleting(true)
-    await onConfirm()
-    setDeleting(false)
-    onOpenChange(false)
+    try {
+      await onConfirm()
+    } finally {
+      // Dismissing is blocked while deleting, so a throwing onConfirm must not leave it stuck.
+      setDeleting(false)
+      onOpenChange(false)
+    }
   }
 
   return (

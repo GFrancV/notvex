@@ -297,7 +297,11 @@ export function NoteEditor(): ReactNode {
   const togglePin = useTogglePin()
   const handlePin = async (): Promise<void> => {
     if (!note) return
-    if (await togglePin(note)) setNote({ ...note, isPinned: !note.isPinned })
+    if (!(await togglePin(note))) return
+    // The user may have switched notes while the pin was saving.
+    setNote((current) =>
+      current?.id === note.id ? { ...current, isPinned: !note.isPinned } : current
+    )
   }
 
   const handleExport = async (): Promise<void> => {

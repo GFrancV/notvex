@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Note, NoteListItem } from '@shared/types'
@@ -98,6 +106,12 @@ function note(id: string): Note {
   return { ...listItem(id), content: '' }
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => (resolve = r))
+  return { promise, resolve }
+}
+
 beforeEach(() => {
   ipc.list.mockResolvedValue({ success: true, data: [] })
   ipc.counts.mockResolvedValue({ success: true, data: {} })
@@ -170,6 +184,35 @@ describe('NoteEditor — pin', () => {
     expect(screen.queryByTitle('Unpin')).toBeNull()
     // The first full NoteEditor render in this file, slow on a cold worker.
   }, 20_000)
+
+  it('shows the note as pinned once the pin is saved', async () => {
+    ipc.get.mockResolvedValue({ success: true, data: note('a') })
+    render(createElement(NoteEditor))
+    await screen.findByDisplayValue('A')
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Pin'))
+    })
+
+    expect(screen.getByTitle('Unpin')).toBeTruthy()
+  })
+
+  it('a pin that resolves after switching notes leaves the new note alone', async () => {
+    ipc.get.mockResolvedValue({ success: true, data: note('a') })
+    render(createElement(NoteEditor))
+    await screen.findByDisplayValue('A')
+    const pin = deferred<{ success: true; data: null }>()
+    ipc.update.mockReturnValue(pin.promise)
+
+    fireEvent.click(screen.getByTitle('Pin'))
+    ipc.get.mockResolvedValue({ success: true, data: note('b') })
+    act(() => useVaultStore.setState({ activeNoteId: 'b' }))
+    await screen.findByDisplayValue('B')
+    await act(async () => pin.resolve({ success: true, data: null }))
+
+    expect(screen.getByTitle('Pin')).toBeTruthy()
+    expect(screen.queryByTitle('Unpin')).toBeNull()
+  })
 })
 
 describe('NoteList — pin', () => {
@@ -334,6 +377,49 @@ describe('NoteList — trash view actions', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
 
     expect(ipc.emptyTrash).not.toHaveBeenCalled()
+  })
+
+  it('empty trash closes the open note and reloads the trash once confirmed', async () => {
+    ipc.emptyTrash.mockResolvedValue({ success: true, data: null })
+    render(createElement(NoteList))
+
+    fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
+    ipc.list.mockClear()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Empty trash' }))
+    })
+
+    expect(ipc.emptyTrash).toHaveBeenCalledTimes(1)
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
+    expect(ipc.list).toHaveBeenCalledWith({ trashed: true })
+  })
+
+  it('the dialog cannot be dismissed while the delete runs', async () => {
+    const del = deferred<{ success: true; data: null }>()
+    ipc.delete.mockReturnValue(del.promise)
+    render(createElement(NoteList))
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    await act(async () => del.resolve({ success: true, data: null }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('a double click on confirm deletes once', async () => {
+    const del = deferred<{ success: true; data: null }>()
+    ipc.delete.mockReturnValue(del.promise)
+    render(createElement(NoteList))
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
+    const confirm = screen.getByRole('button', { name: 'Delete permanently' })
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
+    await act(async () => del.resolve({ success: true, data: null }))
+
+    expect(ipc.delete).toHaveBeenCalledTimes(1)
   })
 })
 
