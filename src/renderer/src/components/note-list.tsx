@@ -1,13 +1,13 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { TrashIcon } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
 import { notvex } from '@/lib/ipc'
+import { ipcSucceeded } from '@/lib/ipc-succeeded'
 import { sortNotes } from '@/lib/sort-notes'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
@@ -107,13 +107,7 @@ export function NoteList(): ReactNode {
 
   const handleRestore = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      const res = await notvex.notes
-        .restore(note.id)
-        .catch(() => ({ success: false as const, error: 'Failed to restore note' }))
-      if (!res.success) {
-        toast.error(res.error)
-        return
-      }
+      if (!(await ipcSucceeded(notvex.notes.restore(note.id), 'Failed to restore note'))) return
       void loadNotes({ trashed: true })
     },
     [loadNotes]
@@ -121,13 +115,7 @@ export function NoteList(): ReactNode {
 
   const handleDelete = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      const res = await notvex.notes
-        .delete(note.id)
-        .catch(() => ({ success: false as const, error: 'Failed to delete note' }))
-      if (!res.success) {
-        toast.error(res.error)
-        return
-      }
+      if (!(await ipcSucceeded(notvex.notes.delete(note.id), 'Failed to delete note'))) return
       if (activeNoteId === note.id) setActiveNoteId(null)
       void loadNotes({ trashed: true })
     },
@@ -141,13 +129,7 @@ export function NoteList(): ReactNode {
   }, [])
 
   const handleEmptyTrash = async (): Promise<void> => {
-    const res = await notvex.notes
-      .emptyTrash()
-      .catch(() => ({ success: false as const, error: 'Failed to empty trash' }))
-    if (!res.success) {
-      toast.error(res.error)
-      return
-    }
+    if (!(await ipcSucceeded(notvex.notes.emptyTrash(), 'Failed to empty trash'))) return
     setActiveNoteId(null)
     void loadNotes({ trashed: true })
   }

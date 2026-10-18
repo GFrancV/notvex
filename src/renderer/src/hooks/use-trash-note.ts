@@ -1,8 +1,7 @@
 import { useCallback } from 'react'
 
-import { toast } from 'sonner'
-
 import { notvex } from '@/lib/ipc'
+import { ipcSucceeded } from '@/lib/ipc-succeeded'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 
@@ -12,11 +11,7 @@ export function useTrashNote(): (id: string) => Promise<boolean> {
 
   return useCallback(
     async (id) => {
-      const res = await notvex.notes
-        .trash(id)
-        .catch(() => ({ success: false as const, error: 'Failed to move note to trash' }))
-      if (!res.success) {
-        toast.error(res.error)
+      if (!(await ipcSucceeded(notvex.notes.trash(id), 'Failed to move note to trash'))) {
         return false
       }
       if (useVaultStore.getState().activeNoteId === id) setActiveNoteId(null)
