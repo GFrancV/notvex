@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '@main/url-guard'
 
-// The main process is the trust boundary for tag names: the renderer's maxLength only limits
-// typing. Only what importing ipc-handlers.ts and the tag handlers touch is mocked.
+// The main process is the trust boundary for tag names and colors: the renderer's maxLength and
+// color picker only limit what the UI offers. Only what importing ipc-handlers.ts and the tag
+// handlers touch is mocked.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
