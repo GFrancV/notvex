@@ -1,7 +1,7 @@
 import { ShieldIcon } from 'lucide-react'
+import { cn } from 'cn'
 
 import { useIsDev } from '@/hooks/use-is-dev'
-import { cn } from 'cn'
 
 export function AppLogo({ className }: { className?: string }): React.JSX.Element {
   const isDev = useIsDev()

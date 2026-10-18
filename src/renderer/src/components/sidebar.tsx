@@ -12,11 +12,11 @@ import {
   XIcon
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
+import { cn } from 'cn'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
-import { cn } from 'cn'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'

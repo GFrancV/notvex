@@ -1,6 +1,5 @@
 import { CheckIcon } from 'lucide-react'
 import { Checkbox as CheckboxPrimitive } from 'radix-ui'
-
 import { cn } from 'cn'
 
 function Checkbox({
