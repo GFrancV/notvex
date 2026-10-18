@@ -1,6 +1,6 @@
 import { Progress as ProgressPrimitive } from 'radix-ui'
 
-import { cn } from '@/lib/utils'
+import { cn } from 'cn'
 
 function Progress({
   className,

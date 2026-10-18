@@ -1,8 +1,6 @@
 import { format, formatDistanceToNow } from 'date-fns'
 import millify from 'millify'
 
-export { cn } from 'cn'
-
 export function formatTimeAgo(timestamp: number): string {
   return formatDistanceToNow(new Date(timestamp), { addSuffix: true })
 }
