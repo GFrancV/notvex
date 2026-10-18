@@ -38,13 +38,14 @@ vi.mock('@main/vault/vault', () => ({
 vi.mock('@main/db/queries', () => ({
   createTag: vi.fn(async () => ({ id: 't1' })),
   createTagAndAssign: vi.fn(async () => ({ id: 't1' })),
+  listTags: vi.fn(async () => []),
   updateTag: vi.fn(async () => undefined)
 }))
 vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { createTag, createTagAndAssign, updateTag } = await import('@main/db/queries')
+const { createTag, createTagAndAssign, listTags, updateTag } = await import('@main/db/queries')
 const { isVaultOpen, withVaultLock } = await import('@main/vault/vault')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
@@ -226,5 +227,30 @@ describe('tags:update tag color validation', () => {
 
   it('reports an invalid name before an invalid color', async () => {
     expect(await invoke('tags:update', 't1', { name: '', color: 'red' })).toEqual(EMPTY)
+  })
+
+  it('rejects a valid name paired with an invalid color', async () => {
+    expect(await invoke('tags:update', 't1', { name: 'work', color: '#fff' })).toEqual(BAD_COLOR)
+    expect(updateTag).not.toHaveBeenCalled()
+  })
+
+  it('normalizes the name and the color of one patch together', async () => {
+    const patch = { name: '  work ', color: '#ABCDEF' }
+    expect(await invoke('tags:update', 't1', patch)).toEqual({ success: true, data: null })
+    expect(updateTag).toHaveBeenCalledWith(expect.anything(), 't1', {
+      name: 'work',
+      color: '#abcdef'
+    })
+  })
+})
+
+describe('tags:list', () => {
+  it('returns stored tags whose colors predate validation unchanged', async () => {
+    const stored = [
+      { id: 't1', name: 'old', color: 'red', createdAt: 0 },
+      { id: 't2', name: 'upper', color: '#FFF', createdAt: 0 }
+    ]
+    vi.mocked(listTags).mockResolvedValueOnce(stored)
+    expect(await invoke('tags:list')).toEqual({ success: true, data: stored })
   })
 })
