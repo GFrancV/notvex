@@ -123,8 +123,9 @@ function requireVault(): void {
   if (!isVaultOpen()) throw new Error('Vault is locked')
 }
 
-// The renderer's maxLength only limits typing, so any caller of window.notvex.tags.* reaches
-// here unchecked. Validated on write only: tags stored before the cap stay readable.
+// The renderer's maxLength and color picker only limit what the UI offers, so any caller of
+// window.notvex.tags.* reaches here unchecked. Validated on write only: tags stored before these
+// checks stay readable.
 function validTagName(name: unknown): string {
   const trimmed = typeof name === 'string' ? name.trim() : ''
   if (trimmed.length === 0) throw new Error('Tag name cannot be empty')
@@ -132,6 +133,14 @@ function validTagName(name: unknown): string {
     throw new Error(`Tag name must be at most ${TAG_NAME_MAX} characters`)
   }
   return trimmed
+}
+
+// The renderer builds a translucent background by appending a hex alpha, so only #rrggbb works.
+function validTagColor(color: unknown): string {
+  if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) {
+    throw new Error('Tag color must be a #rrggbb hex value')
+  }
+  return color.toLowerCase()
 }
 
 // The caller must memzero the result once written.
@@ -1227,8 +1236,9 @@ export function registerIpcHandlers(
     try {
       requireVault()
       const name = validTagName(input?.name)
+      const color = validTagColor(input?.color)
       touchActivity()
-      return ok(await withVaultLock(() => createTag(getDb(), { ...input, name })))
+      return ok(await withVaultLock(() => createTag(getDb(), { ...input, name, color })))
     } catch (e) {
       return fail(e)
     }
@@ -1240,8 +1250,9 @@ export function registerIpcHandlers(
       try {
         requireVault()
         const name = validTagName(input?.name)
+        const color = validTagColor(input?.color)
         touchActivity()
-        return ok(await withVaultLock(() => createTagAndAssign(getDb(), { ...input, name })))
+        return ok(await withVaultLock(() => createTagAndAssign(getDb(), { ...input, name, color })))
       } catch (e) {
         return fail(e)
       }

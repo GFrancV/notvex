@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '@main/url-guard'
+import { PRESET_COLORS } from '@shared/types'
 
 // The main process is the trust boundary for tag names and colors: the renderer's maxLength and
 // color picker only limit what the UI offers. Only what importing ipc-handlers.ts and the tag
@@ -121,6 +122,66 @@ describe.each(channels)('$channel tag name validation', ({ call, query, nameSent
   it('stores the trimmed name, so surrounding spaces do not count toward the limit', async () => {
     expect(await call(`  ${'a'.repeat(24)}  `)).toMatchObject({ success: true })
     expect(nameSent()).toBe('a'.repeat(24))
+  })
+})
+
+const createChannels = [
+  {
+    channel: 'tags:create',
+    call: (name: unknown, color: unknown) => invoke('tags:create', { name, color }),
+    query: createTag,
+    colorSent: () => vi.mocked(createTag).mock.calls[0][1].color
+  },
+  {
+    channel: 'tags:create-and-assign',
+    call: (name: unknown, color: unknown) =>
+      invoke('tags:create-and-assign', { noteId: 'n1', name, color }),
+    query: createTagAndAssign,
+    colorSent: () => vi.mocked(createTagAndAssign).mock.calls[0][1].color
+  }
+]
+
+const BAD_COLOR = { success: false, error: 'Tag color must be a #rrggbb hex value' }
+
+const INVALID_COLORS: [string, unknown][] = [
+  ['a color name', 'red'],
+  ['a 3-digit hex', '#fff'],
+  ['a 5-digit hex', '#10b98'],
+  ['a 7-digit hex', '#10b9811'],
+  ['an 8-digit hex with alpha', '#10b98126'],
+  ['non-hex digits', '#gggggg'],
+  ['a padded hex', ' #10b981'],
+  ['a CSS function', 'url(x)'],
+  ['a number', 42],
+  ['null', null],
+  ['a missing color', undefined]
+]
+
+describe.each(createChannels)('$channel tag color validation', ({ call, query, colorSent }) => {
+  it.each(INVALID_COLORS)('rejects %s before taking the vault lock', async (_label, color) => {
+    expect(await call('work', color)).toEqual(BAD_COLOR)
+    expect(withVaultLock).not.toHaveBeenCalled()
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it.each(PRESET_COLORS)('stores the preset %s unchanged', async (color) => {
+    expect(await call('work', color)).toMatchObject({ success: true })
+    expect(colorSent()).toBe(color)
+  })
+
+  it('stores a custom hex lower-cased', async () => {
+    expect(await call('work', '#ABCdef')).toMatchObject({ success: true })
+    expect(colorSent()).toBe('#abcdef')
+  })
+
+  it('reports a locked vault before judging the color', async () => {
+    vi.mocked(isVaultOpen).mockReturnValueOnce(false)
+    expect(await call('work', 'red')).toEqual({ success: false, error: 'Vault is locked' })
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('reports an invalid name before an invalid color', async () => {
+    expect(await call('', 'red')).toEqual(EMPTY)
   })
 })
 
