@@ -11,7 +11,9 @@ const rawFormat = (name: string): string => `electron application/osclipboard;fo
 const dwordZero = (): Blob => new Blob([new Uint32Array([0])])
 
 let timer: ReturnType<typeof setTimeout> | undefined
-// The secret the armed timer still has to clear; quitting kills the timer, see clearPendingSecret.
+// What locking may still have to clear, see clearClipboardIfOurs.
+let lastWritten: string | undefined
+// The secret the armed timer still has to clear.
 let pendingSecret: string | undefined
 
 export function scheduleClipboardClear(copiedValue: string, seconds?: number): void {
@@ -21,7 +23,7 @@ export function scheduleClipboardClear(copiedValue: string, seconds?: number): v
   if (delay <= 0) return
 
   timer = setTimeout(() => {
-    pendingSecret = undefined
+    lastWritten = pendingSecret = undefined
     // readText() is async since Electron 44
     clipboard
       .readText()
@@ -49,19 +51,25 @@ export async function writeClipboard(text: string, { secret = false } = {}): Pro
   // Copying the same secret again (e.g. selecting the words) must not relax its clear.
   const isSecret = secret || text === pendingSecret
   pendingSecret = isSecret ? text : undefined
+  lastWritten = text
   scheduleClipboardClear(text, isSecret ? SECRET_CLEAR_SECONDS : undefined)
 }
 
-// The clear timer lives in this process, so a secret copied just before quitting would otherwise
-// outlive the app. Never throws: it runs on the quit path.
-export async function clearPendingSecret(): Promise<void> {
-  const secret = pendingSecret
-  if (secret === undefined) return
-  pendingSecret = undefined
+// A locked vault must not leave its content on the clipboard, and the clear timer dies with the
+// process, so every lock, quit and crash calls this. Never throws: it runs on those paths.
+// The recovery key is shown only once, so a lock leaves it to its 30 s clear: clearing it there
+// could wipe it before the user pastes it, with no way to see it again. Quitting kills that
+// timer, so quit clears it, regardless of the prefs.
+export async function clearClipboardIfOurs(reason: 'lock' | 'quit'): Promise<void> {
+  const ours = lastWritten
+  if (ours === undefined) return
+  const keep = ours === pendingSecret ? reason === 'lock' : !getPrefs().clearClipboardOnLock
+  if (keep) return
+  lastWritten = pendingSecret = undefined
   if (timer) clearTimeout(timer)
   try {
-    if ((await clipboard.readText()) === secret) clipboard.clear()
+    if ((await clipboard.readText()) === ours) clipboard.clear()
   } catch (e) {
-    logError('[clipboard] clearing the pending secret failed:', e)
+    logError('[clipboard] clearing on lock failed:', e)
   }
 }

@@ -67,7 +67,7 @@ vi.mock('@main/crash-handlers', () => ({
 }))
 
 vi.mock('@main/clipboard-guard', () => ({
-  clearPendingSecret: vi.fn().mockResolvedValue(undefined)
+  clearClipboardIfOurs: vi.fn().mockResolvedValue(undefined)
 }))
 
 vi.mock('@main/navigation-guard', () => ({
@@ -147,13 +147,16 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
     expect(event.preventDefault).toHaveBeenCalledTimes(1)
   })
 
-  // The clear timer dies with the process, so a recovery key copied just before quitting
+  // The clear timer dies with the process, so what Notvex copied just before quitting
   // must be cleared on the way out.
-  it('before-quit clears a pending secret before the app quits', async () => {
-    const { clearPendingSecret } = await import('@main/clipboard-guard')
+  it('before-quit clears the clipboard before the app quits', async () => {
+    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
     app.emit('before-quit', { preventDefault: vi.fn() })
     await vi.waitFor(() => expect(quit).toHaveBeenCalled())
-    expect(clearPendingSecret).toHaveBeenCalledTimes(1)
+    expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('quit')
+    expect(vi.mocked(clearClipboardIfOurs).mock.invocationCallOrder[0]).toBeLessThan(
+      quit.mock.invocationCallOrder[0]
+    )
   })
 
   it('firing before-quit twice invokes closeVault() only once', async () => {
