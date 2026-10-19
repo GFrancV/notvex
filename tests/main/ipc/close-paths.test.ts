@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'node:url'
@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { Note } from '@shared/types'
 import { rendererIndexPath } from '@main/url-guard'
 import { clearClipboardIfOurs } from '@main/clipboard-guard'
+import { promoteVaultToTop } from '@main/prefs'
 import { closeVault, createVault, isVaultOpen, openVault } from '@main/vault/vault'
 
 // Drives each close path through the real IPC handlers and vault module: an edit followed by
@@ -115,6 +116,51 @@ describe('every close path packs the latest edit (issue #61)', () => {
 
       await openVault(vaultPath, PASSWORD)
       expect((await invoke<Note | null>('notes:get', note.id))?.content).toBe('after')
+    },
+    60_000
+  )
+
+  // The close already ran, so a failed prefs write must not tell the renderer the switch failed
+  it('vault:switch succeeds when the prefs write after the close fails', async () => {
+    await openVault(vaultPath, PASSWORD)
+    const err = Object.assign(new Error(`EACCES: permission denied, open '${vaultDir}'`), {
+      code: 'EACCES'
+    })
+    vi.mocked(promoteVaultToTop).mockImplementationOnce(() => {
+      throw err
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(invoke('vault:switch', otherVaultPath)).resolves.toBeNull()
+
+      expect(isVaultOpen()).toBe(false)
+      expect(console.error).toHaveBeenCalledExactlyOnceWith('[switch] promote failed:', 'EACCES')
+    } finally {
+      vi.mocked(console.error).mockRestore()
+      // An unconsumed throw would otherwise fire in the next test that reaches the promote
+      vi.mocked(promoteVaultToTop).mockReset()
+    }
+  }, 60_000)
+
+  it.each<[string, () => string, string]>([
+    ['a missing vault', () => join(vaultDir, 'missing.nvx'), 'Vault not found'],
+    [
+      'a file that is not a vault',
+      () => {
+        const junk = join(vaultDir, 'junk.nvx')
+        writeFileSync(junk, 'not a vault')
+        return junk
+      },
+      'not a valid Notvex vault'
+    ]
+  ])(
+    'vault:switch to %s fails and keeps the current one open',
+    async (_target, target, error) => {
+      await openVault(vaultPath, PASSWORD)
+
+      await expect(invoke('vault:switch', target())).rejects.toThrow(error)
+      expect(isVaultOpen()).toBe(true)
     },
     60_000
   )
