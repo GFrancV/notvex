@@ -33,7 +33,7 @@ const back = (): HTMLElement => screen.getByRole('button', { name: 'Security' })
 function renderAdd(): void {
   render(
     createElement(KeyFilePanel, {
-      mode: { kind: 'add', contents: KEY, filename: 'vault.nvxkey' },
+      mode: { kind: 'add', contents: KEY, filename: 'vault.nvxkey', sizeBytes: KEY.byteLength },
       onBack,
       onLockChange,
       onHasKeyFileChange

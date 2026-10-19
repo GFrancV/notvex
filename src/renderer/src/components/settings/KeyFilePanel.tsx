@@ -13,7 +13,7 @@ import { notvex } from '@/lib/ipc'
 import { SubpageHeader } from './SettingRow'
 
 export type KeyFileMode =
-  { kind: 'add'; contents: Uint8Array; filename: string } | { kind: 'remove' }
+  { kind: 'add'; contents: Uint8Array; filename: string; sizeBytes: number } | { kind: 'remove' }
 
 interface KeyFilePanelProps {
   mode: KeyFileMode
@@ -117,7 +117,7 @@ export function KeyFilePanel({
             <KeyFileInput
               initialFile={
                 mode.kind === 'add'
-                  ? { filename: mode.filename, sizeBytes: mode.contents.byteLength }
+                  ? { filename: mode.filename, sizeBytes: mode.sizeBytes }
                   : undefined
               }
               onChange={(contents) => setKeyFile(contents)}

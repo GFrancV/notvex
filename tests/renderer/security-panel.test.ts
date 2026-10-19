@@ -121,6 +121,22 @@ describe('SecurityPanel: the key file row', () => {
     expect(screen.queryByText('Add key file')).toBeNull()
   })
 
+  // Main caps the contents at 1MB, so only sizeBytes tells a larger file apart.
+  it.each([
+    [2_000_000, true],
+    [3, false]
+  ])('warns about the 1MB cap for an existing file of %i bytes: %s', async (sizeBytes, warns) => {
+    ipc.selectKeyFile.mockResolvedValue({
+      success: true,
+      data: { contents: KEY, filename: 'k.bin', sizeBytes }
+    })
+    await renderPanel()
+
+    await click('Use existing…')
+
+    expect(screen.queryByText(/only the first 1MB will be used/i) !== null).toBe(warns)
+  })
+
   it('stays silent when the file dialog is cancelled', async () => {
     ipc.selectKeyFile.mockResolvedValue({ success: true, data: null })
     await renderPanel()

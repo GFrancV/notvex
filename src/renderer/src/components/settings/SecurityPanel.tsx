@@ -79,13 +79,10 @@ export function SecurityPanel({
       return
     }
     if (!res.data) return
-    openSubpage(
-      {
-        kind: 'key-file',
-        mode: { kind: 'add', contents: res.data.contents, filename: res.data.filename }
-      },
-      source
-    )
+    const { contents, filename } = res.data
+    // A selected file's contents are capped at 1MB; its real size is what the warning needs.
+    const sizeBytes = 'sizeBytes' in res.data ? res.data.sizeBytes : contents.byteLength
+    openSubpage({ kind: 'key-file', mode: { kind: 'add', contents, filename, sizeBytes } }, source)
   }
 
   useEffect(() => {
