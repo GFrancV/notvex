@@ -36,7 +36,7 @@ function isSamePath(a: string | null, b: string): boolean {
 }
 
 export function VaultSwitcher(): ReactNode {
-  const { clearSession, setPendingNewVaultPath, lock } = useVaultStore()
+  const { clearSession, setPendingNewVaultPath, setPendingOpenVaultPath, lock } = useVaultStore()
   const currentVaultPath = useVaultStore((s) => s.currentVaultPath)
 
   const { load: loadPrefs } = usePrefsStore()
@@ -57,14 +57,12 @@ export function VaultSwitcher(): ReactNode {
       return
     }
 
-    // Main process already closed the vault and zeroed the master key.
-    // Reload prefs first so Unlock mounts with the switched-to vault at the top of recentVaults,
-    // but clear even if that reload fails.
-    try {
-      await loadPrefs()
-    } finally {
-      clearSession()
-    }
+    // Main already closed the vault and zeroed the master key, so the decrypted state goes first.
+    // The pending path picks Unlock's target: recentVaults[0] can still be the old vault when main
+    // couldn't promote this one in prefs.
+    clearSession()
+    setPendingOpenVaultPath(path)
+    await loadPrefs()
   }
 
   const handleOpenOther = async (): Promise<void> => {
