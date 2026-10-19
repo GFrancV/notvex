@@ -5,7 +5,23 @@ import type { NoteListItem, Tag } from '@shared/types'
 
 const close = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/ipc', () => ({ notvex: { vault: { close } } }))
+// Every tag IPC call hangs until the test replies, so the test controls what lands first
+const ipc = vi.hoisted(() => {
+  let settle: (res: unknown) => void = () => {}
+  const pending = (): Promise<unknown> =>
+    new Promise((resolve) => {
+      settle = resolve
+    })
+  return { pending, reply: (res: unknown): void => settle(res) }
+})
+
+vi.mock('@/lib/ipc', () => ({
+  notvex: {
+    vault: { close },
+    tags: { createAndAssign: ipc.pending, update: ipc.pending, delete: ipc.pending },
+    noteTags: { add: ipc.pending, remove: ipc.pending }
+  }
+}))
 
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -104,6 +120,70 @@ describe('lock', () => {
   it('clears even when the close call throws', async () => {
     close.mockRejectedValue(new Error('ipc gone'))
     await expect(useVaultStore.getState().lock()).rejects.toThrow('ipc gone')
+    expectCleared()
+  })
+})
+
+const tagActions: [string, () => Promise<unknown>][] = [
+  [
+    'createTagAndAssign',
+    () => useVaultStore.getState().createTagAndAssign('n1', { name: 'new', color: '#888888' })
+  ],
+  ['updateTag', () => useVaultStore.getState().updateTag('t1', { name: 'renamed' })],
+  ['deleteTag', () => useVaultStore.getState().deleteTag('t1')],
+  ['addTagToNote', () => useVaultStore.getState().addTagToNote('n1', 't2')],
+  ['removeTagFromNote', () => useVaultStore.getState().removeTagFromNote('n1', 't1')]
+]
+
+const vaultData = (): object => {
+  const { notes, tags, tagCounts, noteTagsMap } = useVaultStore.getState()
+  return { notes, tags, tagCounts, noteTagsMap }
+}
+
+describe('optimistic tag actions', () => {
+  it.each(tagActions)('%s does not roll back into a session that has ended', async (_, run) => {
+    const action = run()
+    useVaultStore.getState().clearSession()
+    ipc.reply({ success: false, error: 'vault closed' })
+    await expect(action).rejects.toThrow('vault closed')
+    expectCleared()
+  })
+
+  it.each(tagActions)(
+    '%s does not roll back into a session reopened after the lock',
+    async (_, run) => {
+      const action = run()
+      useVaultStore.getState().clearSession()
+      const other: Tag = { id: 'o1', name: 'other-vault', color: '#888888', createdAt: 0 }
+      useVaultStore.setState({
+        status: 'unlocked',
+        notes: [],
+        tags: [other],
+        tagCounts: { o1: 0 },
+        noteTagsMap: {}
+      })
+      const reopened = vaultData()
+      ipc.reply({ success: false, error: 'vault closed' })
+      await expect(action).rejects.toThrow('vault closed')
+      expect(vaultData()).toEqual(reopened)
+    }
+  )
+
+  it.each(tagActions)('%s still rolls back while the session is live', async (_, run) => {
+    const before = vaultData()
+    const action = run()
+    ipc.reply({ success: false, error: 'boom' })
+    await expect(action).rejects.toThrow('boom')
+    expect(vaultData()).toEqual(before)
+  })
+
+  it('createTagAndAssign writes nothing when it succeeds after the session ended', async () => {
+    const action = useVaultStore
+      .getState()
+      .createTagAndAssign('n1', { name: 'new', color: '#888888' })
+    useVaultStore.getState().clearSession()
+    ipc.reply({ success: true, data: { ...tag, id: 't9', name: 'new' } })
+    await action
     expectCleared()
   })
 })
