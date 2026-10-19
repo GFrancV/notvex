@@ -1,5 +1,6 @@
 import { app } from 'electron'
 
+import { clearClipboardIfOurs } from './clipboard-guard'
 import { appendError, toErrorLike } from './error-log'
 import { closeVault } from './vault/vault'
 
@@ -20,11 +21,9 @@ async function lockAndExit(e: unknown): Promise<void> {
   appendError('main', toErrorLike(e))
   try {
     await Promise.race([
-      closeVault(),
+      Promise.allSettled([closeVault(), clearClipboardIfOurs('quit')]),
       new Promise((resolve) => setTimeout(resolve, CLOSE_TIMEOUT_MS))
     ])
-  } catch {
-    /* exiting regardless */
   } finally {
     app.exit(1)
   }

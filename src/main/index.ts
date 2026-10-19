@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 
 import { installAppMenu } from './app-menu'
-import { clearPendingSecret } from './clipboard-guard'
+import { clearClipboardIfOurs } from './clipboard-guard'
 import { installCrashHandlers } from './crash-handlers'
 import {
   extractNvxArgv,
@@ -113,7 +113,7 @@ app.on('before-quit', (event): void => {
     } catch (e) {
       logError('[quit] closeVault failed:', e)
     } finally {
-      await clearPendingSecret()
+      await clearClipboardIfOurs('quit')
       readyToQuit = true
       app.quit() // re-enters before-quit, which now lets it through
     }

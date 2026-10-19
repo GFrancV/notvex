@@ -179,6 +179,7 @@ describe('note list sort sources', () => {
       allowScreenCapture: false,
       lockOnMinimize: false,
       clipboardClearSeconds: 60,
+      clearClipboardOnLock: true,
       noteSort: { field: 'title', direction: 'desc' },
       checkUpdatesOnStartup: true
     }

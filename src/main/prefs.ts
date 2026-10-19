@@ -10,6 +10,7 @@ const DEFAULTS: Prefs = {
   allowScreenCapture: false,
   lockOnMinimize: false,
   clipboardClearSeconds: 60,
+  clearClipboardOnLock: true,
   noteSort: { field: 'updatedAt', direction: 'desc' },
   checkUpdatesOnStartup: true
 }
@@ -39,6 +40,9 @@ export function getPrefs(): Prefs {
     if (!isNoteSort(prefs.noteSort)) prefs.noteSort = DEFAULTS.noteSort
     if (typeof prefs.checkUpdatesOnStartup !== 'boolean') {
       prefs.checkUpdatesOnStartup = DEFAULTS.checkUpdatesOnStartup
+    }
+    if (typeof prefs.clearClipboardOnLock !== 'boolean') {
+      prefs.clearClipboardOnLock = DEFAULTS.clearClipboardOnLock
     }
     return prefs
   } catch {

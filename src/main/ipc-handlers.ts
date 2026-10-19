@@ -17,7 +17,7 @@ import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
-import { writeClipboard } from './clipboard-guard'
+import { clearClipboardIfOurs, writeClipboard } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { appendError, clearLog, ensureLogDir, readLogTail } from './error-log'
@@ -266,15 +266,27 @@ export async function closeVaultDrained(
 ): Promise<{ packFailed: boolean }> {
   if (!isVaultOpen()) return { packFailed: false }
   if (win) await drainRenderer(win, drainTimeoutMs)
-  const { packFailed } = await closeVault()
-  if (packFailed && win && !win.isDestroyed()) win.webContents.send('vault:pack-failed')
-  return { packFailed }
+  try {
+    const { packFailed } = await closeVault()
+    if (packFailed && win && !win.isDestroyed()) win.webContents.send('vault:pack-failed')
+    return { packFailed }
+  } finally {
+    await clearClipboardIfOurs('lock')
+  }
 }
 
 export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {
   if (!isVaultOpen()) return
   await closeVaultDrained(win)
   if (win && !win.isDestroyed()) win.webContents.send('vault:auto-locked')
+}
+
+// A failed credential rotation closes the vault itself, outside closeVaultDrained(), so the
+// clipboard clear every lock does happens here.
+async function notifyIfRotationLocked(): Promise<void> {
+  if (isVaultOpen()) return
+  await clearClipboardIfOurs('lock')
+  liveWin()?.webContents.send('vault:auto-locked')
 }
 
 // ─── Current window ──────────────────────────────────────────────────────────
@@ -381,6 +393,7 @@ const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = 
   allowScreenCapture: (v) => typeof v === 'boolean',
   lockOnMinimize: (v) => typeof v === 'boolean',
   checkUpdatesOnStartup: (v) => typeof v === 'boolean',
+  clearClipboardOnLock: (v) => typeof v === 'boolean',
   clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
   // Resolved per call, not at load: suites that mock @main/prefs without isNoteSort would
   // otherwise fail on import.
@@ -778,7 +791,7 @@ export function registerIpcHandlers(
         const result = await changePassword(currentPassword, newPassword, kfContents)
         return ok(result)
       } catch (e) {
-        if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
+        await notifyIfRotationLocked()
         return fail(e)
       }
     }
@@ -791,7 +804,7 @@ export function registerIpcHandlers(
       const result = await rotateVaultCredentials(newPassword)
       return ok(result)
     } catch (e) {
-      if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
+      await notifyIfRotationLocked()
       return fail(e)
     }
   })
@@ -947,7 +960,7 @@ export function registerIpcHandlers(
       recordVaultUsed(getVaultPath()!, true)
       return ok(result)
     } catch (e) {
-      if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
+      await notifyIfRotationLocked()
       return fail(e)
     }
   })
@@ -961,7 +974,7 @@ export function registerIpcHandlers(
       recordVaultUsed(getVaultPath()!, false)
       return ok(result)
     } catch (e) {
-      if (!isVaultOpen()) liveWin()?.webContents.send('vault:auto-locked')
+      await notifyIfRotationLocked()
       return fail(e)
     }
   })
