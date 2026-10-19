@@ -21,7 +21,7 @@ function prefsPath(): string {
   return join(app.getPath('userData'), 'prefs.json')
 }
 
-export function isNoteSort(v: unknown): v is NoteSort {
+function isNoteSort(v: unknown): v is NoteSort {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
   const { field, direction, ...rest } = v as Record<string, unknown>
   return (
@@ -29,6 +29,31 @@ export function isNoteSort(v: unknown): v is NoteSort {
     ['updatedAt', 'createdAt', 'title'].includes(field as string) &&
     (direction === 'asc' || direction === 'desc')
   )
+}
+
+const PREFS_VALIDATORS = {
+  autoLockMinutes: (v: unknown) =>
+    typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 480,
+  allowScreenCapture: (v: unknown) => typeof v === 'boolean',
+  lockOnMinimize: (v: unknown) => typeof v === 'boolean',
+  checkUpdatesOnStartup: (v: unknown) => typeof v === 'boolean',
+  clearClipboardOnLock: (v: unknown) => typeof v === 'boolean',
+  clipboardClearSeconds: (v: unknown) =>
+    typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
+  noteSort: isNoteSort
+} satisfies Record<Exclude<keyof Prefs, 'recentVaults'>, (v: unknown) => boolean>
+
+// Object.hasOwn, not `in` or a bare lookup: 'toString' or 'constructor' would resolve to
+// Object.prototype members and pass as validators.
+export function isPrefKey(key: unknown): key is keyof typeof PREFS_VALIDATORS {
+  return typeof key === 'string' && Object.hasOwn(PREFS_VALIDATORS, key)
+}
+
+export function isValidPref<K extends keyof typeof PREFS_VALIDATORS>(
+  key: K,
+  value: unknown
+): value is Prefs[K] {
+  return PREFS_VALIDATORS[key](value)
 }
 
 export function getPrefs(): Prefs {
