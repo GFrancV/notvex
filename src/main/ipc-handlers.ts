@@ -946,8 +946,9 @@ export function registerIpcHandlers(
       if (sizeBytes === 0) return fail('The selected key file is empty')
       const contents = new Uint8Array(raw.subarray(0, KEY_FILE_MAX_BYTES))
       return ok({ contents, filename, sizeBytes })
-    } catch (e) {
-      return fail(e)
+    } catch {
+      // fs errors quote the path, and the renderer shows this error as is.
+      return fail('Could not read the selected key file')
     }
   })
 
