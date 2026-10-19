@@ -214,6 +214,154 @@ describe('writeClipboard', () => {
       expect(clipboard.clear).not.toHaveBeenCalled()
     })
 
+    describe('with a write still in flight', () => {
+      let landWrite: () => void
+      const holdNextWrite = (): void => {
+        clipboard.write.mockImplementationOnce(
+          () => new Promise<void>((resolve) => (landWrite = resolve))
+        )
+      }
+
+      it('clears the first copy of a session once it lands', async () => {
+        clipboard.readText.mockResolvedValue('note text')
+        holdNextWrite()
+        const writing = writeClipboard('note text')
+        await clearClipboardIfOurs('lock')
+
+        landWrite()
+        await writing
+
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+        clipboard.readText.mockClear()
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(clipboard.readText).not.toHaveBeenCalled()
+      })
+
+      it('clears a copy that replaces an earlier note once it lands', async () => {
+        await writeClipboard('earlier note')
+        clipboard.readText.mockResolvedValue('note text')
+        holdNextWrite()
+        const writing = writeClipboard('note text')
+        await clearClipboardIfOurs('lock')
+        expect(clipboard.clear).not.toHaveBeenCalled()
+
+        landWrite()
+        await writing
+
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+      })
+
+      it('leaves what another app copied since the write landed', async () => {
+        clipboard.readText.mockResolvedValue('copied in another app')
+        holdNextWrite()
+        const writing = writeClipboard('note text')
+        await clearClipboardIfOurs('lock')
+
+        landWrite()
+        await writing
+        await vi.advanceTimersByTimeAsync(10_000)
+
+        expect(clipboard.clear).not.toHaveBeenCalled()
+        expect(clipboard.readText).toHaveBeenCalledOnce()
+      })
+
+      it('leaves the copy to its timed clear when reading the clipboard fails', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        clipboard.readText
+          .mockResolvedValue('note text')
+          .mockRejectedValueOnce(new Error('clipboard unavailable'))
+        holdNextWrite()
+        const writing = writeClipboard('note text')
+        await clearClipboardIfOurs('lock')
+
+        landWrite()
+        await expect(writing).resolves.toBeUndefined()
+        expect(error).toHaveBeenCalled()
+        expect(clipboard.clear).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+        error.mockRestore()
+      })
+
+      it('leaves the copy to the next quit when reading the clipboard fails', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        clipboard.readText
+          .mockResolvedValue('note text')
+          .mockRejectedValueOnce(new Error('clipboard unavailable'))
+        holdNextWrite()
+        const writing = writeClipboard('note text')
+        await clearClipboardIfOurs('lock')
+        landWrite()
+        await writing
+
+        await clearClipboardIfOurs('quit')
+
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+        error.mockRestore()
+      })
+
+      // Selecting the recovery words and pressing Ctrl+C copies them as plain text.
+      it('leaves the pending secret copied again as plain text to its 30 s clear', async () => {
+        clipboard.readText.mockResolvedValue('secret')
+        await writeClipboard('secret', { secret: true })
+        holdNextWrite()
+        const writing = writeClipboard('secret')
+        await clearClipboardIfOurs('lock')
+
+        landWrite()
+        await writing
+        expect(clipboard.clear).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+      })
+
+      it('clears a note that raced the lock without dropping the pending secret', async () => {
+        await writeClipboard('secret', { secret: true })
+        clipboard.readText.mockResolvedValue('note text')
+        holdNextWrite()
+        const writing = writeClipboard('note text')
+        await clearClipboardIfOurs('lock')
+
+        landWrite()
+        await writing
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+
+        clipboard.readText.mockResolvedValue('secret')
+        await clearClipboardIfOurs('quit')
+        expect(clipboard.clear).toHaveBeenCalledTimes(2)
+      })
+
+      it('leaves a secret to its 30 s clear', async () => {
+        holdNextWrite()
+        const writing = writeClipboard('secret', { secret: true })
+        await clearClipboardIfOurs('lock')
+
+        landWrite()
+        await writing
+        expect(clipboard.clear).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+      })
+
+      it('leaves a note to its timed clear when clearing on lock is off', async () => {
+        prefs.clearClipboardOnLock = false
+        clipboard.readText.mockResolvedValue('note text')
+        holdNextWrite()
+        const writing = writeClipboard('note text')
+        await clearClipboardIfOurs('lock')
+
+        landWrite()
+        await writing
+        expect(clipboard.clear).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(clipboard.clear).toHaveBeenCalledOnce()
+      })
+    })
+
     it('never throws, so it cannot block quitting', async () => {
       const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       await writeClipboard('secret', { secret: true })
