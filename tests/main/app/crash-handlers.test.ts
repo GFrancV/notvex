@@ -22,6 +22,13 @@ vi.mock('@main/vault/vault', () => ({
   })
 }))
 
+vi.mock('@main/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(() => {
+    calls.push('clearClipboardIfOurs')
+    return Promise.resolve()
+  })
+}))
+
 vi.mock('@main/error-log', async (importOriginal) => {
   const real = await importOriginal<typeof import('@main/error-log')>()
   return {
@@ -71,13 +78,16 @@ afterEach(() => {
 })
 
 describe.each(['uncaughtException', 'unhandledRejection'])('%s', (event) => {
-  it('logs, then closes the vault, then exits with code 1', async () => {
+  it('logs, then closes the vault and clears the clipboard, then exits with code 1', async () => {
     const { app, appendError } = await install()
 
     processListeners[event](new TypeError('secret'))
     await vi.runAllTimersAsync()
 
-    expect(calls).toEqual(['appendError', 'closeVault', 'exit'])
+    expect(calls).toEqual(['appendError', 'closeVault', 'clearClipboardIfOurs', 'exit'])
+    // The process is going away, so the recovery key's 30 s clear won't run.
+    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    expect(clearClipboardIfOurs).toHaveBeenCalledWith('quit')
     expect(appendError).toHaveBeenCalledWith('main', expect.objectContaining({ name: 'TypeError' }))
     expect(app.exit).toHaveBeenCalledWith(1)
   })
@@ -102,16 +112,21 @@ it('still exits after 3 s when closing the vault never settles', async () => {
 
   await vi.advanceTimersByTimeAsync(1)
   expect(app.exit).toHaveBeenCalledWith(1)
+  // A crash while the vault lock is held must not keep the clipboard from being cleared.
+  expect(calls).toContain('clearClipboardIfOurs')
 })
 
-it('still exits when closing the vault rejects', async () => {
-  const { app, closeVault } = await install()
+it('still clears the clipboard and exits when closing the vault rejects', async () => {
+  const { app, appendError, closeVault } = await install()
   closeVault.mockRejectedValueOnce(new Error('pack failed'))
 
   processListeners['uncaughtException'](new Error('x'))
   await vi.runAllTimersAsync()
 
+  expect(calls).toEqual(['appendError', 'clearClipboardIfOurs', 'exit'])
   expect(app.exit).toHaveBeenCalledWith(1)
+  // The rejection must not escape as a second crash.
+  expect(appendError).toHaveBeenCalledOnce()
 })
 
 it('exits immediately on an error raised while already handling one', async () => {

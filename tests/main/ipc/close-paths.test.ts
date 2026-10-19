@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import type { Note } from '@shared/types'
 import { rendererIndexPath } from '@main/url-guard'
+import { clearClipboardIfOurs } from '@main/clipboard-guard'
 import { closeVault, createVault, isVaultOpen, openVault } from '@main/vault/vault'
 
 // Drives each close path through the real IPC handlers and vault module: an edit followed by
@@ -40,7 +41,7 @@ vi.mock('@main/prefs', () => ({
   setPref: vi.fn()
 }))
 vi.mock('@main/vault/backups', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 // Real Argon2id, cheapest tier: calibration is not what's under test.
@@ -107,14 +108,24 @@ describe('every close path packs the latest edit (issue #61)', () => {
 
       // Mirrors the editor: autosave resolves, then `void loadNotes()` queues a notes:list
       void invoke('notes:list')
+      vi.mocked(clearClipboardIfOurs).mockClear()
       await close()
       expect(isVaultOpen()).toBe(false)
+      expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('lock')
 
       await openVault(vaultPath, PASSWORD)
       expect((await invoke<Note | null>('notes:get', note.id))?.content).toBe('after')
     },
     60_000
   )
+
+  it('leaves the clipboard alone when no vault is open', async () => {
+    vi.mocked(clearClipboardIfOurs).mockClear()
+
+    await ipc.closeVaultDrained(win as never)
+
+    expect(clearClipboardIfOurs).not.toHaveBeenCalled()
+  })
 
   it('tells the window when the pack on close fails', async () => {
     await openVault(vaultPath, PASSWORD)

@@ -161,7 +161,7 @@ describe('app:reload-window', () => {
     })
   })
 
-  it('reports a failed close and does not reload', async () => {
+  it('reports a failed close and does not reload, but still clears the clipboard', async () => {
     vi.mocked(vault.isVaultOpen).mockReturnValue(true)
     vi.mocked(vault.closeVault).mockRejectedValue(new Error('disk full'))
 
@@ -170,5 +170,7 @@ describe('app:reload-window', () => {
       error: 'disk full'
     })
     expect(fake.reload).not.toHaveBeenCalled()
+    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('lock')
   })
 })

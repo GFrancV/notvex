@@ -62,6 +62,7 @@ vi.mock('@main/vault/vault', () => ({
   createVault: vi.fn(),
   openVaultWithRecovery: vi.fn(async () => 1),
   rotateVaultCredentials: vi.fn(),
+  changePassword: vi.fn(),
   syncContainer: vi.fn(),
   openVault: vi.fn(
     async (
@@ -80,7 +81,7 @@ vi.mock('@main/vault/vault', () => ({
 }))
 
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
 vi.mock('@main/drain-renderer', () => ({
   FLUSH_ACK_TIMEOUT_MS: 200,
   drainRenderer: vi.fn(async () => undefined)
