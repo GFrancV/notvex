@@ -56,18 +56,23 @@ export function isValidPref<K extends keyof typeof PREFS_VALIDATORS>(
   return PREFS_VALIDATORS[key](value)
 }
 
+function resetToDefault<K extends keyof Prefs>(prefs: Prefs, key: K): void {
+  prefs[key] = DEFAULTS[key]
+}
+
 export function getPrefs(): Prefs {
   const path = prefsPath()
   if (!existsSync(path)) return { ...DEFAULTS }
   try {
-    const prefs = { ...DEFAULTS, ...(JSON.parse(readFileSync(path, 'utf8')) as Partial<Prefs>) }
-    // prefs.json can be hand-edited, so a stored value is as untrusted as one from the renderer.
-    if (!isNoteSort(prefs.noteSort)) prefs.noteSort = DEFAULTS.noteSort
-    if (typeof prefs.checkUpdatesOnStartup !== 'boolean') {
-      prefs.checkUpdatesOnStartup = DEFAULTS.checkUpdatesOnStartup
+    const stored: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    // a top-level string or array would spread its indices into prefs as keys
+    if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) {
+      return { ...DEFAULTS }
     }
-    if (typeof prefs.clearClipboardOnLock !== 'boolean') {
-      prefs.clearClipboardOnLock = DEFAULTS.clearClipboardOnLock
+    const prefs = { ...DEFAULTS, ...(stored as Partial<Prefs>) }
+    // prefs.json can be hand-edited, so a stored value is as untrusted as one from the renderer.
+    for (const key of Object.keys(PREFS_VALIDATORS) as (keyof typeof PREFS_VALIDATORS)[]) {
+      if (!isValidPref(key, prefs[key])) resetToDefault(prefs, key)
     }
     return prefs
   } catch {
