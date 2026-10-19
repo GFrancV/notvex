@@ -144,3 +144,69 @@ describe('setPrefs after an invalid read', () => {
     })
   })
 })
+
+describe('getPrefs recentVaults', () => {
+  const vault = { path: '/vaults/a.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+
+  it('keeps well-formed entries', () => {
+    fsState.contents = JSON.stringify({ recentVaults: [vault] })
+    expect(getPrefs().recentVaults).toEqual([vault])
+  })
+
+  it.each([
+    ['a string', 'x'],
+    ['an object', {}],
+    ['null', null]
+  ])('falls back to an empty list for %s', (_label, recentVaults) => {
+    fsState.contents = JSON.stringify({ recentVaults })
+    expect(getPrefs().recentVaults).toEqual([])
+  })
+
+  it('drops malformed entries and keeps the valid ones', () => {
+    fsState.contents = JSON.stringify({
+      recentVaults: [vault, { path: 1 }, null, 'x', { ...vault, hasKeyFile: 'no' }]
+    })
+    expect(getPrefs().recentVaults).toEqual([vault])
+  })
+
+  it('drops an entry with an empty path', () => {
+    fsState.contents = JSON.stringify({ recentVaults: [{ ...vault, path: '' }, vault] })
+    expect(getPrefs().recentVaults).toEqual([vault])
+  })
+
+  it('keeps only the three known fields of an entry', () => {
+    fsState.contents = JSON.stringify({ recentVaults: [{ ...vault, extra: 1 }] })
+    expect(getPrefs().recentVaults).toStrictEqual([vault])
+  })
+
+  it('keeps only the first 5 entries', () => {
+    const vaults = Array.from({ length: 7 }, (_, i) => ({ ...vault, path: `/vaults/${i}.nvx` }))
+    fsState.contents = JSON.stringify({ recentVaults: vaults })
+    expect(getPrefs().recentVaults).toEqual(vaults.slice(0, 5))
+  })
+})
+
+describe('getPrefs with every pref invalid', () => {
+  it('reads back exactly the defaults', () => {
+    fsState.contents = JSON.stringify({
+      recentVaults: 'x',
+      autoLockMinutes: -1,
+      allowScreenCapture: 'y',
+      lockOnMinimize: 1,
+      clipboardClearSeconds: 45,
+      clearClipboardOnLock: null,
+      noteSort: 'title',
+      checkUpdatesOnStartup: 0
+    })
+    expect(getPrefs()).toEqual({
+      recentVaults: [],
+      autoLockMinutes: 15,
+      allowScreenCapture: false,
+      lockOnMinimize: false,
+      clipboardClearSeconds: 60,
+      clearClipboardOnLock: true,
+      noteSort: { field: 'updatedAt', direction: 'desc' },
+      checkUpdatesOnStartup: true
+    })
+  })
+})

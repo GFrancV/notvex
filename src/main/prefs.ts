@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-import type { NoteSort, Prefs } from '@shared/types'
+import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
 const DEFAULTS: Prefs = {
   recentVaults: [],
@@ -28,6 +28,17 @@ function isNoteSort(v: unknown): v is NoteSort {
     Object.keys(rest).length === 0 &&
     ['updatedAt', 'createdAt', 'title'].includes(field as string) &&
     (direction === 'asc' || direction === 'desc')
+  )
+}
+
+function isRecentVault(v: unknown): v is RecentVault {
+  if (typeof v !== 'object' || v === null) return false
+  const { path, hasKeyFile, lastOpenedAt } = v as Record<string, unknown>
+  return (
+    typeof path === 'string' &&
+    path !== '' &&
+    typeof hasKeyFile === 'boolean' &&
+    typeof lastOpenedAt === 'number'
   )
 }
 
@@ -74,6 +85,12 @@ export function getPrefs(): Prefs {
     for (const key of Object.keys(PREFS_VALIDATORS) as (keyof typeof PREFS_VALIDATORS)[]) {
       if (!isValidPref(key, prefs[key])) resetToDefault(prefs, key)
     }
+    prefs.recentVaults = Array.isArray(prefs.recentVaults)
+      ? prefs.recentVaults
+          .filter(isRecentVault)
+          .slice(0, MAX_RECENT_VAULTS)
+          .map(({ path, hasKeyFile, lastOpenedAt }) => ({ path, hasKeyFile, lastOpenedAt }))
+      : []
     return prefs
   } catch {
     return { ...DEFAULTS }
