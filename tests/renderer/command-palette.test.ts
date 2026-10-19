@@ -280,7 +280,10 @@ describe('command palette help', () => {
   it('copies the debug info', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
     await pick(/^Copy Debug Info/)
-    expect(clipboardWrite).toHaveBeenCalledWith('REPORT BODY', { secret: false })
+    expect(clipboardWrite).toHaveBeenCalledWith('REPORT BODY', {
+      secret: false,
+      fromUnlockedView: false
+    })
   })
 
   it('opens the logs folder', async () => {

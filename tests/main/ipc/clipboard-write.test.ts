@@ -42,11 +42,14 @@ function write(...args: unknown[]): Promise<unknown> {
 
 let ipc: typeof import('@main/ipc-handlers')
 let writeClipboard: ReturnType<typeof vi.fn>
+let isVaultOpen: ReturnType<typeof vi.fn>
 
 beforeEach(async () => {
   handlers.clear()
   vi.resetModules()
   vi.clearAllMocks()
+  isVaultOpen = vi.mocked((await import('@main/vault/vault')).isVaultOpen)
+  isVaultOpen.mockReturnValue(true)
   writeClipboard = vi.mocked((await import('@main/clipboard-guard')).writeClipboard)
   ipc = await import('@main/ipc-handlers')
   ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
@@ -98,5 +101,46 @@ describe('clipboard:write', () => {
       error: 'Invalid clipboard value'
     })
     expect(writeClipboard).not.toHaveBeenCalled()
+  })
+
+  it('refuses a copy from the unlocked view once the vault is locked', async () => {
+    isVaultOpen.mockReturnValue(false)
+
+    await expect(write('note text', { fromUnlockedView: true })).resolves.toEqual({
+      success: false,
+      error: 'Vault is locked'
+    })
+    expect(writeClipboard).not.toHaveBeenCalled()
+  })
+
+  it('writes a copy from the unlocked view while the vault is open', async () => {
+    await expect(write('note text', { fromUnlockedView: true })).resolves.toEqual({
+      success: true,
+      data: null
+    })
+    expect(writeClipboard).toHaveBeenCalledExactlyOnceWith('note text', { secret: false })
+  })
+
+  // Setup and Unlock have no vault open, and their fields must still copy and cut.
+  it.each([
+    ['no flag', undefined],
+    ['null options', null],
+    ['the flag set to false', { fromUnlockedView: false }],
+    ['the flag set to a string', { fromUnlockedView: 'true' }]
+  ])('writes a copy with %s while no vault is open', async (_label, opts) => {
+    isVaultOpen.mockReturnValue(false)
+
+    await expect(write('password', opts)).resolves.toEqual({ success: true, data: null })
+    expect(writeClipboard).toHaveBeenCalledExactlyOnceWith('password', { secret: false })
+  })
+
+  it('still copies the recovery key from the unlocked view with no vault open', async () => {
+    isVaultOpen.mockReturnValue(false)
+
+    await expect(write('words', { secret: true, fromUnlockedView: true })).resolves.toEqual({
+      success: true,
+      data: null
+    })
+    expect(writeClipboard).toHaveBeenCalledExactlyOnceWith('words', { secret: true })
   })
 })

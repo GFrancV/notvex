@@ -261,8 +261,12 @@ export interface NotvexAPI {
     set<K extends keyof Prefs>(key: K, value: Prefs[K]): Promise<IpcResult<void>>
   }
   clipboard: {
-    /** Main clears it after the auto-clear pref, or after a fixed 30 s when `secret`. */
-    write(text: string, opts?: { secret?: boolean }): Promise<IpcResult<null>>
+    /** Main clears it after the auto-clear pref, or after a fixed 30 s when `secret`.
+     *  `fromUnlockedView`: copied from a view showing vault content; refused once main has locked. */
+    write(
+      text: string,
+      opts?: { secret?: boolean; fromUnlockedView?: boolean }
+    ): Promise<IpcResult<null>>
   }
   shell: {
     openExternal(url: string): Promise<IpcResult<null>>

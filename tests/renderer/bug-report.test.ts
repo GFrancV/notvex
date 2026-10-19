@@ -95,7 +95,7 @@ describe('BugReportActions', () => {
     await waitFor(() =>
       expect(ipc.clipboardWrite).toHaveBeenCalledWith(
         reportBody({ environment: ENVIRONMENT, log: LOG }),
-        { secret: false }
+        { secret: false, fromUnlockedView: false }
       )
     )
     // The ErrorBoundary fallback has no Toaster, so the button itself confirms.
