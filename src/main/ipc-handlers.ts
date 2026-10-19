@@ -921,8 +921,9 @@ export function registerIpcHandlers(
       writeFileSync(result.filePath, bytes)
       const filename = basename(result.filePath)
       return ok({ path: result.filePath, contents: new Uint8Array(bytes), filename })
-    } catch (e) {
-      return fail(e)
+    } catch {
+      // fs errors quote the path, and the renderer shows this error as is.
+      return fail('Could not save the key file')
     }
   })
 

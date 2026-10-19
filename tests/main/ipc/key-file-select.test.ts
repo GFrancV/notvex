@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '@main/url-guard'
 
-// The renderer shows this handler's error in a toast, so it must never carry the file path.
-// Only what importing ipc-handlers.ts and this handler touches is mocked.
+// The renderer shows these handlers' errors in a toast, so it must never carry the file path.
+// Only what importing ipc-handlers.ts and these handlers touch is mocked.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -13,12 +13,16 @@ const handlers = new Map<string, Handler>()
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
-  dialog: { showOpenDialog: vi.fn() },
+  dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
   shell: {},
   ipcMain: { handle: (channel: string, fn: Handler): void => void handlers.set(channel, fn) }
 }))
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('fs', () => ({ existsSync: vi.fn(() => false), readFileSync: vi.fn() }))
+vi.mock('fs', () => ({
+  existsSync: vi.fn(() => false),
+  readFileSync: vi.fn(),
+  writeFileSync: vi.fn()
+}))
 vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
 vi.mock('@main/log', () => ({ logError: vi.fn() }))
 vi.mock('@main/vault/backups', () => ({}))
@@ -31,17 +35,19 @@ vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
 const { dialog } = await import('electron')
-const { readFileSync } = await import('fs')
+const { readFileSync, writeFileSync } = await import('fs')
 
 const PATH = '/home/someone/secret-folder/key.bin'
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 const win = { isDestroyed: () => false, webContents: {} } as unknown as BrowserWindow
 
-function select(): Promise<unknown> {
-  const fn = handlers.get('vault:select-key-file')
-  if (!fn) throw new Error('no handler for vault:select-key-file')
+function invoke(channel: string): Promise<unknown> {
+  const fn = handlers.get(channel)
+  if (!fn) throw new Error(`no handler for ${channel}`)
   return Promise.resolve(fn(event))
 }
+
+const select = (): Promise<unknown> => invoke('vault:select-key-file')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -81,5 +87,18 @@ describe('vault:select-key-file', () => {
     vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] })
 
     expect(await select()).toEqual({ success: true, data: null })
+  })
+})
+
+describe('vault:generate-key-file', () => {
+  it('reports a failed save with a fixed message that leaves out the path', async () => {
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: false, filePath: PATH })
+    vi.mocked(writeFileSync).mockImplementation(() => {
+      throw new Error(`EACCES: permission denied, open '${PATH}'`)
+    })
+
+    const result = await invoke('vault:generate-key-file')
+
+    expect(result).toEqual({ success: false, error: 'Could not save the key file' })
   })
 })
