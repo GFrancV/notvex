@@ -58,6 +58,10 @@ interface VaultStore {
   removeTagFromNote: (noteId: string, tagId: string) => Promise<void>
 }
 
+// Bumped by clearSession. An optimistic action whose IPC reply lands after a lock must not
+// write its snapshot back: status alone can't tell, a re-unlock may already have happened.
+let session = 0
+
 export const useVaultStore = create<VaultStore>((set, get) => ({
   status: 'checking',
   vaultVersion: null,
@@ -90,6 +94,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   setActiveNoteId: (activeNoteId): void => set({ activeNoteId }),
 
   clearSession: (): void => {
+    session++
     set({
       notes: [],
       activeNoteId: null,
@@ -201,6 +206,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     const prevMap = get().noteTagsMap
     const prevCounts = get().tagCounts
     const prevNotes = get().notes
+    const started = session
 
     set((s) => ({
       tags: [...s.tags, optimistic],
@@ -211,11 +217,14 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
 
     const res = await notvex.tags.createAndAssign({ noteId, name: input.name, color: input.color })
     if (!res.success) {
-      set({ tags: prevTags, noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
+      if (session === started) {
+        set({ tags: prevTags, noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
+      }
       throw new Error(res.error)
     }
 
     const realTag = res.data
+    if (session !== started) return realTag
     set((s) => ({
       tags: s.tags.map((t) => (t.id === tempId ? realTag : t)),
       noteTagsMap: {
@@ -235,10 +244,11 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
 
   updateTag: async (id, patch): Promise<void> => {
     const prev = get().tags
+    const started = session
     set((s) => ({ tags: s.tags.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))
     const res = await notvex.tags.update(id, patch)
     if (!res.success) {
-      set({ tags: prev })
+      if (session === started) set({ tags: prev })
       throw new Error(res.error)
     }
   },
@@ -247,6 +257,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     const prevTags = get().tags
     const prevMap = get().noteTagsMap
     const prevCounts = get().tagCounts
+    const started = session
     const newMap = Object.fromEntries(
       Object.entries(prevMap).map(([nId, tIds]) => [nId, tIds.filter((t) => t !== id)])
     )
@@ -257,7 +268,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     }))
     const res = await notvex.tags.delete(id)
     if (!res.success) {
-      set({ tags: prevTags, noteTagsMap: prevMap, tagCounts: prevCounts })
+      if (session === started) set({ tags: prevTags, noteTagsMap: prevMap, tagCounts: prevCounts })
       throw new Error(res.error)
     }
   },
@@ -269,6 +280,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     const current = prevMap[noteId] ?? []
     if (current.includes(tagId)) return
     const tag = get().tags.find((t) => t.id === tagId)
+    const started = session
     set((s) => ({
       noteTagsMap: { ...s.noteTagsMap, [noteId]: [...current, tagId] },
       tagCounts: { ...s.tagCounts, [tagId]: (s.tagCounts[tagId] ?? 0) + 1 },
@@ -278,7 +290,9 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     }))
     const res = await notvex.noteTags.add(noteId, tagId)
     if (!res.success) {
-      set({ noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
+      if (session === started) {
+        set({ noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
+      }
       throw new Error(res.error)
     }
   },
@@ -287,6 +301,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     const prevMap = get().noteTagsMap
     const prevCounts = get().tagCounts
     const prevNotes = get().notes
+    const started = session
     set((s) => ({
       noteTagsMap: {
         ...s.noteTagsMap,
@@ -299,7 +314,9 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     }))
     const res = await notvex.noteTags.remove(noteId, tagId)
     if (!res.success) {
-      set({ noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
+      if (session === started) {
+        set({ noteTagsMap: prevMap, tagCounts: prevCounts, notes: prevNotes })
+      }
       throw new Error(res.error)
     }
   }
