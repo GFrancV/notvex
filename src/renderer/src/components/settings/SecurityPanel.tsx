@@ -8,6 +8,7 @@ import {
   ShieldOffIcon,
   Trash2Icon
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
 import { Button } from '@/components/ui/button'
@@ -73,15 +74,15 @@ export function SecurityPanel({
       source === 'generate'
         ? await notvex.vault.generateKeyFile()
         : await notvex.vault.selectKeyFile()
-    if (!res.success || !res.data) return
-    if ('sizeBytes' in res.data && res.data.sizeBytes === 0) return
-    openSubpage(
-      {
-        kind: 'key-file',
-        mode: { kind: 'add', contents: res.data.contents, filename: res.data.filename }
-      },
-      source
-    )
+    if (!res.success) {
+      toast.error(res.error)
+      return
+    }
+    if (!res.data) return
+    const { contents, filename } = res.data
+    // A selected file's contents are capped at 1MB; its real size is what the warning needs.
+    const sizeBytes = 'sizeBytes' in res.data ? res.data.sizeBytes : contents.byteLength
+    openSubpage({ kind: 'key-file', mode: { kind: 'add', contents, filename, sizeBytes } }, source)
   }
 
   useEffect(() => {

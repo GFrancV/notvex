@@ -20,6 +20,9 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+
+const { toast } = await import('sonner')
 const { KeyFilePanel } = await import('@/components/settings/KeyFilePanel')
 
 const MNEMONIC = 'one two three four five six seven eight nine ten eleven twelve'
@@ -33,7 +36,7 @@ const back = (): HTMLElement => screen.getByRole('button', { name: 'Security' })
 function renderAdd(): void {
   render(
     createElement(KeyFilePanel, {
-      mode: { kind: 'add', contents: KEY, filename: 'vault.nvxkey' },
+      mode: { kind: 'add', contents: KEY, filename: 'vault.nvxkey', sizeBytes: KEY.byteLength },
       onBack,
       onLockChange,
       onHasKeyFileChange
@@ -176,5 +179,20 @@ describe('KeyFilePanel: removing the key file', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(onLockChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('reports a key file that could not be chosen and keeps waiting for one', async () => {
+    ipc.selectKeyFile.mockResolvedValue({ success: false, error: 'The selected key file is empty' })
+    renderRemove()
+    fireEvent.change(screen.getByLabelText('Current password'), {
+      target: { value: 'my password 123' }
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    })
+
+    expect(toast.error).toHaveBeenCalledWith('The selected key file is empty')
+    expect(screen.getByRole('button', { name: 'Remove' }).hasAttribute('disabled')).toBe(true)
   })
 })
