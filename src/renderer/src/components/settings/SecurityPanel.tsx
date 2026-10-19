@@ -37,15 +37,21 @@ export function SecurityPanel({
   onLockChange: (locked: boolean) => void
 }): ReactNode {
   const { setPref } = usePrefsStore()
-  const { autoLockMinutes, lockOnMinimize, allowScreenCapture, clipboardClearSeconds } =
-    usePrefsStore(
-      useShallow((s) => ({
-        autoLockMinutes: s.autoLockMinutes,
-        lockOnMinimize: s.lockOnMinimize,
-        allowScreenCapture: s.allowScreenCapture,
-        clipboardClearSeconds: s.clipboardClearSeconds
-      }))
-    )
+  const {
+    autoLockMinutes,
+    lockOnMinimize,
+    allowScreenCapture,
+    clipboardClearSeconds,
+    clearClipboardOnLock
+  } = usePrefsStore(
+    useShallow((s) => ({
+      autoLockMinutes: s.autoLockMinutes,
+      lockOnMinimize: s.lockOnMinimize,
+      allowScreenCapture: s.allowScreenCapture,
+      clipboardClearSeconds: s.clipboardClearSeconds,
+      clearClipboardOnLock: s.clearClipboardOnLock
+    }))
+  )
 
   const [subpage, setSubpage] = useState<Subpage>(null)
   const [hasKeyFile, setHasKeyFile] = useState(false)
@@ -161,6 +167,17 @@ export function SecurityPanel({
               </SelectGroup>
             </SelectContent>
           </Select>
+        </SettingRow>
+
+        <SettingRow
+          label="Clear when locked"
+          description="Clear text copied from Notvex when the vault locks or Notvex quits. Your recovery key keeps its 30 seconds on lock, so you have time to paste it."
+        >
+          <Checkbox
+            aria-label="Clear when locked"
+            checked={clearClipboardOnLock}
+            onCheckedChange={(v) => void setPref('clearClipboardOnLock', v === true)}
+          />
         </SettingRow>
       </SettingsSection>
 

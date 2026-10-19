@@ -11,6 +11,7 @@ interface PrefsStore {
   allowScreenCapture: boolean
   lockOnMinimize: boolean
   clipboardClearSeconds: number
+  clearClipboardOnLock: boolean
   noteSort: NoteSort
   checkUpdatesOnStartup: boolean
   recentVaults: RecentVault[]
@@ -25,6 +26,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
   allowScreenCapture: false,
   lockOnMinimize: false,
   clipboardClearSeconds: 60,
+  clearClipboardOnLock: true,
   noteSort: { field: 'updatedAt', direction: 'desc' },
   checkUpdatesOnStartup: true,
   recentVaults: [],
@@ -39,6 +41,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
         allowScreenCapture: p.allowScreenCapture,
         lockOnMinimize: p.lockOnMinimize,
         clipboardClearSeconds: p.clipboardClearSeconds,
+        clearClipboardOnLock: p.clearClipboardOnLock,
         noteSort: p.noteSort,
         checkUpdatesOnStartup: p.checkUpdatesOnStartup,
         recentVaults: p.recentVaults

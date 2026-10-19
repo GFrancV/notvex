@@ -15,9 +15,12 @@ const ipc = vi.hoisted(() => ({
   removeKeyFile: vi.fn()
 }))
 
-vi.mock('@/lib/ipc', () => ({ notvex: { vault: ipc } }))
+const prefsIpc = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }))
+
+vi.mock('@/lib/ipc', () => ({ notvex: { vault: ipc, prefs: prefsIpc } }))
 
 const { SecurityPanel } = await import('@/components/settings/SecurityPanel')
+const { usePrefsStore } = await import('@/store/prefs.store')
 
 const MNEMONIC = 'one two three four five six seven eight nine ten eleven twelve'
 const KEY = new Uint8Array([1, 2, 3])
@@ -101,5 +104,36 @@ describe('SecurityPanel: the key file row', () => {
 
     expect(screen.getByText('Not configured')).toBeTruthy()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Generate…' }))
+  })
+})
+
+describe('SecurityPanel: clear when locked', () => {
+  afterEach(() => {
+    usePrefsStore.setState({ clearClipboardOnLock: true })
+  })
+
+  it('shows a saved off once the prefs load', async () => {
+    prefsIpc.get.mockResolvedValue({
+      success: true,
+      data: { ...usePrefsStore.getState(), clearClipboardOnLock: false }
+    })
+    await usePrefsStore.getState().load()
+    await renderPanel()
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Clear when locked' })
+    expect(checkbox.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('is on by default and saves the change when turned off', async () => {
+    await renderPanel()
+    const checkbox = screen.getByRole('checkbox', { name: 'Clear when locked' })
+    expect(checkbox.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => {
+      fireEvent.click(checkbox)
+    })
+
+    expect(prefsIpc.set).toHaveBeenCalledExactlyOnceWith('clearClipboardOnLock', false)
+    expect(checkbox.getAttribute('aria-checked')).toBe('false')
   })
 })

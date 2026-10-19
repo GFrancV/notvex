@@ -71,23 +71,23 @@ describe('getPrefs noteSort', () => {
   })
 })
 
-describe('getPrefs checkUpdatesOnStartup', () => {
+describe.each(['checkUpdatesOnStartup', 'clearClipboardOnLock'] as const)('getPrefs %s', (key) => {
   it('keeps a saved false', () => {
-    fsState.contents = JSON.stringify({ checkUpdatesOnStartup: false })
-    expect(getPrefs().checkUpdatesOnStartup).toBe(false)
+    fsState.contents = JSON.stringify({ [key]: false })
+    expect(getPrefs()[key]).toBe(false)
   })
 
   it('defaults to true for a prefs.json written before the pref existed', () => {
     fsState.contents = JSON.stringify({ autoLockMinutes: 5 })
-    expect(getPrefs().checkUpdatesOnStartup).toBe(true)
+    expect(getPrefs()[key]).toBe(true)
   })
 
   it.each([
     ['a string', 'no'],
     ['a number', 0],
     ['null', null]
-  ])('falls back to true for %s', (_label, checkUpdatesOnStartup) => {
-    fsState.contents = JSON.stringify({ checkUpdatesOnStartup })
-    expect(getPrefs().checkUpdatesOnStartup).toBe(true)
+  ])('falls back to true for %s', (_label, value) => {
+    fsState.contents = JSON.stringify({ [key]: value })
+    expect(getPrefs()[key]).toBe(true)
   })
 })

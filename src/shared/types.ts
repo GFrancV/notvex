@@ -125,6 +125,7 @@ export interface Prefs {
   allowScreenCapture: boolean
   lockOnMinimize: boolean
   clipboardClearSeconds: number
+  clearClipboardOnLock: boolean
   noteSort: NoteSort
   checkUpdatesOnStartup: boolean
 }

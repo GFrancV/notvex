@@ -60,13 +60,13 @@ afterEach(() => {
   ipc.stopAutoLockTimer()
 })
 
-describe('prefs:set checkUpdatesOnStartup', () => {
+describe.each(['checkUpdatesOnStartup', 'clearClipboardOnLock'])('prefs:set %s', (key) => {
   it.each([true, false])('accepts %s', async (value) => {
-    await expect(setPrefIpc('checkUpdatesOnStartup', value)).resolves.toEqual({
+    await expect(setPrefIpc(key, value)).resolves.toEqual({
       success: true,
       data: null
     })
-    expect(setPref).toHaveBeenCalledExactlyOnceWith('checkUpdatesOnStartup', value)
+    expect(setPref).toHaveBeenCalledExactlyOnceWith(key, value)
   })
 
   it.each([
@@ -74,9 +74,9 @@ describe('prefs:set checkUpdatesOnStartup', () => {
     ['a number', 0],
     ['null', null]
   ])('rejects %s', async (_label, value) => {
-    await expect(setPrefIpc('checkUpdatesOnStartup', value)).resolves.toEqual({
+    await expect(setPrefIpc(key, value)).resolves.toEqual({
       success: false,
-      error: 'Invalid value for preference: checkUpdatesOnStartup'
+      error: `Invalid value for preference: ${key}`
     })
     expect(setPref).not.toHaveBeenCalled()
   })
