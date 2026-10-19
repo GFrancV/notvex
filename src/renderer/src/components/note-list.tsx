@@ -1,15 +1,19 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { TrashIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { useTogglePin } from '@/hooks/use-toggle-pin'
+import { useTrashNote } from '@/hooks/use-trash-note'
 import { notvex } from '@/lib/ipc'
+import { ipcSucceeded } from '@/lib/ipc-succeeded'
 import { sortNotes } from '@/lib/sort-notes'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { NoteListItem } from '@shared/types'
+import { ConfirmDeleteDialog } from './dialogs/ConfirmDeleteDialog'
 import { NoteListRow } from './note-list-row'
 import { NoteSortMenu } from './note-sort-menu'
 import { TagFilter } from './tags/TagFilter'
@@ -19,8 +23,7 @@ import { ScrollArea } from './ui/scroll-area'
 const SEARCH_DEBOUNCE = 300
 
 export function NoteList(): ReactNode {
-  const { notes, activeNoteId, setActiveNoteId, loadNotes, loadTagCounts, noteTagsMap } =
-    useVaultStore()
+  const { notes, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } = useVaultStore()
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
@@ -86,27 +89,25 @@ export function NoteList(): ReactNode {
     [showPinned, activeTags.length, filteredNotes, notes, noteSort]
   )
 
+  const togglePin = useTogglePin()
   const handlePin = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.update(note.id, { isPinned: !note.isPinned })
-      void loadNotes({ trashed: showTrash })
+      await togglePin(note)
     },
-    [showTrash, loadNotes]
+    [togglePin]
   )
 
+  const trashNote = useTrashNote()
   const handleTrash = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.trash(note.id)
-      if (activeNoteId === note.id) setActiveNoteId(null)
-      void loadNotes({ trashed: showTrash })
-      void loadTagCounts()
+      await trashNote(note.id)
     },
-    [showTrash, activeNoteId, loadNotes, loadTagCounts, setActiveNoteId]
+    [trashNote]
   )
 
   const handleRestore = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.restore(note.id)
+      if (!(await ipcSucceeded(notvex.notes.restore(note.id), 'Failed to restore note'))) return
       void loadNotes({ trashed: true })
     },
     [loadNotes]
@@ -114,15 +115,21 @@ export function NoteList(): ReactNode {
 
   const handleDelete = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      await notvex.notes.delete(note.id)
+      if (!(await ipcSucceeded(notvex.notes.delete(note.id), 'Failed to delete note'))) return
       if (activeNoteId === note.id) setActiveNoteId(null)
       void loadNotes({ trashed: true })
     },
     [activeNoteId, loadNotes, setActiveNoteId]
   )
 
+  const [pendingDelete, setPendingDelete] = useState<NoteListItem | null>(null)
+  const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false)
+  const requestDelete = useCallback(async (note: NoteListItem): Promise<void> => {
+    setPendingDelete(note)
+  }, [])
+
   const handleEmptyTrash = async (): Promise<void> => {
-    await notvex.notes.emptyTrash()
+    if (!(await ipcSucceeded(notvex.notes.emptyTrash(), 'Failed to empty trash'))) return
     setActiveNoteId(null)
     void loadNotes({ trashed: true })
   }
@@ -165,7 +172,7 @@ export function NoteList(): ReactNode {
             size="sm"
             className="w-full"
             onClick={(): void => {
-              void handleEmptyTrash()
+              setConfirmEmptyTrash(true)
             }}
           >
             <TrashIcon className="size-3" /> Empty trash ({notes.length})
@@ -203,11 +210,30 @@ export function NoteList(): ReactNode {
               onDuplicate={duplicateNote}
               onTrash={handleTrash}
               onRestore={handleRestore}
-              onDelete={handleDelete}
+              onDelete={requestDelete}
             />
           ))
         )}
       </ScrollArea>
+
+      <ConfirmDeleteDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete note permanently?"
+        description="This note will be deleted for good. It can't be undone."
+        confirmLabel="Delete permanently"
+        onConfirm={async () => {
+          if (pendingDelete) await handleDelete(pendingDelete)
+        }}
+      />
+      <ConfirmDeleteDialog
+        open={confirmEmptyTrash}
+        onOpenChange={setConfirmEmptyTrash}
+        title="Empty trash?"
+        description="Every note in the trash will be deleted for good. It can't be undone."
+        confirmLabel="Empty trash"
+        onConfirm={handleEmptyTrash}
+      />
     </div>
   )
 }

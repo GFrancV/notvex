@@ -20,6 +20,8 @@ import {
 import { toast } from 'sonner'
 
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { useTogglePin } from '@/hooks/use-toggle-pin'
+import { useTrashNote } from '@/hooks/use-trash-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
@@ -105,7 +107,6 @@ export function NoteEditor(): ReactNode {
     activeNoteId,
     setActiveNoteId,
     loadNotes,
-    loadTagCounts,
     noteTagsMap,
     tags: allTags,
     removeTagFromNote
@@ -293,11 +294,14 @@ export function NoteEditor(): ReactNode {
     editorView.focus()
   }
 
+  const togglePin = useTogglePin()
   const handlePin = async (): Promise<void> => {
-    if (!activeNoteId || !note) return
-    await notvex.notes.update(activeNoteId, { isPinned: !note.isPinned })
-    setNote({ ...note, isPinned: !note.isPinned })
-    void loadNotes()
+    if (!note) return
+    if (!(await togglePin(note))) return
+    // The user may have switched notes while the pin was saving.
+    setNote((current) =>
+      current?.id === note.id ? { ...current, isPinned: !note.isPinned } : current
+    )
   }
 
   const handleExport = async (): Promise<void> => {
@@ -307,12 +311,9 @@ export function NoteEditor(): ReactNode {
     else if (res.data) toast.success('Note exported')
   }
 
+  const trashNote = useTrashNote()
   const handleTrash = async (): Promise<void> => {
-    if (!activeNoteId) return
-    await notvex.notes.trash(activeNoteId)
-    useVaultStore.getState().setActiveNoteId(null)
-    void loadNotes()
-    void loadTagCounts()
+    if (activeNoteId) await trashNote(activeNoteId)
   }
 
   const duplicateNote = useDuplicateNote()
