@@ -1,9 +1,10 @@
 import { type ReactNode, useState } from 'react'
 
 import { CircleAlertIcon, FileKeyIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
+import { cn } from 'cn'
 
 import { notvex } from '@/lib/ipc'
-import { cn, formatFileSize } from '@/lib/utils'
+import { formatFileSize } from '@/lib/utils'
 import { InputGroup, InputGroupAddon, InputGroupButton } from './ui/input-group'
 
 interface KeyFileInputProps {

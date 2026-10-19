@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 const PANEL = 'border-border min-h-0 space-y-5 overflow-y-auto border-l py-1 pr-2 pl-6'
 
 // Active indicator on the left in the primary color; the same variant prefix as the shadcn
-// classes lets tailwind-merge replace them instead of stacking on top.
+// classes lets cn replace them instead of stacking on top.
 const TAB =
   'pl-3 after:bg-primary group-data-[orientation=vertical]/tabs:after:right-auto group-data-[orientation=vertical]/tabs:after:left-0'
 

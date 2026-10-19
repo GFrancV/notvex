@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 
 import { CopyIcon, PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucide-react'
+import { cn } from 'cn'
 
-import { cn, formatTimeAgo } from '@/lib/utils'
+import { formatTimeAgo } from '@/lib/utils'
 import type { NoteListItem } from '@shared/types'
 import {
   ContextMenu,
