@@ -836,7 +836,12 @@ export function registerIpcHandlers(
         return fail('This file is not a valid Notvex vault')
       }
       await closeVaultDrained(liveWin())
-      promoteVaultToTop(filePath)
+      try {
+        promoteVaultToTop(filePath)
+      } catch (e) {
+        // The vault is already closed: failing here would strand the renderer unlocked over it
+        logError('[switch] promote failed:', e)
+      }
       return ok(null)
     } catch (e) {
       return fail(e)

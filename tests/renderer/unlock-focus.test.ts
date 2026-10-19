@@ -168,6 +168,24 @@ describe('Unlock focus', () => {
     expect(document.activeElement).not.toBe(passwordInput())
   })
 
+  // A vault switch leaves the old vault first in recents when main couldn't promote the new one
+  it('unlocks the pending vault over the first recent vault', async () => {
+    vi.mocked(notvex.vault.open).mockResolvedValueOnce({ success: true, data: null })
+    useVaultStore.setState({ pendingOpenVaultPath: OTHER_VAULT })
+    await renderUnlock()
+    fireEvent.change(passwordInput(), { target: { value: 'some password' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }))
+
+    await waitFor(() =>
+      expect(notvex.vault.open).toHaveBeenCalledExactlyOnceWith(
+        OTHER_VAULT,
+        'some password',
+        undefined
+      )
+    )
+  })
+
   it.each(cancellations)('does not focus the recovery phrase on %s', async (error) => {
     vi.mocked(notvex.vault.openWithRecovery).mockResolvedValueOnce({ success: false, error })
     await renderUnlock()
