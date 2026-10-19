@@ -8,6 +8,7 @@ import {
   ShieldOffIcon,
   Trash2Icon
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
 import { Button } from '@/components/ui/button'
@@ -73,8 +74,11 @@ export function SecurityPanel({
       source === 'generate'
         ? await notvex.vault.generateKeyFile()
         : await notvex.vault.selectKeyFile()
-    if (!res.success || !res.data) return
-    if ('sizeBytes' in res.data && res.data.sizeBytes === 0) return
+    if (!res.success) {
+      toast.error(res.error)
+      return
+    }
+    if (!res.data) return
     openSubpage(
       {
         kind: 'key-file',

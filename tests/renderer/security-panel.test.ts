@@ -18,7 +18,9 @@ const ipc = vi.hoisted(() => ({
 const prefsIpc = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }))
 
 vi.mock('@/lib/ipc', () => ({ notvex: { vault: ipc, prefs: prefsIpc } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
+const { toast } = await import('sonner')
 const { SecurityPanel } = await import('@/components/settings/SecurityPanel')
 const { usePrefsStore } = await import('@/store/prefs.store')
 
@@ -104,6 +106,29 @@ describe('SecurityPanel: the key file row', () => {
 
     expect(screen.getByText('Not configured')).toBeTruthy()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Generate…' }))
+  })
+
+  it.each([
+    ['Use existing…', ipc.selectKeyFile],
+    ['Generate…', ipc.generateKeyFile]
+  ])('reports a failed "%s" and stays on Security', async (button, call) => {
+    call.mockResolvedValue({ success: false, error: 'The selected key file is empty' })
+    await renderPanel()
+
+    await click(button)
+
+    expect(toast.error).toHaveBeenCalledWith('The selected key file is empty')
+    expect(screen.queryByText('Add key file')).toBeNull()
+  })
+
+  it('stays silent when the file dialog is cancelled', async () => {
+    ipc.selectKeyFile.mockResolvedValue({ success: true, data: null })
+    await renderPanel()
+
+    await click('Use existing…')
+
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(screen.queryByText('Add key file')).toBeNull()
   })
 })
 
