@@ -214,6 +214,25 @@ describe('NoteEditor — pin', () => {
     expect(screen.getByTitle('Pin')).toBeTruthy()
     expect(screen.queryByTitle('Unpin')).toBeNull()
   })
+
+  it('follows a pin made from the note list, and the next click unpins', async () => {
+    ipc.get.mockResolvedValue({ success: true, data: note('a') })
+    render(createElement(NoteEditor))
+    await screen.findByDisplayValue('A')
+    // The reload never lands, so only the store patch made on save can flip the icon.
+    ipc.list.mockReturnValue(new Promise(() => {}))
+    const { result } = renderHook(() => useTogglePin())
+
+    await act(async () => {
+      await result.current(listItem('a'))
+    })
+
+    expect(screen.getByTitle('Unpin')).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Unpin'))
+    })
+    expect(ipc.update).toHaveBeenLastCalledWith('a', { isPinned: false })
+  })
 })
 
 describe('NoteList — pin', () => {

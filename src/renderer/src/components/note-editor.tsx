@@ -107,6 +107,7 @@ export function NoteEditor(): ReactNode {
     activeNoteId,
     setActiveNoteId,
     loadNotes,
+    notes,
     noteTagsMap,
     tags: allTags,
     removeTagFromNote
@@ -294,14 +295,16 @@ export function NoteEditor(): ReactNode {
     editorView.focus()
   }
 
+  // A pin made from the list only reaches the store's entry; the local copy is the fallback
+  // for a note the current list doesn't hold.
+  const isPinned = notes.find((n) => n.id === note?.id)?.isPinned ?? note?.isPinned ?? false
+
   const togglePin = useTogglePin()
   const handlePin = async (): Promise<void> => {
     if (!note) return
-    if (!(await togglePin(note))) return
+    if (!(await togglePin({ id: note.id, isPinned }))) return
     // The user may have switched notes while the pin was saving.
-    setNote((current) =>
-      current?.id === note.id ? { ...current, isPinned: !note.isPinned } : current
-    )
+    setNote((current) => (current?.id === note.id ? { ...current, isPinned: !isPinned } : current))
   }
 
   const handleExport = async (): Promise<void> => {
@@ -415,10 +418,10 @@ export function NoteEditor(): ReactNode {
               variant="ghost"
               size="icon"
               onClick={handlePin}
-              title={note?.isPinned ? 'Unpin' : 'Pin'}
-              className={note?.isPinned ? 'text-primary' : 'text-muted-foreground'}
+              title={isPinned ? 'Unpin' : 'Pin'}
+              className={isPinned ? 'text-primary' : 'text-muted-foreground'}
             >
-              <PinIcon className={`size-4 ${note?.isPinned ? 'fill-primary text-primary' : ''}`} />
+              <PinIcon className={`size-4 ${isPinned ? 'fill-primary text-primary' : ''}`} />
             </Button>
             <Button
               variant="ghost"
