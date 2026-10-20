@@ -446,27 +446,25 @@ export function NoteEditor(): ReactNode {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
+                {note && !note.isTrashed && (
+                  <>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
+                        <CopyIcon className="size-4" />
+                        Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setExportOpen(true)}>
+                        <DownloadIcon className="size-4" />
+                        Export note…
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuGroup>
-                  {note && !note.isTrashed && (
-                    <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
-                      <CopyIcon className="size-4" />
-                      Duplicate
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => setExportOpen(true)}>
-                    <DownloadIcon className="size-4" />
-                    Export note…
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={handleTrash}
-                    title="Move to trash"
-                  >
+                  <DropdownMenuItem variant="destructive" onClick={handleTrash}>
                     <Trash2Icon className="size-4" />
-                    Delete file
+                    Move to trash
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>

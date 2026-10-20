@@ -113,4 +113,15 @@ describe('NoteEditor: Export note…', () => {
 
     expect(toast.error).toHaveBeenCalledWith('Could not write the exported file')
   })
+
+  it('is not offered for a trashed note', async () => {
+    ipc.get.mockResolvedValue({ success: true, data: { ...NOTE, isTrashed: true, trashedAt: 1 } })
+    render(createElement(NoteEditor))
+    // Waiting for the title means the note, and with it isTrashed, has loaded.
+    await screen.findByDisplayValue('Plan')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Note actions' }), { key: 'Enter' })
+
+    await screen.findByRole('menuitem', { name: 'Move to trash' })
+    expect(screen.queryByRole('menuitem', { name: 'Export note…' })).toBeNull()
+  })
 })
