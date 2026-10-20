@@ -187,8 +187,11 @@ export function isValidNotvexFile(filePath: string): boolean {
     if (!existsSync(filePath)) return false
     const buf = Buffer.alloc(4)
     const fd = openSync(filePath, 'r')
-    readSync(fd, buf, 0, 4, 0)
-    closeSync(fd)
+    try {
+      readSync(fd, buf, 0, 4, 0)
+    } finally {
+      closeSync(fd)
+    }
     return buf.equals(MAGIC_NVX)
   } catch {
     return false
