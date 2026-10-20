@@ -21,6 +21,7 @@ const ipcNotes = vi.hoisted(() => {
   return {
     all,
     list: vi.fn(() => Promise.resolve({ success: true, data: all })),
+    counts: vi.fn(async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } })),
     search: vi.fn((q: string) =>
       Promise.resolve({ success: true, data: all.filter((n) => n.title.includes(q)) })
     )

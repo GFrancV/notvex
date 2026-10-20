@@ -5,6 +5,7 @@ import { useUiStore } from '@/store/ui.store'
 import type {
   CreateNoteInput,
   CreateTagInput,
+  NoteCounts,
   NoteListItem,
   Tag,
   TagPatch,
@@ -21,6 +22,7 @@ interface VaultStore {
   pendingNewVaultPath: string | null
   pendingOpenVaultPath: string | null
   notes: NoteListItem[]
+  noteCounts: NoteCounts
   tags: Tag[]
   tagCounts: Record<string, number>
   noteTagsMap: Record<string, string[]>
@@ -44,6 +46,7 @@ interface VaultStore {
   clearSession: () => void
   lock: () => Promise<void>
   loadNotes: (filter?: { trashed?: boolean; tagId?: string }) => Promise<void>
+  loadNoteCounts: () => Promise<void>
   createNote: (input?: CreateNoteInput) => Promise<NoteListItem>
   duplicateNote: (id: string) => Promise<NoteListItem>
   loadTags: () => Promise<void>
@@ -62,6 +65,8 @@ interface VaultStore {
 // write its snapshot back: status alone can't tell, a re-unlock may already have happened.
 let session = 0
 
+const NO_COUNTS: NoteCounts = { live: 0, pinned: 0, trashed: 0 }
+
 export const useVaultStore = create<VaultStore>((set, get) => ({
   status: 'checking',
   vaultVersion: null,
@@ -70,6 +75,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   pendingNewVaultPath: null,
   pendingOpenVaultPath: null,
   notes: [],
+  noteCounts: NO_COUNTS,
   tags: [],
   tagCounts: {},
   noteTagsMap: {},
@@ -97,6 +103,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     session++
     set({
       notes: [],
+      noteCounts: NO_COUNTS,
       activeNoteId: null,
       tags: [],
       tagCounts: {},
@@ -117,8 +124,16 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   },
 
   loadNotes: async (filter = {}): Promise<void> => {
+    // List reloads follow note mutations, so the badges refresh with them.
+    void get().loadNoteCounts()
     const res = await notvex.notes.list(filter)
     if (res.success) set({ notes: res.data })
+  },
+
+  loadNoteCounts: async (): Promise<void> => {
+    const started = session
+    const res = await notvex.notes.counts()
+    if (res.success && session === started) set({ noteCounts: res.data })
   },
 
   createNote: async (input?: CreateNoteInput): Promise<NoteListItem> => {
@@ -128,6 +143,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     }
 
     set((s) => ({ notes: [res.data, ...s.notes] }))
+    void get().loadNoteCounts()
 
     return res.data
   },
@@ -143,6 +159,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
       notes: [copy, ...s.notes],
       noteTagsMap: { ...s.noteTagsMap, [copy.id]: copy.tags.map((t) => t.id) }
     }))
+    void get().loadNoteCounts()
     // The copy carries the source's tags, so every one of them gained a note.
     if (copy.tags.length > 0) void get().loadTagCounts()
 

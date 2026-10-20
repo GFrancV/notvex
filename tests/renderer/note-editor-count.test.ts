@@ -41,7 +41,13 @@ vi.mock('@/lib/text-count', async (importOriginal) => {
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
-    notes: { get: ipc.get, update: ipc.update, list: ipc.list, trash: vi.fn() },
+    notes: {
+      get: ipc.get,
+      update: ipc.update,
+      list: ipc.list,
+      trash: vi.fn(),
+      counts: vi.fn(async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } }))
+    },
     tags: { list: vi.fn() },
     noteTags: { counts: ipc.counts, all: vi.fn() }
   }

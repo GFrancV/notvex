@@ -14,7 +14,14 @@ vi.mock('@/lib/ipc', () => {
   return {
     notvex: {
       platform: 'win32',
-      notes: { get: ipc.get, create: ipc.create, update: ok, list: ok, trash: ok },
+      notes: {
+        get: ipc.get,
+        create: ipc.create,
+        update: ok,
+        list: ok,
+        trash: ok,
+        counts: async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } })
+      },
       tags: { list: ok },
       noteTags: { counts: ok, all: ok }
     }

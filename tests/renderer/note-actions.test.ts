@@ -74,7 +74,8 @@ vi.mock('@/lib/ipc', () => ({
       trash: ipc.trash,
       restore: ipc.restore,
       delete: ipc.delete,
-      emptyTrash: ipc.emptyTrash
+      emptyTrash: ipc.emptyTrash,
+      counts: vi.fn(async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } }))
     },
     tags: { list: vi.fn() },
     noteTags: { counts: ipc.counts, all: vi.fn() }

@@ -32,6 +32,7 @@ const ipc = vi.hoisted(() => {
     all,
     notes: {
       list: vi.fn(() => Promise.resolve({ success: true, data: all })),
+      counts: vi.fn(async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } })),
       search: vi.fn(() => Promise.resolve({ success: true, data: all }))
     },
     prefs: {

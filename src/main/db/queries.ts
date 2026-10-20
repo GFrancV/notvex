@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 
 import type sqlite3 from '@journeyapps/sqlcipher'
-import { type ImportResult, PRESET_COLORS, TAG_NAME_MAX } from '@shared/types'
+import { type ImportResult, type NoteCounts, PRESET_COLORS, TAG_NAME_MAX } from '@shared/types'
 
 import type { MarkdownNote } from '../markdown-io'
 import { decryptField, encryptField } from '../vault/crypto'
@@ -446,6 +446,18 @@ export async function getNoteTags(db: sqlite3.Database, noteId: string): Promise
      WHERE nt.note_id = ?`,
     [noteId]
   )
+}
+
+// Plaintext flags only: the sidebar badges never need a title decrypted. SUM over no rows is NULL.
+export async function getNoteCounts(db: sqlite3.Database): Promise<NoteCounts> {
+  const row = await dbGet<NoteCounts>(
+    db,
+    `SELECT COALESCE(SUM(is_trashed = 0), 0)                   AS live,
+            COALESCE(SUM(is_pinned = 1 AND is_trashed = 0), 0) AS pinned,
+            COALESCE(SUM(is_trashed = 1), 0)                   AS trashed
+     FROM notes`
+  )
+  return row ?? { live: 0, pinned: 0, trashed: 0 }
 }
 
 export async function getNoteCountPerTag(db: sqlite3.Database): Promise<Record<string, number>> {

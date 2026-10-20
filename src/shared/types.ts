@@ -67,6 +67,11 @@ export interface NoteFilter {
   trashed?: boolean
   tagId?: string
 }
+export interface NoteCounts {
+  live: number
+  pinned: number
+  trashed: number
+}
 export interface CreateTagInput {
   name: string
   color: string
@@ -234,6 +239,8 @@ export interface NotvexAPI {
     restore(id: string): Promise<IpcResult<null>>
     delete(id: string): Promise<IpcResult<null>>
     emptyTrash(): Promise<IpcResult<null>>
+    /** Global badge counts, independent of the list the renderer is showing. */
+    counts(): Promise<IpcResult<NoteCounts>>
     search(query: string): Promise<IpcResult<NoteListItem[]>>
     /** Writes the note to a user-chosen .md file in main: true once written, null if canceled. */
     export(id: string): Promise<IpcResult<true | null>>

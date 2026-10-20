@@ -45,6 +45,7 @@ import {
   getAllNoteTags,
   getNote,
   getNoteCountPerTag,
+  getNoteCounts,
   getNoteTags,
   getNoteTitle,
   importNotes,
@@ -1121,6 +1122,16 @@ export function registerIpcHandlers(
       touchActivity()
       await withVaultLock(() => emptyTrash(getDb()))
       return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('notes:counts', async () => {
+    try {
+      requireVault()
+      touchActivity()
+      return ok(await withVaultLock(() => getNoteCounts(getDb())))
     } catch (e) {
       return fail(e)
     }
