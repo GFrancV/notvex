@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner'
 
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { useExportNote } from '@/hooks/use-export-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
@@ -307,12 +308,7 @@ export function NoteEditor(): ReactNode {
     setNote((current) => (current?.id === note.id ? { ...current, isPinned: !isPinned } : current))
   }
 
-  const handleExport = async (): Promise<void> => {
-    if (!activeNoteId) return
-    const res = await notvex.notes.export(activeNoteId)
-    if (!res.success) toast.error(res.error)
-    else if (res.data) toast.success('Note exported')
-  }
+  const exportNote = useExportNote()
 
   const trashNote = useTrashNote()
   const handleTrash = async (): Promise<void> => {
@@ -480,7 +476,7 @@ export function NoteEditor(): ReactNode {
               open={exportOpen}
               onOpenChange={setExportOpen}
               title="Export note"
-              onConfirm={handleExport}
+              onConfirm={() => exportNote(activeNoteId)}
             />
           </div>
         </div>
