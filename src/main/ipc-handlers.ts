@@ -183,6 +183,17 @@ function decodeUtf8(raw: Uint8Array): string | null {
   }
 }
 
+// A short read is not EOF; stopping early would silently drop bytes.
+function readFully(fd: number, buf: Uint8Array): number {
+  let length = 0
+  while (length < buf.length) {
+    const n = readSync(fd, buf, length, buf.length - length, length)
+    if (n === 0) break
+    length += n
+  }
+  return length
+}
+
 // Checked and read through one descriptor, so the file that was checked is the file that is read.
 async function readImportFile(file: string): Promise<ImportRead> {
   let fd: number
@@ -201,12 +212,7 @@ async function readImportFile(file: string): Promise<ImportRead> {
     if (stat.size > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
     // One byte past the stated size, to notice a file that grew since fstat.
     buf = Buffer.alloc(stat.size + 1)
-    let length = 0
-    while (length < buf.length) {
-      const n = readSync(fd, buf, length, buf.length - length, length)
-      if (n === 0) break
-      length += n
-    }
+    const length = readFully(fd, buf)
     if (length > stat.size) return { skip: 'changed while being read' }
     const text = decodeUtf8(buf.subarray(0, length))
     if (text === null) return { skip: 'not valid UTF-8' }
@@ -947,11 +953,18 @@ export function registerIpcHandlers(
       const filePath = result.filePaths[0]
       rememberDialogDir(filePath)
       const filename = basename(filePath)
-      const raw = readFileSync(filePath)
-      const sizeBytes = raw.length
-      if (sizeBytes === 0) return fail('The selected key file is empty')
-      const contents = new Uint8Array(raw.subarray(0, KEY_FILE_MAX_BYTES))
-      return ok({ contents, filename, sizeBytes })
+      const fd = openSync(filePath, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0))
+      try {
+        const stat = fstatSync(fd)
+        if (!stat.isFile()) return fail('Could not read the selected key file')
+        // Only the first KEY_FILE_MAX_BYTES feed the key, so a file of any size costs at most that.
+        const buf = new Uint8Array(Math.min(stat.size, KEY_FILE_MAX_BYTES))
+        const read = readFully(fd, buf)
+        if (read === 0) return fail('The selected key file is empty')
+        return ok({ contents: buf.subarray(0, read), filename, sizeBytes: stat.size })
+      } finally {
+        closeSync(fd)
+      }
     } catch {
       // fs errors quote the path, and the renderer shows this error as is.
       return fail('Could not read the selected key file')
