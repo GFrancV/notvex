@@ -16,7 +16,8 @@ const ipc = vi.hoisted(() => ({
     trash: vi.fn(),
     restore: vi.fn(),
     delete: vi.fn(),
-    counts: vi.fn()
+    counts: vi.fn(),
+    export: vi.fn()
   },
   noteTags: { counts: vi.fn() }
 }))
@@ -113,5 +114,42 @@ describe('NoteList row context menu', () => {
 
     expect(useVaultStore.getState().activeNoteId).toBe('n1')
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+})
+
+describe('NoteList row context menu: Export note…', () => {
+  async function openWarning(activeNoteId: string | null = null): Promise<void> {
+    renderList(note(), false)
+    act(() => useVaultStore.setState({ activeNoteId }))
+    fireEvent.contextMenu(row())
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Export note…' }))
+    await screen.findByText(/not encrypted/i)
+  }
+
+  it('exports the right-clicked note, which is not the open one', async () => {
+    await openWarning('other')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    })
+
+    expect(ipc.notes.export).toHaveBeenCalledExactlyOnceWith('n1')
+    expect(screen.queryByText(/not encrypted/i)).toBeNull()
+  })
+
+  it('exports nothing on Cancel', async () => {
+    await openWarning()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    })
+
+    expect(ipc.notes.export).not.toHaveBeenCalled()
+  })
+
+  it('is not offered in the trash', async () => {
+    renderList(note({ isTrashed: true }), true)
+    fireEvent.contextMenu(row())
+
+    await screen.findByRole('menuitem', { name: 'Restore' })
+    expect(screen.queryByRole('menuitem', { name: 'Export note…' })).toBeNull()
   })
 })

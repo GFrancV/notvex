@@ -4,6 +4,7 @@ import { TrashIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { useExportNote } from '@/hooks/use-export-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
 import { notvex } from '@/lib/ipc'
@@ -14,6 +15,7 @@ import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { NoteListItem } from '@shared/types'
 import { ConfirmDeleteDialog } from './dialogs/ConfirmDeleteDialog'
+import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { NoteListRow } from './note-list-row'
 import { NoteSortMenu } from './note-sort-menu'
 import { TagFilter } from './tags/TagFilter'
@@ -25,6 +27,8 @@ export function NoteList(): ReactNode {
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
+  const exportNote = useExportNote()
+  const [exportTarget, setExportTarget] = useState<NoteListItem | null>(null)
 
   // Reload when the trash/pinned view changes
   useEffect(() => {
@@ -173,6 +177,7 @@ export function NoteList(): ReactNode {
               onSelect={setActiveNoteId}
               onPin={handlePin}
               onDuplicate={duplicateNote}
+              onExport={setExportTarget}
               onTrash={handleTrash}
               onRestore={handleRestore}
               onDelete={requestDelete}
@@ -198,6 +203,14 @@ export function NoteList(): ReactNode {
         description="Every note in the trash will be deleted for good. It can't be undone."
         confirmLabel="Empty trash"
         onConfirm={handleEmptyTrash}
+      />
+      <ExportWarningDialog
+        open={exportTarget !== null}
+        onOpenChange={(open) => !open && setExportTarget(null)}
+        title="Export note"
+        onConfirm={async () => {
+          if (exportTarget) await exportNote(exportTarget.id)
+        }}
       />
     </div>
   )
