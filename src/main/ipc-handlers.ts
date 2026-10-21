@@ -61,7 +61,8 @@ import {
   getCurrentVaultPath,
   getPref,
   getPrefs,
-  isNoteSort,
+  isPrefKey,
+  isValidPref,
   promoteVaultToTop,
   recordVaultUsed,
   setPref
@@ -384,20 +385,6 @@ function checkAndSetThrottle(): IpcResult<never> | null {
     return fail(`Too many failed attempts. Try again in ${waitSecs}s`)
   }
   return null
-}
-
-// ─── Prefs validators ─────────────────────────────────────────────────────────
-
-const PREFS_VALIDATORS: Partial<Record<keyof Prefs, (v: unknown) => boolean>> = {
-  autoLockMinutes: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 480,
-  allowScreenCapture: (v) => typeof v === 'boolean',
-  lockOnMinimize: (v) => typeof v === 'boolean',
-  checkUpdatesOnStartup: (v) => typeof v === 'boolean',
-  clearClipboardOnLock: (v) => typeof v === 'boolean',
-  clipboardClearSeconds: (v) => typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
-  // Resolved per call, not at load: suites that mock @main/prefs without isNoteSort would
-  // otherwise fail on import.
-  noteSort: (v) => isNoteSort(v)
 }
 
 // ─── Migration coordinator ────────────────────────────────────────────────────
@@ -1389,9 +1376,8 @@ export function registerIpcHandlers(
 
   handle('prefs:set', (_e, key: keyof Prefs, value: Prefs[keyof Prefs]) => {
     try {
-      const validator = PREFS_VALIDATORS[key as keyof Prefs]
-      if (!validator) return fail(`Unknown preference key: ${key}`)
-      if (!validator(value)) return fail(`Invalid value for preference: ${key}`)
+      if (!isPrefKey(key)) return fail(`Unknown preference key: ${key}`)
+      if (!isValidPref(key, value)) return fail(`Invalid value for preference: ${key}`)
 
       setPref(key, value)
       return ok(null)

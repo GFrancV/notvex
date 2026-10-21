@@ -1,6 +1,8 @@
 import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Prefs } from '@shared/types'
+
 // prefs.json is a plain file anyone can edit, so a value read back from it is untrusted too.
 
 const fsState = vi.hoisted(() => ({ contents: '' }))
@@ -89,5 +91,122 @@ describe.each(['checkUpdatesOnStartup', 'clearClipboardOnLock'] as const)('getPr
   ])('falls back to true for %s', (_label, value) => {
     fsState.contents = JSON.stringify({ [key]: value })
     expect(getPrefs()[key]).toBe(true)
+  })
+})
+
+// Valid values exclude the default, which a fallback would also return.
+describe.each<[keyof Prefs, unknown[], unknown, unknown[]]>([
+  ['clipboardClearSeconds', [0, 10, 30, 120, 300], 60, [-1, 45, '60', 2 ** 31, 1.5, null, true]],
+  ['autoLockMinutes', [0, 1, 480], 15, [-1, 481, 1.5, '15', null, true]],
+  ['lockOnMinimize', [true], false, ['true', 1]],
+  ['allowScreenCapture', [true], false, ['true', 1]]
+])('getPrefs %s', (key, valid, fallback, invalid) => {
+  it.each(valid)('keeps a saved %j', (value) => {
+    fsState.contents = JSON.stringify({ [key]: value })
+    expect(getPrefs()[key]).toEqual(value)
+  })
+
+  it.each(invalid)('falls back to the default for %j', (value) => {
+    fsState.contents = JSON.stringify({ [key]: value })
+    expect(getPrefs()[key]).toEqual(fallback)
+  })
+})
+
+describe('getPrefs', () => {
+  it('resets only the invalid key, not the valid ones next to it', () => {
+    fsState.contents = JSON.stringify({ autoLockMinutes: 5, clipboardClearSeconds: -1 })
+    expect(getPrefs()).toMatchObject({ autoLockMinutes: 5, clipboardClearSeconds: 60 })
+  })
+
+  it.each(['"abc"', '[1]', 'null', '5'])('reads a top-level %s as the defaults', (contents) => {
+    fsState.contents = contents
+    expect(getPrefs()).toEqual({
+      recentVaults: [],
+      autoLockMinutes: 15,
+      allowScreenCapture: false,
+      lockOnMinimize: false,
+      clipboardClearSeconds: 60,
+      clearClipboardOnLock: true,
+      noteSort: { field: 'updatedAt', direction: 'desc' },
+      checkUpdatesOnStartup: true
+    })
+  })
+})
+
+describe('setPrefs after an invalid read', () => {
+  it('writes the cleaned values, not the invalid ones from prefs.json', () => {
+    fsState.contents = JSON.stringify({ autoLockMinutes: -1 })
+    setPrefs({ lockOnMinimize: true })
+
+    expect(JSON.parse(fsMock.writeFileSync.mock.calls[0][1])).toMatchObject({
+      autoLockMinutes: 15,
+      lockOnMinimize: true
+    })
+  })
+})
+
+describe('getPrefs recentVaults', () => {
+  const vault = { path: '/vaults/a.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+
+  it('keeps well-formed entries', () => {
+    fsState.contents = JSON.stringify({ recentVaults: [vault] })
+    expect(getPrefs().recentVaults).toEqual([vault])
+  })
+
+  it.each([
+    ['a string', 'x'],
+    ['an object', {}],
+    ['null', null]
+  ])('falls back to an empty list for %s', (_label, recentVaults) => {
+    fsState.contents = JSON.stringify({ recentVaults })
+    expect(getPrefs().recentVaults).toEqual([])
+  })
+
+  it('drops malformed entries and keeps the valid ones', () => {
+    fsState.contents = JSON.stringify({
+      recentVaults: [vault, { path: 1 }, null, 'x', { ...vault, hasKeyFile: 'no' }]
+    })
+    expect(getPrefs().recentVaults).toEqual([vault])
+  })
+
+  it('drops an entry with an empty path', () => {
+    fsState.contents = JSON.stringify({ recentVaults: [{ ...vault, path: '' }, vault] })
+    expect(getPrefs().recentVaults).toEqual([vault])
+  })
+
+  it('keeps only the three known fields of an entry', () => {
+    fsState.contents = JSON.stringify({ recentVaults: [{ ...vault, extra: 1 }] })
+    expect(getPrefs().recentVaults).toStrictEqual([vault])
+  })
+
+  it('keeps only the first 5 entries', () => {
+    const vaults = Array.from({ length: 7 }, (_, i) => ({ ...vault, path: `/vaults/${i}.nvx` }))
+    fsState.contents = JSON.stringify({ recentVaults: vaults })
+    expect(getPrefs().recentVaults).toEqual(vaults.slice(0, 5))
+  })
+})
+
+describe('getPrefs with every pref invalid', () => {
+  it('reads back exactly the defaults', () => {
+    fsState.contents = JSON.stringify({
+      recentVaults: 'x',
+      autoLockMinutes: -1,
+      allowScreenCapture: 'y',
+      lockOnMinimize: 1,
+      clipboardClearSeconds: 45,
+      clearClipboardOnLock: null,
+      noteSort: 'title',
+      checkUpdatesOnStartup: 0
+    })
+    expect(getPrefs()).toEqual({
+      recentVaults: [],
+      autoLockMinutes: 15,
+      allowScreenCapture: false,
+      lockOnMinimize: false,
+      clipboardClearSeconds: 60,
+      clearClipboardOnLock: true,
+      noteSort: { field: 'updatedAt', direction: 'desc' },
+      checkUpdatesOnStartup: true
+    })
   })
 })

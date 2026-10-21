@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-import type { NoteSort, Prefs } from '@shared/types'
+import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
 const DEFAULTS: Prefs = {
   recentVaults: [],
@@ -21,7 +21,7 @@ function prefsPath(): string {
   return join(app.getPath('userData'), 'prefs.json')
 }
 
-export function isNoteSort(v: unknown): v is NoteSort {
+function isNoteSort(v: unknown): v is NoteSort {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
   const { field, direction, ...rest } = v as Record<string, unknown>
   return (
@@ -31,19 +31,66 @@ export function isNoteSort(v: unknown): v is NoteSort {
   )
 }
 
+function isRecentVault(v: unknown): v is RecentVault {
+  if (typeof v !== 'object' || v === null) return false
+  const { path, hasKeyFile, lastOpenedAt } = v as Record<string, unknown>
+  return (
+    typeof path === 'string' &&
+    path !== '' &&
+    typeof hasKeyFile === 'boolean' &&
+    typeof lastOpenedAt === 'number'
+  )
+}
+
+const PREFS_VALIDATORS = {
+  autoLockMinutes: (v: unknown) =>
+    typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 480,
+  allowScreenCapture: (v: unknown) => typeof v === 'boolean',
+  lockOnMinimize: (v: unknown) => typeof v === 'boolean',
+  checkUpdatesOnStartup: (v: unknown) => typeof v === 'boolean',
+  clearClipboardOnLock: (v: unknown) => typeof v === 'boolean',
+  clipboardClearSeconds: (v: unknown) =>
+    typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
+  noteSort: isNoteSort
+} satisfies Record<Exclude<keyof Prefs, 'recentVaults'>, (v: unknown) => boolean>
+
+// Object.hasOwn, not `in` or a bare lookup: 'toString' or 'constructor' would resolve to
+// Object.prototype members and pass as validators.
+export function isPrefKey(key: unknown): key is keyof typeof PREFS_VALIDATORS {
+  return typeof key === 'string' && Object.hasOwn(PREFS_VALIDATORS, key)
+}
+
+export function isValidPref<K extends keyof typeof PREFS_VALIDATORS>(
+  key: K,
+  value: unknown
+): value is Prefs[K] {
+  return PREFS_VALIDATORS[key](value)
+}
+
+function resetToDefault<K extends keyof Prefs>(prefs: Prefs, key: K): void {
+  prefs[key] = DEFAULTS[key]
+}
+
 export function getPrefs(): Prefs {
   const path = prefsPath()
   if (!existsSync(path)) return { ...DEFAULTS }
   try {
-    const prefs = { ...DEFAULTS, ...(JSON.parse(readFileSync(path, 'utf8')) as Partial<Prefs>) }
+    const stored: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    // a top-level string or array would spread its indices into prefs as keys
+    if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) {
+      return { ...DEFAULTS }
+    }
+    const prefs = { ...DEFAULTS, ...(stored as Partial<Prefs>) }
     // prefs.json can be hand-edited, so a stored value is as untrusted as one from the renderer.
-    if (!isNoteSort(prefs.noteSort)) prefs.noteSort = DEFAULTS.noteSort
-    if (typeof prefs.checkUpdatesOnStartup !== 'boolean') {
-      prefs.checkUpdatesOnStartup = DEFAULTS.checkUpdatesOnStartup
+    for (const key of Object.keys(PREFS_VALIDATORS) as (keyof typeof PREFS_VALIDATORS)[]) {
+      if (!isValidPref(key, prefs[key])) resetToDefault(prefs, key)
     }
-    if (typeof prefs.clearClipboardOnLock !== 'boolean') {
-      prefs.clearClipboardOnLock = DEFAULTS.clearClipboardOnLock
-    }
+    prefs.recentVaults = Array.isArray(prefs.recentVaults)
+      ? prefs.recentVaults
+          .filter(isRecentVault)
+          .slice(0, MAX_RECENT_VAULTS)
+          .map(({ path, hasKeyFile, lastOpenedAt }) => ({ path, hasKeyFile, lastOpenedAt }))
+      : []
     return prefs
   } catch {
     return { ...DEFAULTS }
