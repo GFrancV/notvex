@@ -24,7 +24,6 @@ const trashed = [item('t1', 'old plan', true), item('t2', 'old recipe', true)]
 
 const ipc = vi.hoisted(() => ({ list: vi.fn() }))
 
-// No `notes.search`: the list filters on its own, and a call to main's search would throw here.
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     notes: {

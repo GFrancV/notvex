@@ -53,7 +53,6 @@ import {
   listTags,
   removeTagFromNote,
   restoreNote,
-  searchNotesByTitle,
   trashNote,
   updateNote,
   updateTag
@@ -1132,16 +1131,6 @@ export function registerIpcHandlers(
       requireVault()
       touchActivity()
       return ok(await withVaultLock(() => getNoteCounts(getDb())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:search', async (_e, query: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => searchNotesByTitle(getDb(), query, getMasterKey())))
     } catch (e) {
       return fail(e)
     }

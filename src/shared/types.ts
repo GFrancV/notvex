@@ -241,7 +241,6 @@ export interface NotvexAPI {
     emptyTrash(): Promise<IpcResult<null>>
     /** Global badge counts, independent of the list the renderer is showing. */
     counts(): Promise<IpcResult<NoteCounts>>
-    search(query: string): Promise<IpcResult<NoteListItem[]>>
     /** Writes the note to a user-chosen .md file in main: true once written, null if canceled. */
     export(id: string): Promise<IpcResult<true | null>>
     /** Writes every non-trashed note into a user-chosen folder: the count, or null if canceled. */

@@ -335,16 +335,6 @@ export async function emptyTrash(db: sqlite3.Database): Promise<void> {
   await dbRun(db, 'DELETE FROM notes WHERE is_trashed = 1')
 }
 
-export async function searchNotesByTitle(
-  db: sqlite3.Database,
-  query: string,
-  masterKey: Uint8Array
-): Promise<NoteListItem[]> {
-  const all = await listNotes(db, masterKey, { trashed: false })
-  const lower = query.toLowerCase()
-  return all.filter((n) => n.title.toLowerCase().includes(lower))
-}
-
 // ─── Tag queries ─────────────────────────────────────────────────────────────
 // Tag names are intentionally not application-layer encrypted. See migrations.ts migration_v1.
 
