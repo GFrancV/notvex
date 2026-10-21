@@ -61,6 +61,7 @@ import {
   getCurrentVaultPath,
   getPref,
   getPrefs,
+  isLocalVaultPath,
   isPrefKey,
   isValidPref,
   promoteVaultToTop,
@@ -523,7 +524,9 @@ export function registerIpcHandlers(
   handle('vault:has-vault', (_e, filePath?: string) => {
     try {
       const path = filePath ?? getCurrentVaultPath()
-      return ok(path ? existsSync(path) && isValidNotvexFile(path) : false)
+      if (!path) return ok(false)
+      if (!isLocalVaultPath(path)) return fail('Vaults on network shares are not supported')
+      return ok(existsSync(path) && isValidNotvexFile(path))
     } catch (e) {
       return fail(e)
     }
