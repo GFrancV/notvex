@@ -48,11 +48,11 @@ import { VaultSwitcher } from './VaultSwitcher'
 
 export function Sidebar(): React.ReactNode {
   const { loadTags, loadTagCounts } = useVaultStore()
-  const { tags, tagCounts, notes } = useVaultStore(
+  const { tags, tagCounts, noteCounts } = useVaultStore(
     useShallow((s) => ({
       tags: s.tags,
       tagCounts: s.tagCounts,
-      notes: s.notes
+      noteCounts: s.noteCounts
     }))
   )
 
@@ -89,9 +89,7 @@ export function Sidebar(): React.ReactNode {
     void loadTagCounts()
   }, [loadTags, loadTagCounts])
 
-  const allNotesCount = notes.filter((n) => !n.isTrashed).length
-  const pinnedCount = notes.filter((n) => n.isPinned && !n.isTrashed).length
-  const trashCount = notes.filter((n) => n.isTrashed).length
+  const { live: allNotesCount, pinned: pinnedCount, trashed: trashCount } = noteCounts
 
   const allNotesActive = activeTags.length === 0 && !showTrash && !showPinned
 

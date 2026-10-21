@@ -11,11 +11,18 @@ export function useTogglePin(): (note: { id: string; isPinned: boolean }) => Pro
 
   return useCallback(
     async (note) => {
+      const pinned = !note.isPinned
       const saved = await ipcSucceeded(
-        notvex.notes.update(note.id, { isPinned: !note.isPinned }),
+        notvex.notes.update(note.id, { isPinned: pinned }),
         'Failed to update note'
       )
-      if (saved) void loadNotes({ trashed: useUiStore.getState().showTrash })
+      if (saved) {
+        // The editor reads the pin from this entry; don't wait for the reload to show it.
+        useVaultStore.setState((s) => ({
+          notes: s.notes.map((n) => (n.id === note.id ? { ...n, isPinned: pinned } : n))
+        }))
+        void loadNotes({ trashed: useUiStore.getState().showTrash })
+      }
       return saved
     },
     [loadNotes]

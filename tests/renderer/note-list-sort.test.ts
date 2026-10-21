@@ -32,7 +32,7 @@ const ipc = vi.hoisted(() => {
     all,
     notes: {
       list: vi.fn(() => Promise.resolve({ success: true, data: all })),
-      search: vi.fn(() => Promise.resolve({ success: true, data: all }))
+      counts: vi.fn(async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } }))
     },
     prefs: {
       get: vi.fn(),
@@ -158,20 +158,6 @@ describe('note list sort menu', () => {
 })
 
 describe('note list sort sources', () => {
-  it('sorts search results, which arrive in server order', async () => {
-    vi.useFakeTimers()
-    usePrefsStore.setState({ noteSort: { field: 'title', direction: 'asc' } })
-    render(createElement(NoteList))
-
-    act(() => useUiStore.setState({ searchQuery: 'a' }))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300)
-    })
-
-    expect(ipc.notes.search).toHaveBeenCalledWith('a')
-    expect(titles()).toEqual(['Alpha', 'Beta', 'Gamma'])
-  })
-
   it('applies the sort saved in prefs once the store loads', async () => {
     const saved: Prefs = {
       recentVaults: [],

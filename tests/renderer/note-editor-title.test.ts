@@ -18,13 +18,20 @@ vi.mock('@uiw/react-codemirror', () => ({ default: (): null => null }))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
-    notes: { get: ipc.get, update: ipc.update, list: ipc.list, trash: vi.fn() },
+    notes: {
+      get: ipc.get,
+      update: ipc.update,
+      list: ipc.list,
+      trash: vi.fn(),
+      counts: vi.fn(async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } }))
+    },
     tags: { list: vi.fn() },
     noteTags: { counts: ipc.counts, all: vi.fn() }
   }
 }))
 
 const { NoteEditor } = await import('@/components/note-editor')
+const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 
 function note(id: string, title: string): Note {
@@ -58,10 +65,27 @@ describe('NoteEditor — title persistence', () => {
     ipc.counts.mockResolvedValue({ success: true, data: {} })
     ipc.update.mockResolvedValue({ success: true, data: null })
     useVaultStore.setState({ activeNoteId: null, notes: [], tags: [], noteTagsMap: {} })
+    useUiStore.getState().resetFilters()
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('reloads the view that is open after a title save', async () => {
+    useUiStore.setState({ showTrash: true })
+    ipc.get.mockResolvedValue({ success: true, data: { ...note('t', 'Old'), isTrashed: true } })
+    useVaultStore.setState({ activeNoteId: 't' })
+
+    const view = render(createElement(NoteEditor))
+    await waitFor(() => expect(titleInput().value).toBe('Old'))
+
+    fireEvent.change(titleInput(), { target: { value: 'Old renamed' } })
+    fireEvent.blur(titleInput())
+
+    await waitFor(() => expect(ipc.list).toHaveBeenCalled())
+    expect(ipc.list).toHaveBeenLastCalledWith({ trashed: true })
+    view.unmount()
   })
 
   it('1 · persists a typed title without waiting for blur', async () => {

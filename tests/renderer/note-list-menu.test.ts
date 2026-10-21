@@ -15,7 +15,8 @@ const ipc = vi.hoisted(() => ({
     update: vi.fn(),
     trash: vi.fn(),
     restore: vi.fn(),
-    delete: vi.fn()
+    delete: vi.fn(),
+    counts: vi.fn()
   },
   noteTags: { counts: vi.fn() }
 }))

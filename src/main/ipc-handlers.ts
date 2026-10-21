@@ -45,6 +45,7 @@ import {
   getAllNoteTags,
   getNote,
   getNoteCountPerTag,
+  getNoteCounts,
   getNoteTags,
   getNoteTitle,
   importNotes,
@@ -52,7 +53,6 @@ import {
   listTags,
   removeTagFromNote,
   restoreNote,
-  searchNotesByTitle,
   trashNote,
   updateNote,
   updateTag
@@ -1113,11 +1113,11 @@ export function registerIpcHandlers(
     }
   })
 
-  handle('notes:search', async (_e, query: string) => {
+  handle('notes:counts', async () => {
     try {
       requireVault()
       touchActivity()
-      return ok(await withVaultLock(() => searchNotesByTitle(getDb(), query, getMasterKey())))
+      return ok(await withVaultLock(() => getNoteCounts(getDb())))
     } catch (e) {
       return fail(e)
     }

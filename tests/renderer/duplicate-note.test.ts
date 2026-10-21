@@ -72,7 +72,8 @@ vi.mock('@/lib/ipc', () => ({
       update: ipc.update,
       list: ipc.list,
       duplicate: ipc.duplicate,
-      trash: vi.fn()
+      trash: vi.fn(),
+      counts: vi.fn(async () => ({ success: true, data: { live: 0, pinned: 0, trashed: 0 } }))
     },
     tags: { list: vi.fn() },
     noteTags: { counts: ipc.counts, all: vi.fn() }
