@@ -15,7 +15,7 @@ export function usePickVault(): UsePickVaultReturn {
 
     const hasVaultRes = await notvex.vault.hasVault(chooseFileRes.data)
     if (!hasVaultRes.success || !hasVaultRes.data) {
-      toast.error('This file is not a valid Notvex vault')
+      toast.error(hasVaultRes.success ? 'This file is not a valid Notvex vault' : hasVaultRes.error)
       return null
     }
 
