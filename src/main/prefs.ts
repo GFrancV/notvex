@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { isAbsolute, join } from 'path'
 
 import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
@@ -31,12 +31,17 @@ function isNoteSort(v: unknown): v is NoteSort {
   )
 }
 
+export function isLocalVaultPath(p: string): boolean {
+  // a leading \\ or // is a UNC path: any fs call on it opens an SMB connection to that host
+  return isAbsolute(p) && !/^[\\/]{2}/.test(p)
+}
+
 function isRecentVault(v: unknown): v is RecentVault {
   if (typeof v !== 'object' || v === null) return false
   const { path, hasKeyFile, lastOpenedAt } = v as Record<string, unknown>
   return (
     typeof path === 'string' &&
-    path !== '' &&
+    isLocalVaultPath(path) &&
     typeof hasKeyFile === 'boolean' &&
     typeof lastOpenedAt === 'number'
   )
