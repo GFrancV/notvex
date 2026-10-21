@@ -185,7 +185,7 @@ export function NoteEditor(): ReactNode {
       // A flush fired by a note switch resolves after the next note has loaded
       // and already set this ref. Only the note still on screen may update it.
       if (activeIdRef.current === id) persistedTitleRef.current = newTitle
-      void loadNotes()
+      void loadNotes({ trashed: useUiStore.getState().showTrash })
     },
     [loadNotes]
   )
