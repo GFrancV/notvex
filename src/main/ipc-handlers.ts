@@ -978,7 +978,7 @@ export function registerIpcHandlers(
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await configureKeyFile(password, kfContents)
-      recordVaultUsed(getVaultPath()!, true)
+      recordVaultUsedNonFatal('vault:configure-key-file', getVaultPath()!, true)
       return ok(result)
     } catch (e) {
       await notifyIfRotationLocked()
@@ -992,7 +992,7 @@ export function registerIpcHandlers(
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await removeKeyFile(password, kfContents)
-      recordVaultUsed(getVaultPath()!, false)
+      recordVaultUsedNonFatal('vault:remove-key-file', getVaultPath()!, false)
       return ok(result)
     } catch (e) {
       await notifyIfRotationLocked()

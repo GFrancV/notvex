@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { recordVaultUsed } from '@main/prefs'
 import { rendererIndexPath } from '@main/url-guard'
-import { closeVault } from '@main/vault/vault'
+import { closeVault, isVaultOpen } from '@main/vault/vault'
 
 // prefs.json is written after the vault change already happened, so a failed write must not
 // turn that change into an error: the renderer would disagree with main about the vault.
@@ -44,7 +44,10 @@ vi.mock('@main/vault/container', () => ({
   shouldWarnOpeningInDevBuild: vi.fn(() => false)
 }))
 
-vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
+vi.mock('@main/vault/crypto', () => ({
+  KEY_FILE_MAX_BYTES: 0,
+  readKeyFileContents: vi.fn((contents: Uint8Array) => contents)
+}))
 
 vi.mock('@main/vault/vault', () => ({
   getVaultPath: vi.fn(() => '/v.nvx'),
@@ -52,7 +55,9 @@ vi.mock('@main/vault/vault', () => ({
   closeVault: vi.fn(async () => ({ packFailed: false })),
   createVault: vi.fn(async () => ({ mnemonic: 'created words' })),
   openVault: vi.fn(async () => ({ maj: 1, min: 0 })),
-  openVaultWithRecovery: vi.fn(async () => ({ maj: 1, min: 0 }))
+  openVaultWithRecovery: vi.fn(async () => ({ maj: 1, min: 0 })),
+  configureKeyFile: vi.fn(async () => ({ mnemonic: 'rotated words' })),
+  removeKeyFile: vi.fn(async () => ({ mnemonic: 'rotated words' }))
 }))
 
 vi.mock('@main/db/queries', () => ({}))
@@ -112,6 +117,37 @@ describe('a failed prefs write after a successful vault change', () => {
       vi.mocked(console.error).mockRestore()
       // An unconsumed throw would otherwise fire in the next test
       vi.mocked(recordVaultUsed).mockReset()
+    }
+  })
+
+  // The vault was re-encrypted with a new recovery mnemonic the user must still be shown
+  it.each([
+    ['vault:configure-key-file', true],
+    ['vault:remove-key-file', false]
+  ])('%s still returns the new mnemonic', async (channel, hasKeyFile) => {
+    vi.mocked(isVaultOpen).mockReturnValue(true)
+    vi.mocked(recordVaultUsed).mockImplementationOnce(() => {
+      throw Object.assign(new Error(`EACCES: permission denied, open '${PATH}'`), {
+        code: 'EACCES'
+      })
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(invoke(channel, 'pw', new Uint8Array([1]))).resolves.toEqual({
+        success: true,
+        data: { mnemonic: 'rotated words' }
+      })
+
+      expect(recordVaultUsed).toHaveBeenCalledExactlyOnceWith('/v.nvx', hasKeyFile)
+      expect(console.error).toHaveBeenCalledExactlyOnceWith(
+        `[${channel}] record vault used failed:`,
+        'EACCES'
+      )
+    } finally {
+      vi.mocked(console.error).mockRestore()
+      vi.mocked(recordVaultUsed).mockReset()
+      vi.mocked(isVaultOpen).mockReturnValue(false)
     }
   })
 })
