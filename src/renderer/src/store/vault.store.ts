@@ -33,7 +33,6 @@ interface VaultStore {
   setNeedsRecoveryReset: (value: boolean) => void
   setPendingNewVaultPath: (path: string | null) => void
   setPendingOpenVaultPath: (path: string | null) => void
-  setNotes: (notes: NoteListItem[]) => void
   setTags: (tags: Tag[]) => void
   setTagCounts: (counts: Record<string, number>) => void
   setNoteTagsMap: (map: Record<string, string[]>) => void
@@ -93,7 +92,6 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   setNeedsRecoveryReset: (needsRecoveryReset): void => set({ needsRecoveryReset }),
   setPendingNewVaultPath: (pendingNewVaultPath): void => set({ pendingNewVaultPath }),
   setPendingOpenVaultPath: (pendingOpenVaultPath): void => set({ pendingOpenVaultPath }),
-  setNotes: (notes): void => set({ notes }),
   setTags: (tags): void => set({ tags }),
   setTagCounts: (tagCounts): void => set({ tagCounts }),
   setNoteTagsMap: (noteTagsMap): void => set({ noteTagsMap }),

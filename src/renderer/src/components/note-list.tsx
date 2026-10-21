@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { TrashIcon } from 'lucide-react'
 
@@ -20,73 +20,38 @@ import { TagFilter } from './tags/TagFilter'
 import { Button } from './ui/button'
 import { ScrollArea } from './ui/scroll-area'
 
-const SEARCH_DEBOUNCE = 300
-
 export function NoteList(): ReactNode {
   const { notes, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } = useVaultStore()
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
 
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-
   // Reload when the trash/pinned view changes
   useEffect(() => {
     void loadNotes({ trashed: showTrash })
   }, [showTrash, showPinned, loadNotes])
 
-  // The tag filter works client-side on `notes`, which may still hold the results of a search
-  // made before the first tag was picked; start it from the full list.
-  const tagsActive = activeTags.length > 0
-  useEffect(() => {
-    if (tagsActive) void loadNotes({ trashed: showTrash })
-  }, [tagsActive, showTrash, loadNotes])
+  const query = searchQuery.trim().toLowerCase()
 
-  // Debounced IPC search — only when no tag filter active (tag filter handled client-side)
-  useEffect(() => {
-    if (activeTags.length > 0) return
-    clearTimeout(searchTimer.current)
-    if (!searchQuery.trim()) {
-      void loadNotes({ trashed: showTrash })
-      return
-    }
-    searchTimer.current = setTimeout((): void => {
-      void (async (): Promise<void> => {
-        const res = await notvex.notes.search(searchQuery)
-        if (res.success) useVaultStore.getState().setNotes(res.data)
-      })()
-    }, SEARCH_DEBOUNCE)
-    return () => clearTimeout(searchTimer.current)
-  }, [searchQuery, showTrash, activeTags, loadNotes])
-
-  // Client-side filtering: pinned view, multi-tag AND, and search-on-top-of-tags
+  // Every filter, the title search included, runs here on the loaded list: a reload after a
+  // pin, a trash or a save then keeps what the user is looking at.
   const filteredNotes = useMemo(() => {
     let result = notes
-    if (showPinned) {
-      result = result.filter((n) => n.isPinned)
-      if (searchQuery.trim()) {
-        const lower = searchQuery.toLowerCase()
-        result = result.filter((n) => n.title.toLowerCase().includes(lower))
-      }
-      return result
-    }
-    if (activeTags.length > 0) {
+    if (showPinned) result = result.filter((n) => n.isPinned)
+    else if (activeTags.length > 0) {
       result = result.filter((n) =>
         activeTags.every((tagId) => (noteTagsMap[n.id] ?? []).includes(tagId))
       )
-      if (searchQuery.trim()) {
-        const lower = searchQuery.toLowerCase()
-        result = result.filter((n) => n.title.toLowerCase().includes(lower))
-      }
     }
+    if (query) result = result.filter((n) => n.title.toLowerCase().includes(query))
     return result
-  }, [notes, showPinned, activeTags, noteTagsMap, searchQuery])
+  }, [notes, showPinned, activeTags, noteTagsMap, query])
 
-  // Sorted last so every path that fills `notes` (list, search, tags) gets the user's order.
+  // Sorted last so every filter gets the user's order.
   const noteSort = usePrefsStore((s) => s.noteSort)
   const displayedNotes = useMemo(
-    () => sortNotes(showPinned || activeTags.length > 0 ? filteredNotes : notes, noteSort),
-    [showPinned, activeTags.length, filteredNotes, notes, noteSort]
+    () => sortNotes(filteredNotes, noteSort),
+    [filteredNotes, noteSort]
   )
 
   const togglePin = useTogglePin()
@@ -135,18 +100,18 @@ export function NoteList(): ReactNode {
   }
 
   const emptyMessage = (): string => {
+    if (query) return 'No results'
     if (showTrash) return 'Trash is empty'
     if (showPinned) return 'No pinned notes'
     if (activeTags.length > 0) return 'No notes with these tags'
-    if (searchQuery) return 'No results'
     return 'No notes yet'
   }
 
   const listTitle = (): string => {
     if (showTrash) return 'Trash'
     if (showPinned) return 'Pinned notes'
-    if (activeTags.length > 0) return searchQuery.trim() ? 'Search in tags' : 'Notes by Tags'
-    if (searchQuery) return 'Search results'
+    if (activeTags.length > 0) return query ? 'Search in tags' : 'Notes by Tags'
+    if (query) return 'Search results'
     return 'All Notes'
   }
 
@@ -185,7 +150,7 @@ export function NoteList(): ReactNode {
         {displayedNotes.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center justify-center p-8">
             <p className="text-sm">{emptyMessage()}</p>
-            {!showTrash && !searchQuery && activeTags.length === 0 && (
+            {!showTrash && !query && activeTags.length === 0 && (
               <button
                 type="button"
                 onClick={(): void => {
