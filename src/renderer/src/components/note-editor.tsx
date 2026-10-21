@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner'
 
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { useExportNote } from '@/hooks/use-export-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
@@ -307,12 +308,7 @@ export function NoteEditor(): ReactNode {
     setNote((current) => (current?.id === note.id ? { ...current, isPinned: !isPinned } : current))
   }
 
-  const handleExport = async (): Promise<void> => {
-    if (!activeNoteId) return
-    const res = await notvex.notes.export(activeNoteId)
-    if (!res.success) toast.error(res.error)
-    else if (res.data) toast.success('Note exported')
-  }
+  const exportNote = useExportNote()
 
   const trashNote = useTrashNote()
   const handleTrash = async (): Promise<void> => {
@@ -450,27 +446,25 @@ export function NoteEditor(): ReactNode {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
+                {note && !note.isTrashed && (
+                  <>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
+                        <CopyIcon className="size-4" />
+                        Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setExportOpen(true)}>
+                        <DownloadIcon className="size-4" />
+                        Export note…
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuGroup>
-                  {note && !note.isTrashed && (
-                    <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
-                      <CopyIcon className="size-4" />
-                      Duplicate
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => setExportOpen(true)}>
-                    <DownloadIcon className="size-4" />
-                    Export note…
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={handleTrash}
-                    title="Move to trash"
-                  >
+                  <DropdownMenuItem variant="destructive" onClick={handleTrash}>
                     <Trash2Icon className="size-4" />
-                    Delete file
+                    Move to trash
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -480,7 +474,7 @@ export function NoteEditor(): ReactNode {
               open={exportOpen}
               onOpenChange={setExportOpen}
               title="Export note"
-              onConfirm={handleExport}
+              onConfirm={() => exportNote(activeNoteId)}
             />
           </div>
         </div>

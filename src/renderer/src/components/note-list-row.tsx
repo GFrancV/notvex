@@ -1,6 +1,14 @@
 import type { ReactNode } from 'react'
 
-import { CopyIcon, PinIcon, PinOffIcon, RotateCcwIcon, Trash2Icon, TrashIcon } from 'lucide-react'
+import {
+  CopyIcon,
+  DownloadIcon,
+  PinIcon,
+  PinOffIcon,
+  RotateCcwIcon,
+  Trash2Icon,
+  TrashIcon
+} from 'lucide-react'
 import { cn } from 'cn'
 
 import { formatTimeAgo } from '@/lib/utils'
@@ -22,6 +30,7 @@ interface NoteListRowProps {
   onSelect: (id: string) => void
   onPin: (note: NoteListItem) => Promise<void>
   onDuplicate: (id: string) => Promise<void>
+  onExport: (note: NoteListItem) => void
   onTrash: (note: NoteListItem) => Promise<void>
   onRestore: (note: NoteListItem) => Promise<void>
   onDelete: (note: NoteListItem) => Promise<void>
@@ -35,6 +44,7 @@ export function NoteListRow({
   onSelect,
   onPin,
   onDuplicate,
+  onExport,
   onTrash,
   onRestore,
   onDelete
@@ -107,6 +117,10 @@ export function NoteListRow({
             <ContextMenuItem onClick={() => void onDuplicate(note.id)}>
               <CopyIcon className="size-4" />
               Duplicate
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onExport(note)}>
+              <DownloadIcon className="size-4" />
+              Export note…
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" onClick={() => void onTrash(note)}>

@@ -312,7 +312,7 @@ describe('NoteEditor — trash', () => {
     await screen.findByDisplayValue('A')
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete file' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Move to trash' }))
     })
 
     expect(toastError).toHaveBeenCalledWith('DB locked')
