@@ -78,7 +78,10 @@ describe('HelpMenu', () => {
     fireEvent.click(item(/copy debug info/i))
 
     await waitFor(() =>
-      expect(ipc.clipboardWrite).toHaveBeenCalledWith(reportBody(PARTS), { secret: false })
+      expect(ipc.clipboardWrite).toHaveBeenCalledWith(reportBody(PARTS), {
+        secret: false,
+        fromUnlockedView: false
+      })
     )
   })
 

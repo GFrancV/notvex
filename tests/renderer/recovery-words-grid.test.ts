@@ -35,7 +35,10 @@ describe('RecoveryWordsGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy to clipboard/i }))
 
     await waitFor(() =>
-      expect(ipc.write).toHaveBeenCalledExactlyOnceWith(MNEMONIC, { secret: true })
+      expect(ipc.write).toHaveBeenCalledExactlyOnceWith(MNEMONIC, {
+        secret: true,
+        fromUnlockedView: false
+      })
     )
     expect(await screen.findByRole('button', { name: /copied/i })).toBeTruthy()
   })

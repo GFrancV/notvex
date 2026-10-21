@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 import { notvex } from '@/lib/ipc'
+import { useVaultStore } from '@/store/vault.store'
 
 interface UseCopyToClipboardReturn {
   isCopied: boolean
@@ -23,8 +24,9 @@ export function useCopyToClipboard(): UseCopyToClipboardReturn {
     async (content: string, { secret = false } = {}): Promise<void> => {
       if (content === '') return
 
+      const fromUnlockedView = useVaultStore.getState().status === 'unlocked'
       const result = await notvex.clipboard
-        .write(content, { secret })
+        .write(content, { secret, fromUnlockedView })
         .catch(() => ({ success: false }) as const)
       if (!result.success) {
         toast.error('Failed to copy to clipboard')

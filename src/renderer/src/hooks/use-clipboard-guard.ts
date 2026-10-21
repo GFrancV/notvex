@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 
 import { notvex } from '@/lib/ipc'
+import { useVaultStore } from '@/store/vault.store'
 
 function selectedText(target: Element | null): string {
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
@@ -30,7 +31,8 @@ function guardCopy(event: ClipboardEvent): void {
   if (event.type === 'cut' && !handled) document.execCommand('delete')
 
   const failed = (): void => void toast.error('Failed to copy to clipboard')
-  void notvex.clipboard.write(text).then((result) => {
+  const fromUnlockedView = useVaultStore.getState().status === 'unlocked'
+  void notvex.clipboard.write(text, { fromUnlockedView }).then((result) => {
     if (!result.success) failed()
   }, failed)
 }

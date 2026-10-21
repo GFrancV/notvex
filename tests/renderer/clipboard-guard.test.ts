@@ -19,6 +19,7 @@ Range.prototype.getBoundingClientRect = (): DOMRect => new DOMRect()
 
 const { useClipboardGuard } = await import('@/hooks/use-clipboard-guard')
 const { toast } = await import('sonner')
+const { useVaultStore } = await import('@/store/vault.store')
 
 interface FakeClipboardData {
   getData: (type: string) => string
@@ -67,6 +68,7 @@ beforeEach(() => {
   write.mockReset().mockResolvedValue({ success: true, data: null })
   execCommand.mockClear()
   vi.mocked(toast.error).mockClear()
+  useVaultStore.setState({ status: 'locked' })
   document.execCommand = execCommand
   unmountGuard = renderHook(() => useClipboardGuard()).unmount
 })
@@ -82,7 +84,7 @@ describe('copy and cut in the editor', () => {
 
     const { event, data } = fire(view.contentDOM, 'copy')
 
-    expect(write).toHaveBeenCalledExactlyOnceWith('first line')
+    expect(write).toHaveBeenCalledExactlyOnceWith('first line', { fromUnlockedView: false })
     expect(event.defaultPrevented).toBe(true)
     expect(data.types()).toEqual([])
     view.destroy()
@@ -94,7 +96,7 @@ describe('copy and cut in the editor', () => {
 
     fire(view.contentDOM, 'copy')
 
-    expect(write).toHaveBeenCalledExactlyOnceWith(doc)
+    expect(write).toHaveBeenCalledExactlyOnceWith(doc, { fromUnlockedView: false })
     view.destroy()
   })
 
@@ -103,7 +105,7 @@ describe('copy and cut in the editor', () => {
 
     fire(view.contentDOM, 'cut')
 
-    expect(write).toHaveBeenCalledExactlyOnceWith('cut')
+    expect(write).toHaveBeenCalledExactlyOnceWith('cut', { fromUnlockedView: false })
     expect(view.state.doc.toString()).toBe('keep ')
     expect(execCommand).not.toHaveBeenCalled()
     view.destroy()
@@ -130,7 +132,7 @@ describe('copy and cut in plain fields', () => {
 
     const { event } = fire(el, 'copy')
 
-    expect(write).toHaveBeenCalledExactlyOnceWith('title')
+    expect(write).toHaveBeenCalledExactlyOnceWith('title', { fromUnlockedView: false })
     expect(event.defaultPrevented).toBe(true)
   })
 
@@ -139,7 +141,7 @@ describe('copy and cut in plain fields', () => {
 
     fire(el, 'cut')
 
-    expect(write).toHaveBeenCalledExactlyOnceWith('title')
+    expect(write).toHaveBeenCalledExactlyOnceWith('title', { fromUnlockedView: false })
     expect(execCommand).toHaveBeenCalledExactlyOnceWith('delete')
   })
 
@@ -181,7 +183,7 @@ describe('copy in rendered content', () => {
 
     fire(p, 'copy')
 
-    expect(write).toHaveBeenCalledExactlyOnceWith('reading view')
+    expect(write).toHaveBeenCalledExactlyOnceWith('reading view', { fromUnlockedView: false })
   })
 
   it('does nothing when there is nothing to copy', () => {
@@ -221,6 +223,38 @@ describe('a copy main could not write', () => {
 
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledOnce())
   })
+})
+
+// Main refuses a copy from the unlocked view once it has locked, before the renderer knows.
+describe('the view a copy came from', () => {
+  function copyInField(): void {
+    const el = document.createElement('input')
+    el.value = 'note title'
+    document.body.append(el)
+    el.focus()
+    el.setSelectionRange(5, 10)
+    fire(el, 'copy')
+  }
+
+  it('marks a copy made while the vault is unlocked', () => {
+    useVaultStore.setState({ status: 'unlocked' })
+
+    copyInField()
+
+    expect(write).toHaveBeenCalledExactlyOnceWith('title', { fromUnlockedView: true })
+  })
+
+  // Setup runs as 'uninitialized' with no vault open; a marked copy there would be refused.
+  it.each(['checking', 'uninitialized', 'locked'] as const)(
+    'does not mark a copy made while the vault is %s',
+    (status) => {
+      useVaultStore.setState({ status })
+
+      copyInField()
+
+      expect(write).toHaveBeenCalledExactlyOnceWith('title', { fromUnlockedView: false })
+    }
+  )
 })
 
 describe('after unmount', () => {
