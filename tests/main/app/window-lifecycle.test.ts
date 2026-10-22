@@ -35,6 +35,7 @@ vi.mock('electron', async () => {
 vi.mock('@main/ipc-handlers', () => ({
   cancelPendingConfirmations: vi.fn(),
   closeVaultDrained: vi.fn(async () => undefined),
+  isRecoveryConfirmPending: vi.fn(() => false),
   lockVaultAndNotify: vi.fn(async () => undefined),
   markRendererReplaced: vi.fn(),
   registerIpcHandlers: vi.fn()
@@ -91,6 +92,54 @@ describe('createWindow: powerMonitor listeners (issue #36)', () => {
     createWindow(() => null)
 
     for (const event of POWER_EVENTS) expect(powerMonitor.listenerCount(event)).toBe(1)
+  })
+})
+
+describe('createWindow: lock on minimize', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const electron = await import('electron')
+    ;(electron.powerMonitor as unknown as EventEmitter).removeAllListeners()
+    const { getPref } = await import('@main/prefs')
+    const { isVaultOpen } = await import('@main/vault/vault')
+    vi.mocked(getPref).mockReturnValue(true)
+    vi.mocked(isVaultOpen).mockReturnValue(true)
+  })
+
+  afterEach(async () => {
+    const { getPref } = await import('@main/prefs')
+    const { isVaultOpen } = await import('@main/vault/vault')
+    const { isRecoveryConfirmPending } = await import('@main/ipc-handlers')
+    vi.mocked(getPref).mockReturnValue(false)
+    vi.mocked(isVaultOpen).mockReturnValue(false)
+    vi.mocked(isRecoveryConfirmPending).mockReturnValue(false)
+  })
+
+  it('locks when minimized', async () => {
+    const { createWindow } = await import('@main/window')
+    const { lockVaultAndNotify } = await import('@main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    win.emit('minimize')
+    win.emit('closed')
+
+    expect(lockVaultAndNotify).toHaveBeenCalledExactlyOnceWith(win)
+  })
+
+  it('waits while a new recovery key is on screen, but the lock screen still locks', async () => {
+    const { createWindow } = await import('@main/window')
+    const { isRecoveryConfirmPending, lockVaultAndNotify } = await import('@main/ipc-handlers')
+    const electron = await import('electron')
+    vi.mocked(isRecoveryConfirmPending).mockReturnValue(true)
+    const win = createWindow(() => null)
+
+    win.emit('minimize')
+    expect(lockVaultAndNotify).not.toHaveBeenCalled()
+
+    ;(electron.powerMonitor as unknown as EventEmitter).emit('lock-screen')
+    win.emit('closed')
+
+    expect(lockVaultAndNotify).toHaveBeenCalledExactlyOnceWith(win)
   })
 })
 

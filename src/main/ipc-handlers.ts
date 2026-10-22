@@ -128,10 +128,20 @@ function requireVault(): void {
   if (!isVaultOpen()) throw new Error('Vault is locked')
 }
 
+// Set while a new recovery key may still be on screen, so the soft locks (inactivity, minimize)
+// wait for the user to confirm it. Memory only and dropped on any close: the prefs flag is what
+// warns the next unlock, this one must never keep a later session from locking.
+let recoveryConfirmPending = false
+
+export function isRecoveryConfirmPending(): boolean {
+  return recoveryConfirmPending
+}
+
 // Called by every handler that hands out a new recovery key, before it returns. The old key is
 // already invalid, so a failed prefs write must not keep the new one from reaching the user: the
 // next unlock just won't warn if it is lost.
 function markIssuedRecoveryKey(vaultPath: string): void {
+  recoveryConfirmPending = true
   try {
     markRecoveryUnconfirmed(vaultPath)
   } catch (e) {
@@ -293,6 +303,9 @@ export async function closeVaultDrained(
     if (packFailed && win && !win.isDestroyed()) win.webContents.send('vault:pack-failed')
     return { packFailed }
   } finally {
+    // After the close, not before: closeVault() queues behind any running rekey, whose handler
+    // marks its new key before the vault actually closes.
+    recoveryConfirmPending = false
     await clearClipboardIfOurs('lock')
   }
 }
@@ -307,6 +320,7 @@ export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<voi
 // clipboard clear every lock does happens here.
 async function notifyIfRotationLocked(): Promise<void> {
   if (isVaultOpen()) return
+  recoveryConfirmPending = false
   await clearClipboardIfOurs('lock')
   liveWin()?.webContents.send('vault:auto-locked')
 }
@@ -344,7 +358,7 @@ function startAutoLockTimer(): void {
     void (async (): Promise<void> => {
       const minutes = getPref('autoLockMinutes')
       if (minutes === 0) return
-      if (!isVaultOpen()) return
+      if (!isVaultOpen() || recoveryConfirmPending) return
       const elapsed = (Date.now() - lastActivityAt) / 60000
       if (elapsed >= minutes) {
         await lockVaultAndNotify(liveWin())
@@ -838,6 +852,9 @@ export function registerIpcHandlers(
 
   handle('vault:confirm-recovery-saved', () => {
     try {
+      recoveryConfirmPending = false
+      // Reading and confirming the key was activity: the auto-lock restarts from here.
+      touchActivity()
       const vaultPath = getVaultPath()
       if (vaultPath) clearRecoveryUnconfirmed(vaultPath)
       return ok(null)
