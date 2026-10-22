@@ -837,6 +837,25 @@ export function registerIpcHandlers(
     }
   )
 
+  // A new recovery key for a user who lost the last one before saving it: re-keying under the
+  // same password is what issues it, and invalidates the lost one.
+  handle(
+    'vault:regenerate-recovery-key',
+    async (_e, password: string, keyFileContents?: Uint8Array) => {
+      try {
+        requireVault()
+        touchActivity()
+        const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+        const result = await changePassword(password, password, kfContents)
+        markIssuedRecoveryKey(getVaultPath()!)
+        return ok(result)
+      } catch (e) {
+        await notifyIfRotationLocked()
+        return fail(e)
+      }
+    }
+  )
+
   handle('vault:rotate-credentials', async (_e, newPassword: string) => {
     try {
       requireVault()

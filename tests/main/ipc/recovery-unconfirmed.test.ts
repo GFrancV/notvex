@@ -98,7 +98,13 @@ const ISSUERS = [
   { channel: 'vault:change-password', fn: 'changePassword', args: ['old', 'new'], path: VAULT },
   { channel: 'vault:configure-key-file', fn: 'configureKeyFile', args: ['pw', KF], path: VAULT },
   { channel: 'vault:remove-key-file', fn: 'removeKeyFile', args: ['pw', KF], path: VAULT },
-  { channel: 'vault:rotate-credentials', fn: 'rotateVaultCredentials', args: ['new'], path: VAULT }
+  { channel: 'vault:rotate-credentials', fn: 'rotateVaultCredentials', args: ['new'], path: VAULT },
+  {
+    channel: 'vault:regenerate-recovery-key',
+    fn: 'changePassword',
+    args: ['pw', KF],
+    path: VAULT
+  }
 ] as const
 
 describe.each(ISSUERS)('$channel', ({ channel, fn, args, path }) => {
@@ -124,6 +130,28 @@ describe.each(ISSUERS)('$channel', ({ channel, fn, args, path }) => {
     await expect(invoke(channel, ...args)).resolves.toEqual({ success: true, data: MNEMONIC })
     // Only the next-unlock warning is lost: the soft locks still wait for this key.
     expect(ipc.isRecoveryConfirmPending()).toBe(true)
+  })
+})
+
+describe('vault:regenerate-recovery-key', () => {
+  it('re-keys under the same password, which is what issues the new recovery key', async () => {
+    vi.mocked(vault.changePassword).mockResolvedValue(MNEMONIC as never)
+
+    await invoke('vault:regenerate-recovery-key', 'pw', KF)
+
+    expect(vault.changePassword).toHaveBeenCalledExactlyOnceWith('pw', 'pw', KF)
+    expect(ipc.isRecoveryConfirmPending()).toBe(true)
+  })
+
+  it('reports a wrong password and leaves the flag alone', async () => {
+    vi.mocked(vault.changePassword).mockRejectedValue(new Error('Current password is incorrect'))
+
+    await expect(invoke('vault:regenerate-recovery-key', 'wrong')).resolves.toEqual({
+      success: false,
+      error: 'Current password is incorrect'
+    })
+    expect(prefs.markRecoveryUnconfirmed).not.toHaveBeenCalled()
+    expect(prefs.clearRecoveryUnconfirmed).not.toHaveBeenCalled()
   })
 })
 

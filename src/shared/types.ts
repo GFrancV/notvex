@@ -194,6 +194,10 @@ export interface NotvexAPI {
       keyFileContents?: Uint8Array
     ): Promise<IpcResult<ChangePasswordResult>>
     rotateCredentials(newPassword: string): Promise<IpcResult<ChangePasswordResult>>
+    regenerateRecoveryKey(
+      password: string,
+      keyFileContents?: Uint8Array
+    ): Promise<IpcResult<ChangePasswordResult>>
     confirmRecoverySaved(): Promise<IpcResult<null>>
     recoveryUnconfirmed(): Promise<IpcResult<boolean>>
     close(): Promise<IpcResult<null>>
