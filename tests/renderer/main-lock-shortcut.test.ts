@@ -13,6 +13,9 @@ vi.mock('@/lib/ipc', () => ({
   notvex: { vault: { close }, onWillLock: () => () => {} }
 }))
 vi.mock('@/components/command-palette', () => ({ CommandPalette: () => null }))
+vi.mock('@/components/dialogs/RecoveryKeyUnconfirmedDialog', () => ({
+  RecoveryKeyUnconfirmedDialog: () => null
+}))
 vi.mock('@/components/note-editor', () => ({ NoteEditor: () => null }))
 vi.mock('@/components/note-list', () => ({ NoteList: () => null }))
 vi.mock('@/components/sidebar', () => ({ Sidebar: () => null }))

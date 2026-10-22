@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 
 import { CommandPalette } from '@/components/command-palette'
+import { RecoveryKeyUnconfirmedDialog } from '@/components/dialogs/RecoveryKeyUnconfirmedDialog'
 import { NoteEditor } from '@/components/note-editor'
 import { NoteList } from '@/components/note-list'
 import { Sidebar } from '@/components/sidebar'
@@ -85,6 +86,7 @@ export function Main(): ReactNode {
         </SidebarInset>
       </SidebarProvider>
       <CommandPalette />
+      <RecoveryKeyUnconfirmedDialog />
     </div>
   )
 }
