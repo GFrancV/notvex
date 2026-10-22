@@ -95,7 +95,11 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  useVaultStore.setState({ pendingOpenVaultPath: null, needsRecoveryReset: false })
+  useVaultStore.setState({
+    pendingOpenVaultPath: null,
+    pendingNewVaultPath: null,
+    needsRecoveryReset: false
+  })
 })
 
 describe('locks pushed by main', () => {
@@ -108,6 +112,19 @@ describe('locks pushed by main', () => {
     expect(screen.getByText('unlock view')).toBeTruthy()
     expectSessionCleared()
     expect(useVaultStore.getState().needsRecoveryReset).toBe(false)
+  })
+
+  it('an auto-lock on a new vault still in Setup routes to Unlock', async () => {
+    await renderUnlockedApp()
+    act(() => useVaultStore.setState({ pendingNewVaultPath: 'C:/vaults/new.nvx' }))
+    expect(screen.getByText('setup view')).toBeTruthy()
+
+    act(() => pushed.autoLocked?.())
+
+    expect(screen.getByText('unlock view')).toBeTruthy()
+    expect(useVaultStore.getState().pendingNewVaultPath).toBeNull()
+    // Prefs only reload when Setup finishes, so Unlock must be pointed at the created vault.
+    expect(useVaultStore.getState().pendingOpenVaultPath).toBe('C:/vaults/new.nvx')
   })
 
   it('opening a .nvx while unlocked clears the session and queues the file', async () => {

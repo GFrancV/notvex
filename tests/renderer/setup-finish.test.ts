@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Prefs } from '@shared/types'
@@ -31,6 +31,7 @@ vi.mock('@/lib/ipc', () => ({
   notvex: {
     app: { isDev: vi.fn().mockResolvedValue({ success: true, data: false }) },
     vault: {
+      chooseFile: vi.fn().mockResolvedValue({ success: true, data: CREATED_VAULT }),
       create: vi.fn().mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } }),
       confirmRecoverySaved: vi.fn().mockResolvedValue({ success: true, data: null })
     },
@@ -86,10 +87,57 @@ describe('Setup finish', () => {
     expect(useVaultStore.getState().pendingNewVaultPath).toBeNull()
   })
 
+  it('a lock while finishing stays on Unlock instead of opening the closed vault', async () => {
+    let finishLoad!: () => void
+    vi.mocked(notvex.prefs.get).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishLoad = () => resolve({ success: true, data: prefsAfterCreate })
+        })
+    )
+    render(createElement(Setup))
+    fireEvent.change(screen.getByLabelText('Master password'), { target: { value: PASSWORD } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: PASSWORD } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
+    fireEvent.click(await screen.findByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: 'Start using Notvex' }))
+
+    act(() => useVaultStore.getState().clearSession())
+    await act(async () => finishLoad())
+
+    expect(useVaultStore.getState().status).toBe('locked')
+  })
+
   it('tells main the recovery key was saved', async () => {
     vi.mocked(notvex.vault.confirmRecoverySaved).mockClear()
     await finishSetup()
 
     expect(notvex.vault.confirmRecoverySaved).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Setup on first run', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    useVaultStore.setState({ status: 'uninitialized', pendingNewVaultPath: null })
+    usePrefsStore.setState({ recentVaults: [] })
+  })
+
+  // Prefs still have no vault until Setup finishes, so only this path tells Unlock where it is.
+  it('a lock on the recovery step leaves Unlock pointed at the created vault', async () => {
+    render(createElement(Setup))
+    fireEvent.click(
+      screen.getByPlaceholderText('Choose where to save...').nextElementSibling as HTMLElement
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+    fireEvent.change(screen.getByLabelText('Master password'), { target: { value: PASSWORD } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: PASSWORD } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
+    await screen.findByRole('checkbox')
+
+    act(() => useVaultStore.getState().clearSession())
+
+    expect(useVaultStore.getState().pendingOpenVaultPath).toBe(CREATED_VAULT)
   })
 })
