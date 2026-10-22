@@ -80,6 +80,8 @@ export function Setup(): ReactNode {
   }
 
   const handleFinish = async (): Promise<void> => {
+    // See ChangePasswordPanel: a failed confirm only means the next unlock warns.
+    void notvex.vault.confirmRecoverySaved().catch(() => undefined)
     await usePrefsStore.getState().load()
     setPendingNewVaultPath(null)
     setCurrentVaultPath(vaultPath)

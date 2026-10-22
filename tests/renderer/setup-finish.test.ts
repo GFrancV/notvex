@@ -31,12 +31,14 @@ vi.mock('@/lib/ipc', () => ({
   notvex: {
     app: { isDev: vi.fn().mockResolvedValue({ success: true, data: false }) },
     vault: {
-      create: vi.fn().mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+      create: vi.fn().mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } }),
+      confirmRecoverySaved: vi.fn().mockResolvedValue({ success: true, data: null })
     },
     prefs: { get: vi.fn().mockResolvedValue({ success: true, data: prefsAfterCreate }) }
   }
 }))
 
+const { notvex } = await import('@/lib/ipc')
 const { Setup } = await import('@/views/setup')
 const { useVaultStore } = await import('@/store/vault.store')
 const { usePrefsStore } = await import('@/store/prefs.store')
@@ -82,5 +84,12 @@ describe('Setup finish', () => {
     await finishSetup()
 
     expect(useVaultStore.getState().pendingNewVaultPath).toBeNull()
+  })
+
+  it('tells main the recovery key was saved', async () => {
+    vi.mocked(notvex.vault.confirmRecoverySaved).mockClear()
+    await finishSetup()
+
+    expect(notvex.vault.confirmRecoverySaved).toHaveBeenCalledOnce()
   })
 })
