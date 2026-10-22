@@ -16,7 +16,14 @@ vi.mock('fs', () => ({
   renameSync: fsMock.renameSync
 }))
 
-const { getPrefs, setPrefs } = await import('@main/prefs')
+const {
+  clearRecoveryUnconfirmed,
+  getPrefs,
+  isPrefKey,
+  isRecoveryUnconfirmed,
+  markRecoveryUnconfirmed,
+  setPrefs
+} = await import('@main/prefs')
 
 const PREFS_PATH = join('/user-data', 'prefs.json')
 const TMP_PATH = `${PREFS_PATH}.tmp`
@@ -122,6 +129,7 @@ describe('getPrefs', () => {
     fsState.contents = contents
     expect(getPrefs()).toEqual({
       recentVaults: [],
+      unconfirmedRecoveryVaults: [],
       autoLockMinutes: 15,
       allowScreenCapture: false,
       lockOnMinimize: false,
@@ -196,10 +204,83 @@ describe('getPrefs recentVaults', () => {
   })
 })
 
+describe('getPrefs unconfirmedRecoveryVaults', () => {
+  it('keeps the stored paths', () => {
+    fsState.contents = JSON.stringify({ unconfirmedRecoveryVaults: ['/vaults/a.nvx'] })
+    expect(getPrefs().unconfirmedRecoveryVaults).toEqual(['/vaults/a.nvx'])
+  })
+
+  it.each([
+    ['a string', 'x'],
+    ['an object', {}],
+    ['null', null]
+  ])('falls back to an empty list for %s', (_label, unconfirmedRecoveryVaults) => {
+    fsState.contents = JSON.stringify({ unconfirmedRecoveryVaults })
+    expect(getPrefs().unconfirmedRecoveryVaults).toEqual([])
+  })
+
+  it('drops entries that are not non-empty strings', () => {
+    fsState.contents = JSON.stringify({
+      unconfirmedRecoveryVaults: ['/vaults/a.nvx', '', 1, null, {}]
+    })
+    expect(getPrefs().unconfirmedRecoveryVaults).toEqual(['/vaults/a.nvx'])
+  })
+
+  it('is not a renderer-writable key', () => {
+    expect(isPrefKey('unconfirmedRecoveryVaults')).toBe(false)
+  })
+})
+
+describe('recovery-unconfirmed helpers', () => {
+  function written(): Prefs {
+    return JSON.parse(fsMock.writeFileSync.mock.calls.at(-1)![1] as string) as Prefs
+  }
+
+  it('mark adds the path once', () => {
+    fsState.contents = JSON.stringify({ unconfirmedRecoveryVaults: ['/vaults/b.nvx'] })
+    markRecoveryUnconfirmed('/vaults/a.nvx')
+    expect(written().unconfirmedRecoveryVaults).toEqual(['/vaults/b.nvx', '/vaults/a.nvx'])
+  })
+
+  it('mark skips the write when the path is already there', () => {
+    fsState.contents = JSON.stringify({ unconfirmedRecoveryVaults: ['/vaults/a.nvx'] })
+    markRecoveryUnconfirmed('/vaults/a.nvx')
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled()
+  })
+
+  it('clear removes only that path', () => {
+    fsState.contents = JSON.stringify({
+      unconfirmedRecoveryVaults: ['/vaults/a.nvx', '/vaults/b.nvx']
+    })
+    clearRecoveryUnconfirmed('/vaults/a.nvx')
+    expect(written().unconfirmedRecoveryVaults).toEqual(['/vaults/b.nvx'])
+  })
+
+  it('clear skips the write when the path is not there', () => {
+    fsState.contents = JSON.stringify({ unconfirmedRecoveryVaults: ['/vaults/b.nvx'] })
+    clearRecoveryUnconfirmed('/vaults/a.nvx')
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled()
+  })
+
+  it('isRecoveryUnconfirmed reflects the stored list', () => {
+    fsState.contents = JSON.stringify({ unconfirmedRecoveryVaults: ['/vaults/a.nvx'] })
+    expect(isRecoveryUnconfirmed('/vaults/a.nvx')).toBe(true)
+    expect(isRecoveryUnconfirmed('/vaults/b.nvx')).toBe(false)
+  })
+
+  it.runIf(process.platform === 'win32')('matches paths case-insensitively on Windows', () => {
+    fsState.contents = JSON.stringify({ unconfirmedRecoveryVaults: ['C:\\Vaults\\A.nvx'] })
+    expect(isRecoveryUnconfirmed('c:\\vaults\\a.nvx')).toBe(true)
+    clearRecoveryUnconfirmed('c:\\vaults\\a.nvx')
+    expect(written().unconfirmedRecoveryVaults).toEqual([])
+  })
+})
+
 describe('getPrefs with every pref invalid', () => {
   it('reads back exactly the defaults', () => {
     fsState.contents = JSON.stringify({
       recentVaults: 'x',
+      unconfirmedRecoveryVaults: 'x',
       autoLockMinutes: -1,
       allowScreenCapture: 'y',
       lockOnMinimize: 1,
@@ -210,6 +291,7 @@ describe('getPrefs with every pref invalid', () => {
     })
     expect(getPrefs()).toEqual({
       recentVaults: [],
+      unconfirmedRecoveryVaults: [],
       autoLockMinutes: 15,
       allowScreenCapture: false,
       lockOnMinimize: false,

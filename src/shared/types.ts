@@ -126,6 +126,7 @@ export interface NoteSort {
 
 export interface Prefs {
   recentVaults: RecentVault[]
+  unconfirmedRecoveryVaults: string[]
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean

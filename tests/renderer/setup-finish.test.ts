@@ -17,6 +17,7 @@ const prefsAfterCreate: Prefs = {
     { path: CREATED_VAULT, hasKeyFile: false, lastOpenedAt: 2 },
     { path: PREVIOUS_VAULT, hasKeyFile: false, lastOpenedAt: 1 }
   ],
+  unconfirmedRecoveryVaults: [],
   autoLockMinutes: 15,
   allowScreenCapture: false,
   lockOnMinimize: false,

@@ -161,6 +161,7 @@ describe('note list sort sources', () => {
   it('applies the sort saved in prefs once the store loads', async () => {
     const saved: Prefs = {
       recentVaults: [],
+      unconfirmedRecoveryVaults: [],
       autoLockMinutes: 15,
       allowScreenCapture: false,
       lockOnMinimize: false,

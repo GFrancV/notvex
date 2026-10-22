@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { notvex } from '@/lib/ipc'
 import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
-type SettingKey = keyof Omit<Prefs, 'recentVaults'>
+type SettingKey = keyof Omit<Prefs, 'recentVaults' | 'unconfirmedRecoveryVaults'>
 
 interface PrefsStore {
   ready: boolean
