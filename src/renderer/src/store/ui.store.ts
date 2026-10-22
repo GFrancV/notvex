@@ -8,6 +8,9 @@ interface UiStore {
   showPinned: boolean
   commandPaletteOpen: boolean
   settingsOpen: boolean
+  // A credential change is in flight or its new recovery key is unconfirmed: leaving the subpage or
+  // locking now would discard that key for good, so Settings can't be left and Ctrl+L waits.
+  settingsLocked: boolean
   reloadConfirmOpen: boolean
   tagSelectorNoteId: string | null
   removeTagNoteId: string | null
@@ -23,6 +26,7 @@ interface UiStore {
   setShowPinned: (v: boolean) => void
   setCommandPaletteOpen: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
+  setSettingsLocked: (v: boolean) => void
   setReloadConfirmOpen: (v: boolean) => void
   setTagSelectorNoteId: (id: string | null) => void
   setRemoveTagNoteId: (id: string | null) => void
@@ -38,6 +42,7 @@ export const useUiStore = create<UiStore>((set) => ({
   showPinned: false,
   commandPaletteOpen: false,
   settingsOpen: false,
+  settingsLocked: false,
   reloadConfirmOpen: false,
   tagSelectorNoteId: null,
   removeTagNoteId: null,
@@ -64,6 +69,7 @@ export const useUiStore = create<UiStore>((set) => ({
   setShowPinned: (showPinned): void => set({ showPinned, activeTags: [], showTrash: false }),
   setCommandPaletteOpen: (commandPaletteOpen): void => set({ commandPaletteOpen }),
   setSettingsOpen: (settingsOpen): void => set({ settingsOpen }),
+  setSettingsLocked: (settingsLocked): void => set({ settingsLocked }),
   setReloadConfirmOpen: (reloadConfirmOpen): void => set({ reloadConfirmOpen }),
   setTagSelectorNoteId: (tagSelectorNoteId): void => set({ tagSelectorNoteId }),
   setRemoveTagNoteId: (removeTagNoteId): void => set({ removeTagNoteId }),

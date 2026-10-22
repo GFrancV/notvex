@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { openLogsFolder } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
+import { useUiStore } from '@/store/ui.store'
 import { ClearLogsDialog } from './dialogs/ClearLogsDialog'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { AboutPanel } from './settings/AboutPanel'
@@ -62,9 +63,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
   const checkUpdatesOnStartup = usePrefsStore((s) => s.checkUpdatesOnStartup)
   const [exportAllOpen, setExportAllOpen] = useState(false)
   const [clearLogsOpen, setClearLogsOpen] = useState(false)
-  // While a rekey runs or its new recovery key is unconfirmed, leaving the subpage would discard
-  // that key for good, so the other tabs and every way of closing the dialog are switched off.
-  const [locked, setLocked] = useState(false)
+  // Switches off the other tabs and every way of closing the dialog (see settingsLocked).
+  const locked = useUiStore((s) => s.settingsLocked)
+  const setLocked = useUiStore((s) => s.setSettingsLocked)
 
   return (
     <Dialog open={open} onOpenChange={(next) => (locked && !next ? undefined : onOpenChange(next))}>

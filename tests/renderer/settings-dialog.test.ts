@@ -41,6 +41,7 @@ vi.mock('sonner', () => ({
 const { SettingsDialog } = await import('@/components/settings-dialog')
 const { toast } = await import('sonner')
 const { usePrefsStore } = await import('@/store/prefs.store')
+const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 
 const setPref = vi.fn(async () => undefined)
@@ -63,6 +64,8 @@ beforeEach(() => {
   ipc.clearLogs.mockResolvedValue({ success: true, data: null })
   usePrefsStore.setState({ setPref, lockOnMinimize: false, checkUpdatesOnStartup: true })
   useVaultStore.setState({ currentVaultPath: '/v/vault.nvx' })
+  // The lock outlives the dialog, so a test left mid-step would lock the next one.
+  useUiStore.setState({ settingsLocked: false })
 })
 
 afterEach(() => {
@@ -282,6 +285,8 @@ describe('SettingsDialog: a rekey in progress', () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     expect(onOpenChange).not.toHaveBeenCalledWith(false)
     expect(currentCrumb()?.textContent).toBe('Change password')
+    // Shared with Ctrl+L, which must wait too.
+    expect(useUiStore.getState().settingsLocked).toBe(true)
   })
 })
 

@@ -116,6 +116,8 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     })
     get().setStatus('locked')
     useUiStore.getState().resetFilters()
+    // A hard lock unmounts Settings mid-step, before its panel can release this.
+    useUiStore.getState().setSettingsLocked(false)
   },
 
   lock: async (): Promise<void> => {

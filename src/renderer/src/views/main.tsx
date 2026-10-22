@@ -55,6 +55,7 @@ export function Main(): ReactNode {
       switch (e.key.toLowerCase()) {
         case 'l':
           e.preventDefault()
+          if (useUiStore.getState().settingsLocked) return
           void lock()
           break
         case 'n':
