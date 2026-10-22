@@ -58,12 +58,15 @@ import {
   updateTag
 } from './db/queries'
 import {
+  clearRecoveryUnconfirmed,
   getCurrentVaultPath,
   getPref,
   getPrefs,
   isLocalVaultPath,
   isPrefKey,
+  isRecoveryUnconfirmed,
   isValidPref,
+  markRecoveryUnconfirmed,
   promoteVaultToTop,
   recordVaultUsed,
   setPref
@@ -123,6 +126,17 @@ function handle(
 
 function requireVault(): void {
   if (!isVaultOpen()) throw new Error('Vault is locked')
+}
+
+// Called by every handler that hands out a new recovery key, before it returns. The old key is
+// already invalid, so a failed prefs write must not keep the new one from reaching the user: the
+// next unlock just won't warn if it is lost.
+function markIssuedRecoveryKey(vaultPath: string): void {
+  try {
+    markRecoveryUnconfirmed(vaultPath)
+  } catch (e) {
+    logError('recovery key: mark unconfirmed failed:', e)
+  }
 }
 
 // The renderer's maxLength and color picker only limit what the UI offers, so any caller of
@@ -546,6 +560,7 @@ export function registerIpcHandlers(
     isCreating = true
     try {
       const result = await createVault(filePath, password, !app.isPackaged)
+      markIssuedRecoveryKey(filePath)
       recordVaultUsedNonFatal('vault:create', filePath)
       touchActivity()
       return ok(result)
@@ -799,6 +814,7 @@ export function registerIpcHandlers(
         touchActivity()
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
         const result = await changePassword(currentPassword, newPassword, kfContents)
+        markIssuedRecoveryKey(getVaultPath()!)
         return ok(result)
       } catch (e) {
         await notifyIfRotationLocked()
@@ -812,6 +828,7 @@ export function registerIpcHandlers(
       requireVault()
       touchActivity()
       const result = await rotateVaultCredentials(newPassword)
+      markIssuedRecoveryKey(getVaultPath()!)
       return ok(result)
     } catch (e) {
       await notifyIfRotationLocked()
@@ -821,7 +838,18 @@ export function registerIpcHandlers(
 
   handle('vault:confirm-recovery-saved', () => {
     try {
+      const vaultPath = getVaultPath()
+      if (vaultPath) clearRecoveryUnconfirmed(vaultPath)
       return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('vault:recovery-unconfirmed', () => {
+    try {
+      const vaultPath = getVaultPath()
+      return ok(vaultPath ? isRecoveryUnconfirmed(vaultPath) : false)
     } catch (e) {
       return fail(e)
     }
@@ -981,6 +1009,7 @@ export function registerIpcHandlers(
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await configureKeyFile(password, kfContents)
+      markIssuedRecoveryKey(getVaultPath()!)
       recordVaultUsedNonFatal('vault:configure-key-file', getVaultPath()!, true)
       return ok(result)
     } catch (e) {
@@ -995,6 +1024,7 @@ export function registerIpcHandlers(
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await removeKeyFile(password, kfContents)
+      markIssuedRecoveryKey(getVaultPath()!)
       recordVaultUsedNonFatal('vault:remove-key-file', getVaultPath()!, false)
       return ok(result)
     } catch (e) {

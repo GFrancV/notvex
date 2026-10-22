@@ -45,6 +45,7 @@ const api: NotvexAPI = {
       ipcRenderer.invoke('vault:change-password', cur, next, keyFileContents),
     rotateCredentials: (pw) => ipcRenderer.invoke('vault:rotate-credentials', pw),
     confirmRecoverySaved: () => ipcRenderer.invoke('vault:confirm-recovery-saved'),
+    recoveryUnconfirmed: () => ipcRenderer.invoke('vault:recovery-unconfirmed'),
     close: () => ipcRenderer.invoke('vault:close'),
     clearDecryptedContent: () => ipcRenderer.invoke('vault:clear-decrypted'),
     status: () => ipcRenderer.invoke('vault:status'),

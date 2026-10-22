@@ -195,6 +195,7 @@ export interface NotvexAPI {
     ): Promise<IpcResult<ChangePasswordResult>>
     rotateCredentials(newPassword: string): Promise<IpcResult<ChangePasswordResult>>
     confirmRecoverySaved(): Promise<IpcResult<null>>
+    recoveryUnconfirmed(): Promise<IpcResult<boolean>>
     close(): Promise<IpcResult<null>>
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
