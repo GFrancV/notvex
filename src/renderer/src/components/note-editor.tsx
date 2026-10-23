@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages as codeLanguages } from '@codemirror/language-data'
+import { searchPanelOpen } from '@codemirror/search'
 import { EditorView } from '@codemirror/view'
 import { andromeda } from '@uiw/codemirror-theme-andromeda'
 import CodeMirror from '@uiw/react-codemirror'
@@ -24,6 +25,7 @@ import { useExportNote } from '@/hooks/use-export-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
+import { findExtension } from '@/lib/editor/find'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
@@ -76,6 +78,7 @@ const notvexEditorTheme = EditorView.theme({
 const editorExtensions = [
   markdown({ base: markdownLanguage, codeLanguages }),
   formattingKeymap,
+  findExtension,
   andromeda,
   notvexEditorTheme,
   livePreviewPlugin,
@@ -229,9 +232,12 @@ export function NoteEditor(): ReactNode {
 
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
-      const editorFocused = editorViewRef.current?.hasFocus ?? false
+      const view = editorViewRef.current
+      const editorFocused = view?.hasFocus ?? false
       const titleFocused = document.activeElement === titleInputRef.current
       if (!editorFocused && !titleFocused) return
+      // Left to CodeMirror, whose Escape closes the find bar; the next Escape closes the note.
+      if (view?.hasFocus && searchPanelOpen(view.state)) return
       e.stopPropagation()
       setActiveNoteId(null)
     }
