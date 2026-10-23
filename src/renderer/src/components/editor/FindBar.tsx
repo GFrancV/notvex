@@ -1,6 +1,7 @@
 import { type ReactNode, useMemo } from 'react'
 
 import {
+  closeSearchPanel,
   findNext,
   findPrevious,
   getSearchQuery,
@@ -9,7 +10,7 @@ import {
 } from '@codemirror/search'
 import type { EditorState, Text } from '@codemirror/state'
 import { type EditorView, runScopeHandlers } from '@codemirror/view'
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, XIcon } from 'lucide-react'
 
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -92,6 +93,22 @@ export function FindBar({ view, state }: { view: EditorView; state: EditorState 
         onClick={() => findNext(view)}
       >
         <ChevronDownIcon />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Close find"
+        title="Close (Esc)"
+        className="ml-auto"
+        onClick={() => {
+          closeSearchPanel(view)
+          // closeSearchPanel refocuses the editor only if focus is inside the bar, and a click
+          // doesn't always leave it on the button.
+          view.focus()
+        }}
+      >
+        {/* Same color as the chevrons, but its full-height strokes read brighter at the same size. */}
+        <XIcon className="size-2.5" />
       </Button>
     </search>
   )

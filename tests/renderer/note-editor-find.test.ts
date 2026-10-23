@@ -93,6 +93,15 @@ describe('NoteEditor — find bar', () => {
     expect(useVaultStore.getState().activeNoteId).toBe('a')
   })
 
+  it('closes from its close button and returns focus to the editor', async () => {
+    const cm = await openNote()
+    press(cm.contentDOM, MOD_F)
+    fireEvent.click(screen.getByRole('button', { name: 'Close find' }))
+    expect(findInput()).toBeNull()
+    expect(editorHasFocus()).toBe(true)
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+
   it('closes before the note on Escape in the document', async () => {
     const cm = await openNote()
     press(cm.contentDOM, MOD_F)
