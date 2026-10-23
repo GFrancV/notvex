@@ -170,6 +170,9 @@ In the editor (use `Cmd` instead of `Ctrl` on macOS):
 | `Ctrl+Shift+8` | Bullet list |
 | `Ctrl+Shift+9` | Checklist |
 | `Ctrl+Shift+.` | Quote |
+| `Ctrl+F` | Find in the note |
+| `Enter` / `Shift+Enter` (in the find bar) | Next / previous match |
+| `Esc` (with the find bar open) | Close the find bar (the next `Esc` closes the note) |
 | `Tab` or `Enter` (in the title) | Jump to the start of the note body |
 | `Ctrl+M`, then `Shift+Tab` | Leave the editor (`Tab` indents inside it; `Shift+Option+M` on macOS) |
 
