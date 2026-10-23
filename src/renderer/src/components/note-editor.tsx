@@ -63,11 +63,13 @@ const notvexEditorTheme = EditorView.theme({
   '.cm-line': { overflowWrap: 'anywhere' },
   '.cm-gutters': { display: 'none' },
   '.cm-cursor': { borderLeftColor: 'var(--primary) !important' },
-  '.cm-selectionBackground': {
-    backgroundColor: 'oklch(0.701913 0.15768 160.4375 / 0.2) !important'
+  // One class more than Andromeda's !important selection rules, which are mounted later and would
+  // win a tie.
+  '& .cm-scroller .cm-selectionLayer .cm-selectionBackground': {
+    background: 'color-mix(in oklch, var(--primary) 20%, transparent) !important'
   },
-  '&.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'oklch(0.701913 0.15768 160.4375 / 0.25) !important'
+  '&.cm-focused .cm-scroller .cm-selectionLayer .cm-selectionBackground': {
+    background: 'color-mix(in oklch, var(--primary) 25%, transparent) !important'
   },
   '.cm-activeLine': { backgroundColor: '#ffffff05' }
 })
