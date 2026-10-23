@@ -5,6 +5,7 @@ import { appendError } from './error-log'
 import {
   cancelPendingConfirmations,
   closeVaultDrained,
+  isRecoveryConfirmPending,
   lockVaultAndNotify,
   markRendererReplaced,
   registerIpcHandlers
@@ -81,7 +82,8 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
   powerMonitor.on('user-did-resign-active', lockOnSuspend)
 
   win.on('minimize', () => {
-    if (getPref('lockOnMinimize') && isVaultOpen()) {
+    // Minimizing is a soft lock: it waits while a new recovery key is still on screen.
+    if (getPref('lockOnMinimize') && isVaultOpen() && !isRecoveryConfirmPending()) {
       void lockVaultAndNotify(win)
     }
   })

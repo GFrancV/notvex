@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 
 import { CommandPalette } from '@/components/command-palette'
+import { RecoveryKeyUnconfirmedDialog } from '@/components/dialogs/RecoveryKeyUnconfirmedDialog'
 import { NoteEditor } from '@/components/note-editor'
 import { NoteList } from '@/components/note-list'
 import { Sidebar } from '@/components/sidebar'
@@ -55,6 +56,7 @@ export function Main(): ReactNode {
       switch (e.key.toLowerCase()) {
         case 'l':
           e.preventDefault()
+          if (useUiStore.getState().settingsLocked) return
           void lock()
           break
         case 'n':
@@ -84,6 +86,7 @@ export function Main(): ReactNode {
         </SidebarInset>
       </SidebarProvider>
       <CommandPalette />
+      <RecoveryKeyUnconfirmedDialog />
     </div>
   )
 }

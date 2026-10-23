@@ -6,6 +6,7 @@ import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
 const DEFAULTS: Prefs = {
   recentVaults: [],
+  unconfirmedRecoveryVaults: [],
   autoLockMinutes: 15,
   allowScreenCapture: false,
   lockOnMinimize: false,
@@ -57,7 +58,10 @@ const PREFS_VALIDATORS = {
   clipboardClearSeconds: (v: unknown) =>
     typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
   noteSort: isNoteSort
-} satisfies Record<Exclude<keyof Prefs, 'recentVaults'>, (v: unknown) => boolean>
+} satisfies Record<
+  Exclude<keyof Prefs, 'recentVaults' | 'unconfirmedRecoveryVaults'>,
+  (v: unknown) => boolean
+>
 
 // Object.hasOwn, not `in` or a bare lookup: 'toString' or 'constructor' would resolve to
 // Object.prototype members and pass as validators.
@@ -96,6 +100,9 @@ export function getPrefs(): Prefs {
           .slice(0, MAX_RECENT_VAULTS)
           .map(({ path, hasKeyFile, lastOpenedAt }) => ({ path, hasKeyFile, lastOpenedAt }))
       : []
+    prefs.unconfirmedRecoveryVaults = Array.isArray(prefs.unconfirmedRecoveryVaults)
+      ? prefs.unconfirmedRecoveryVaults.filter((p) => typeof p === 'string' && p !== '')
+      : []
     return prefs
   } catch {
     return { ...DEFAULTS }
@@ -132,6 +139,26 @@ export function recordVaultUsed(path: string, hasKeyFile: boolean = false): void
     recentVaults: [{ path, hasKeyFile, lastOpenedAt: Date.now() }, ...rest].slice(
       0,
       MAX_RECENT_VAULTS
+    )
+  })
+}
+
+// Vaults whose current recovery key was issued but never confirmed as saved. Kept outside the
+// vault so it survives a lock, quit or crash before the user confirms.
+export function isRecoveryUnconfirmed(path: string): boolean {
+  return getPrefs().unconfirmedRecoveryVaults.some((p) => samePath(p, path))
+}
+
+export function markRecoveryUnconfirmed(path: string): void {
+  if (isRecoveryUnconfirmed(path)) return
+  setPrefs({ unconfirmedRecoveryVaults: [...getPrefs().unconfirmedRecoveryVaults, path] })
+}
+
+export function clearRecoveryUnconfirmed(path: string): void {
+  if (!isRecoveryUnconfirmed(path)) return
+  setPrefs({
+    unconfirmedRecoveryVaults: getPrefs().unconfirmedRecoveryVaults.filter(
+      (p) => !samePath(p, path)
     )
   })
 }

@@ -99,6 +99,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
 
   clearSession: (): void => {
     session++
+    const { pendingNewVaultPath, pendingOpenVaultPath } = get()
     set({
       notes: [],
       noteCounts: NO_COUNTS,
@@ -106,10 +107,17 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
       tags: [],
       tagCounts: {},
       noteTagsMap: {},
-      needsRecoveryReset: false
+      needsRecoveryReset: false,
+      // Setup's recovery step runs over the just-created, open vault: once it closes, Setup
+      // would show a recovery key that no longer matches an unlocked session. Prefs only reload
+      // when Setup finishes, so Unlock is pointed at the created vault instead of recentVaults[0].
+      pendingNewVaultPath: null,
+      pendingOpenVaultPath: pendingNewVaultPath ?? pendingOpenVaultPath
     })
     get().setStatus('locked')
     useUiStore.getState().resetFilters()
+    // A hard lock unmounts Settings mid-step, before its panel can release this.
+    useUiStore.getState().setSettingsLocked(false)
   },
 
   lock: async (): Promise<void> => {

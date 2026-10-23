@@ -4,10 +4,20 @@ import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const ipc = vi.hoisted(() => ({ getHasKeyFile: vi.fn(), changePassword: vi.fn() }))
+const ipc = vi.hoisted(() => ({
+  getHasKeyFile: vi.fn(),
+  changePassword: vi.fn(),
+  confirmRecoverySaved: vi.fn()
+}))
 
 vi.mock('@/lib/ipc', () => ({
-  notvex: { vault: { getHasKeyFile: ipc.getHasKeyFile, changePassword: ipc.changePassword } }
+  notvex: {
+    vault: {
+      getHasKeyFile: ipc.getHasKeyFile,
+      changePassword: ipc.changePassword,
+      confirmRecoverySaved: ipc.confirmRecoverySaved
+    }
+  }
 }))
 
 const { ChangePasswordPanel } = await import('@/components/settings/ChangePasswordPanel')
@@ -38,6 +48,7 @@ async function submitValidForm(): Promise<void> {
 
 beforeEach(() => {
   ipc.getHasKeyFile.mockResolvedValue({ success: true, data: false })
+  ipc.confirmRecoverySaved.mockResolvedValue({ success: true, data: null })
 })
 
 afterEach(() => {
@@ -71,7 +82,23 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     await screen.findByRole('heading', { name: 'Save your new recovery key' })
     expect(back().hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(true)
+    expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
 
+    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+
+    expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()
+    expect(onLockChange).toHaveBeenLastCalledWith(false)
+    expect(onBack).toHaveBeenCalledOnce()
+  })
+
+  // main keeps the vault flagged, so the next unlock warns instead
+  it('still leaves the step when confirming the recovery key fails', async () => {
+    ipc.changePassword.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+    ipc.confirmRecoverySaved.mockRejectedValue(new Error('IPC gone'))
+    await submitValidForm()
+
+    await screen.findByRole('heading', { name: 'Save your new recovery key' })
     fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 

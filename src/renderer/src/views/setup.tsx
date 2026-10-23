@@ -75,12 +75,19 @@ export function Setup(): ReactNode {
       setError(res.error)
       return
     }
+    // The vault is open now: a lock before Finish routes to Unlock for it (see clearSession).
+    // On first run this is the only record of it, since prefs reload only at Finish.
+    setPendingNewVaultPath(vaultPath)
     setMnemonic(res.data.mnemonic)
     setStep('recovery')
   }
 
   const handleFinish = async (): Promise<void> => {
+    // See ChangePasswordPanel: a failed confirm only means the next unlock warns.
+    void notvex.vault.confirmRecoverySaved().catch(() => undefined)
     await usePrefsStore.getState().load()
+    // A lock during the reload already routed to Unlock (clearSession dropped the pending path).
+    if (useVaultStore.getState().pendingNewVaultPath === null) return
     setPendingNewVaultPath(null)
     setCurrentVaultPath(vaultPath)
     setStatus('unlocked')

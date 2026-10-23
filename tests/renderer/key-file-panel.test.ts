@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const ipc = vi.hoisted(() => ({
   configureKeyFile: vi.fn(),
   removeKeyFile: vi.fn(),
-  selectKeyFile: vi.fn()
+  selectKeyFile: vi.fn(),
+  confirmRecoverySaved: vi.fn(() => Promise.resolve({ success: true, data: null }))
 }))
 
 vi.mock('@/lib/ipc', () => ({
@@ -15,7 +16,8 @@ vi.mock('@/lib/ipc', () => ({
     vault: {
       configureKeyFile: ipc.configureKeyFile,
       removeKeyFile: ipc.removeKeyFile,
-      selectKeyFile: ipc.selectKeyFile
+      selectKeyFile: ipc.selectKeyFile,
+      confirmRecoverySaved: ipc.confirmRecoverySaved
     }
   }
 }))
@@ -102,9 +104,11 @@ describe('KeyFilePanel: locking while the recovery key is at stake', () => {
     await screen.findByRole('heading', { name: 'Save your new recovery key' })
     expect(back().hasAttribute('disabled')).toBe(true)
 
+    expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
     fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
+    expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()
     expect(onLockChange).toHaveBeenLastCalledWith(false)
     expect(onBack).toHaveBeenCalledOnce()
   })
@@ -175,9 +179,11 @@ describe('KeyFilePanel: removing the key file', () => {
     await screen.findByRole('heading', { name: 'Save your new recovery key' })
     expect(back().hasAttribute('disabled')).toBe(true)
 
+    expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
     fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
+    expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()
     expect(onLockChange).toHaveBeenLastCalledWith(false)
   })
 

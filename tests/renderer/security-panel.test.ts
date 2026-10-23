@@ -12,7 +12,8 @@ const ipc = vi.hoisted(() => ({
   generateKeyFile: vi.fn(),
   selectKeyFile: vi.fn(),
   configureKeyFile: vi.fn(),
-  removeKeyFile: vi.fn()
+  removeKeyFile: vi.fn(),
+  confirmRecoverySaved: vi.fn(() => Promise.resolve({ success: true, data: null }))
 }))
 
 const prefsIpc = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }))

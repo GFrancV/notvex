@@ -55,6 +55,8 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
   const locked = loading || step === 'mnemonic'
 
   const finish = (): void => {
+    // A failed confirm keeps the vault flagged in main, so the next unlock warns instead.
+    void notvex.vault.confirmRecoverySaved().catch(() => undefined)
     onLockChange(false)
     onBack()
   }

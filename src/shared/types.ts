@@ -126,6 +126,7 @@ export interface NoteSort {
 
 export interface Prefs {
   recentVaults: RecentVault[]
+  unconfirmedRecoveryVaults: string[]
   autoLockMinutes: number
   allowScreenCapture: boolean
   lockOnMinimize: boolean
@@ -193,7 +194,12 @@ export interface NotvexAPI {
       keyFileContents?: Uint8Array
     ): Promise<IpcResult<ChangePasswordResult>>
     rotateCredentials(newPassword: string): Promise<IpcResult<ChangePasswordResult>>
+    regenerateRecoveryKey(
+      password: string,
+      keyFileContents?: Uint8Array
+    ): Promise<IpcResult<ChangePasswordResult>>
     confirmRecoverySaved(): Promise<IpcResult<null>>
+    recoveryUnconfirmed(): Promise<IpcResult<boolean>>
     close(): Promise<IpcResult<null>>
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>

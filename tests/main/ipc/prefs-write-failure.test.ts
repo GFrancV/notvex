@@ -34,6 +34,7 @@ vi.mock('fs', () => ({
 
 vi.mock('@main/prefs', () => ({
   getPref: vi.fn(() => 0),
+  markRecoveryUnconfirmed: vi.fn(),
   recordVaultUsed: vi.fn()
 }))
 

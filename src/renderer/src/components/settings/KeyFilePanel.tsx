@@ -73,6 +73,8 @@ export function KeyFilePanel({
   const locked = loading || mnemonic !== ''
 
   const finish = (): void => {
+    // See ChangePasswordPanel: a failed confirm only means the next unlock warns.
+    void notvex.vault.confirmRecoverySaved().catch(() => undefined)
     onLockChange(false)
     onBack()
   }
