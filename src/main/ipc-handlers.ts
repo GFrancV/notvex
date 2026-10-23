@@ -474,6 +474,16 @@ async function relockOrphanedVault(): Promise<IpcResult<never>> {
   return fail('No window is open')
 }
 
+// Runs after the vault change already happened: failing the handler here would leave the
+// renderer believing the change didn't, while main holds the result (open vault, new mnemonic).
+function recordVaultUsedNonFatal(tag: string, path: string, hasKeyFile = false): void {
+  try {
+    recordVaultUsed(path, hasKeyFile)
+  } catch (e) {
+    logError(`[${tag}] record vault used failed:`, e)
+  }
+}
+
 // Maps the internal error sentinels thrown by readContainer/runMigrations to
 // user-facing messages. 'MIGRATION_CANCELLED' is the same sentinel unlock.tsx
 // already special-cases to silently return to the idle unlock form.
@@ -533,7 +543,7 @@ export function registerIpcHandlers(
     isCreating = true
     try {
       const result = await createVault(filePath, password, !app.isPackaged)
-      recordVaultUsed(filePath)
+      recordVaultUsedNonFatal('vault:create', filePath)
       touchActivity()
       return ok(result)
     } catch (e) {
@@ -617,7 +627,7 @@ export function registerIpcHandlers(
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
           unlockThrottle.lockedUntil = 0
-          recordVaultUsed(filePath, keyFileContents !== undefined)
+          recordVaultUsedNonFatal('vault:open', filePath, keyFileContents !== undefined)
           touchActivity()
         } else {
           unlockThrottle.failedAttempts += 1
@@ -757,7 +767,11 @@ export function registerIpcHandlers(
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
             unlockThrottle.lockedUntil = 0
-            recordVaultUsed(filePath, keyFileContents !== undefined)
+            recordVaultUsedNonFatal(
+              'vault:open-with-recovery',
+              filePath,
+              keyFileContents !== undefined
+            )
             touchActivity()
           } else {
             unlockThrottle.failedAttempts += 1
@@ -964,7 +978,7 @@ export function registerIpcHandlers(
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await configureKeyFile(password, kfContents)
-      recordVaultUsed(getVaultPath()!, true)
+      recordVaultUsedNonFatal('vault:configure-key-file', getVaultPath()!, true)
       return ok(result)
     } catch (e) {
       await notifyIfRotationLocked()
@@ -978,7 +992,7 @@ export function registerIpcHandlers(
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await removeKeyFile(password, kfContents)
-      recordVaultUsed(getVaultPath()!, false)
+      recordVaultUsedNonFatal('vault:remove-key-file', getVaultPath()!, false)
       return ok(result)
     } catch (e) {
       await notifyIfRotationLocked()
