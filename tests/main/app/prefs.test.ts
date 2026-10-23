@@ -174,6 +174,16 @@ describe('getPrefs recentVaults', () => {
     expect(getPrefs().recentVaults).toEqual([vault])
   })
 
+  it.each([
+    ['a UNC path', '\\\\host\\share\\v.nvx'],
+    ['a forward-slash UNC path', '//host/share/v.nvx'],
+    ['a device path', '\\\\?\\C:\\v.nvx'],
+    ['a relative path', 'v.nvx']
+  ])('drops an entry with %s', (_label, path) => {
+    fsState.contents = JSON.stringify({ recentVaults: [{ ...vault, path }, vault] })
+    expect(getPrefs().recentVaults).toEqual([vault])
+  })
+
   it('keeps only the three known fields of an entry', () => {
     fsState.contents = JSON.stringify({ recentVaults: [{ ...vault, extra: 1 }] })
     expect(getPrefs().recentVaults).toStrictEqual([vault])
