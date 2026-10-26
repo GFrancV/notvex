@@ -128,7 +128,7 @@ describe('Setup on first run', () => {
   it('a lock on the recovery step leaves Unlock pointed at the created vault', async () => {
     render(createElement(Setup))
     fireEvent.click(
-      screen.getByPlaceholderText('Choose where to save...').nextElementSibling as HTMLElement
+      screen.getByPlaceholderText('Choose where to save…').nextElementSibling as HTMLElement
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     fireEvent.change(screen.getByLabelText('Master password'), { target: { value: PASSWORD } })

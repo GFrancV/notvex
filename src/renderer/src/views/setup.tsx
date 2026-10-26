@@ -123,7 +123,7 @@ export function Setup(): ReactNode {
                 <div className="flex gap-2">
                   <Input
                     value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
-                    placeholder="Choose where to save..."
+                    placeholder="Choose where to save…"
                     readOnly
                     title={vaultPath}
                     className="flex-1"

@@ -135,7 +135,7 @@ export function Sidebar(): React.ReactNode {
                     void handleNewNote()
                   }
                 }}
-                placeholder="Search ..."
+                placeholder="Search…"
               />
               <InputGroupAddon>
                 <SearchIcon />

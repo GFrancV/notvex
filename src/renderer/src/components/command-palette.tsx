@@ -162,7 +162,7 @@ function PaletteContent(): ReactNode {
               onSelect={() => run(() => setTagSelectorNoteId(activeNoteId))}
             >
               <TagIcon />
-              <span>Tag note with...</span>
+              <span>Tag note with…</span>
             </CommandItem>
           )}
           {activeNoteId && noteHasTags && (
@@ -171,7 +171,7 @@ function PaletteContent(): ReactNode {
               onSelect={() => run(() => setRemoveTagNoteId(activeNoteId))}
             >
               <XIcon />
-              <span>Remove tag from note...</span>
+              <span>Remove tag from note…</span>
             </CommandItem>
           )}
           {activeNote && !activeNote.isTrashed && (
