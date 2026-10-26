@@ -94,7 +94,7 @@ export function VaultDataPanel({ onExportAll }: Props): ReactNode {
               <InputGroupAddon align="inline-end">
                 <InputGroupButton
                   onClick={() => copyToClipboard(vaultPath)}
-                  title="Copy to Clipboard"
+                  title="Copy to clipboard"
                 >
                   {isCopied ? <CheckIcon className="text-success" /> : <CopyIcon />}
                 </InputGroupButton>

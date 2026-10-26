@@ -125,7 +125,7 @@ function PaletteContent(): ReactNode {
             onSelect={() => run(handleCreate)}
           >
             <PlusIcon />
-            <span>New Note</span>
+            <span>New note</span>
             <CommandShortcut>Ctrl+N</CommandShortcut>
           </CommandItem>
           <CommandItem
@@ -133,7 +133,7 @@ function PaletteContent(): ReactNode {
             onSelect={() => run(toggleEditorMode)}
           >
             <EyeIcon />
-            <span>Toggle Reading View</span>
+            <span>Toggle reading view</span>
             <CommandShortcut>Ctrl+Shift+E</CommandShortcut>
           </CommandItem>
           <CommandItem
@@ -141,19 +141,19 @@ function PaletteContent(): ReactNode {
             onSelect={() => run(() => setShowTrash(true))}
           >
             <Trash2Icon />
-            <span>Show Trash</span>
+            <span>Show trash</span>
           </CommandItem>
           <CommandItem
             keywords={['close vault', 'logout', 'sign out', 'exit']}
             onSelect={() => run(lock)}
           >
             <LockIcon />
-            <span>Lock Vault</span>
+            <span>Lock vault</span>
             <CommandShortcut>Ctrl+L</CommandShortcut>
           </CommandItem>
           <CommandItem keywords={['refresh', 'restart']} onSelect={() => run(requestReload)}>
             <RotateCwIcon />
-            <span>Reload Window</span>
+            <span>Reload window</span>
             <CommandShortcut>Ctrl+R</CommandShortcut>
           </CommandItem>
           {activeNoteId && (
@@ -180,7 +180,7 @@ function PaletteContent(): ReactNode {
               onSelect={() => run(() => duplicateNote(activeNote.id))}
             >
               <CopyIcon />
-              <span>Duplicate Note</span>
+              <span>Duplicate note</span>
             </CommandItem>
           )}
         </CommandGroup>
@@ -198,14 +198,14 @@ function PaletteContent(): ReactNode {
             onSelect={() => run(async () => copyToClipboard(await loadDebugInfo()))}
           >
             <CopyIcon />
-            <span>Copy Debug Info</span>
+            <span>Copy debug info</span>
           </CommandItem>
           <CommandItem
             keywords={['logs', 'errors', 'diagnostics']}
             onSelect={() => run(openLogsFolder)}
           >
             <FolderOpenIcon />
-            <span>Open Logs Folder</span>
+            <span>Open logs folder</span>
           </CommandItem>
         </CommandGroup>
 

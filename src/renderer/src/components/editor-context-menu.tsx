@@ -65,7 +65,7 @@ export function EditorContextMenu({ editorView, children }: EditorContextMenuPro
             <ContextMenuGroup>
               <ContextMenuItem onClick={act(toolbarActions.code)}>
                 <CodeIcon />
-                Inline Code
+                Inline code
               </ContextMenuItem>
             </ContextMenuGroup>
           </ContextMenuSubContent>

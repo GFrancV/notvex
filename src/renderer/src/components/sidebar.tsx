@@ -185,7 +185,7 @@ export function Sidebar(): React.ReactNode {
                 }}
               >
                 <FileIcon />
-                All Notes
+                All notes
               </SidebarMenuButton>
               {allNotesCount > 0 && <SidebarMenuBadge>{allNotesCount}</SidebarMenuBadge>}
             </SidebarMenuItem>

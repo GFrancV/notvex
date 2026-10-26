@@ -241,7 +241,7 @@ export function Unlock(): ReactNode {
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {vaultExists === true && mode === 'recovery'
-                ? 'Account Recovery'
+                ? 'Account recovery'
                 : 'Unlock your vault'}
             </p>
           </div>
@@ -479,7 +479,7 @@ export function Unlock(): ReactNode {
                       Recovering…
                     </>
                   ) : (
-                    'Recover Access'
+                    'Recover access'
                   )}
                 </Button>
 

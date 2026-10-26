@@ -109,7 +109,7 @@ describe('sidebar badges', () => {
     })
     await renderSidebar()
 
-    expect(badge('All Notes')).toBe('3')
+    expect(badge('All notes')).toBe('3')
     expect(badge('Pinned')).toBe('1')
     expect(badge('Trash')).toBe('2')
   })

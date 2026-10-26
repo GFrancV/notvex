@@ -214,7 +214,7 @@ describe('command palette create note from query', () => {
 
   it.each([
     ['Create note "qqq"', 'qqq'],
-    [/^New Note/, 'new note']
+    [/^New note/, 'new note']
   ])('toasts when creating from %s fails', async (name, query) => {
     createNote.mockRejectedValueOnce(new Error('db locked'))
     openPalette([])
@@ -225,7 +225,7 @@ describe('command palette create note from query', () => {
 })
 
 describe('command palette duplicate note', () => {
-  const duplicateOption = (): HTMLElement | null => option('Duplicate Note')
+  const duplicateOption = (): HTMLElement | null => option('Duplicate note')
 
   it('is offered for the open note', () => {
     useVaultStore.setState({ activeNoteId: 'n-1' })
@@ -258,7 +258,7 @@ describe('command palette reload', () => {
   it('closes and requests a reload', async () => {
     const { requestReload } = await import('@/lib/reload-window')
     openPalette([])
-    await act(async () => fireEvent.click(screen.getByRole('option', { name: /^Reload Window/ })))
+    await act(async () => fireEvent.click(screen.getByRole('option', { name: /^Reload window/ })))
     expect(requestReload).toHaveBeenCalledOnce()
     expect(useUiStore.getState().commandPaletteOpen).toBe(false)
   })
@@ -279,7 +279,7 @@ describe('command palette help', () => {
 
   it('copies the debug info', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
-    await pick(/^Copy Debug Info/)
+    await pick(/^Copy debug info/)
     expect(clipboardWrite).toHaveBeenCalledWith('REPORT BODY', {
       secret: false,
       fromUnlockedView: false
@@ -288,26 +288,26 @@ describe('command palette help', () => {
 
   it('opens the logs folder', async () => {
     const { openLogsFolder } = await import('@/lib/bug-report')
-    await pick(/^Open Logs Folder/)
+    await pick(/^Open logs folder/)
     expect(openLogsFolder).toHaveBeenCalledOnce()
   })
 })
 
 describe('command palette synonyms', () => {
   it.each([
-    ['create note', /^New Note/],
-    ['add note', /^New Note/],
-    ['preview', /^Toggle Reading View/],
-    ['bin', /^Show Trash/],
-    ['logout', /^Lock Vault/],
-    ['refresh', /^Reload Window/],
+    ['create note', /^New note/],
+    ['add note', /^New note/],
+    ['preview', /^Toggle reading view/],
+    ['bin', /^Show trash/],
+    ['logout', /^Lock vault/],
+    ['refresh', /^Reload window/],
     ['assign tag', /^Tag note with/],
     ['untag', /^Remove tag from note/],
-    ['clone', /^Duplicate Note/],
+    ['clone', /^Duplicate note/],
     ['issue', /^Report a Bug/],
     ['feedback', /^Report a Bug/],
-    ['diagnostics', /^Copy Debug Info/],
-    ['logs', /^Open Logs Folder/]
+    ['diagnostics', /^Copy debug info/],
+    ['logs', /^Open logs folder/]
   ])('"%s" finds %s', (query, command) => {
     useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
     openPalette([note('n-1', 'zzz')])
