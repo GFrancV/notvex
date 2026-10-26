@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   BugIcon,
   CopyIcon,
+  ExternalLinkIcon,
   EyeIcon,
   FileTextIcon,
   FolderOpenIcon,
@@ -189,9 +190,11 @@ function PaletteContent(): ReactNode {
           <CommandItem
             keywords={['bug', 'issue', 'feedback', 'problem', 'support']}
             onSelect={() => run(openBugReport)}
+            aria-label="Report a bug (opens in your browser)"
           >
             <BugIcon />
-            <span>Report a Bug…</span>
+            <span>Report a bug</span>
+            <ExternalLinkIcon className="ml-auto" aria-hidden />
           </CommandItem>
           <CommandItem
             keywords={['diagnostics', 'debug', 'version', 'system info']}

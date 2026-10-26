@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import { ChevronDownIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
+import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
@@ -502,10 +502,12 @@ export function Unlock(): ReactNode {
       {/* The sidebar's Help menu doesn't exist while the vault is locked. */}
       <Button
         variant="link"
-        className="text-muted-foreground absolute bottom-6 h-auto p-0 text-xs font-normal"
+        className="text-muted-foreground absolute bottom-6 h-auto gap-1 p-0 text-xs font-normal"
         onClick={() => void openBugReport()}
+        aria-label="Report a bug (opens in your browser)"
       >
         Report a bug
+        <ExternalLinkIcon className="size-3" aria-hidden />
       </Button>
     </div>
   )

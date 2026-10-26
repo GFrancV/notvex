@@ -77,7 +77,9 @@ describe('ErrorBoundary', () => {
   it('offers to report the bug from the fallback', () => {
     render(createElement(ErrorBoundary, null, createElement(Thrower)))
 
-    expect(screen.getByRole('button', { name: /report bug/i })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Report a bug (opens in your browser)' })
+    ).toBeTruthy()
     expect(screen.getByRole('button', { name: /copy debug info/i })).toBeTruthy()
   })
 })

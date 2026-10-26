@@ -272,7 +272,7 @@ describe('command palette help', () => {
 
   it('opens a prefilled bug report and closes', async () => {
     const { openBugReport } = await import('@/lib/bug-report')
-    await pick(/^Report a Bug/)
+    await pick(/^Report a bug \(opens in your browser\)$/)
     expect(openBugReport).toHaveBeenCalledOnce()
     expect(useUiStore.getState().commandPaletteOpen).toBe(false)
   })
@@ -304,8 +304,8 @@ describe('command palette synonyms', () => {
     ['assign tag', /^Tag note with/],
     ['untag', /^Remove tag from note/],
     ['clone', /^Duplicate note/],
-    ['issue', /^Report a Bug/],
-    ['feedback', /^Report a Bug/],
+    ['issue', /^Report a bug/],
+    ['feedback', /^Report a bug/],
     ['diagnostics', /^Copy debug info/],
     ['logs', /^Open logs folder/]
   ])('"%s" finds %s', (query, command) => {
