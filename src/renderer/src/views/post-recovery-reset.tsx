@@ -71,7 +71,7 @@ export function PostRecoveryReset(): ReactNode {
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold tracking-tight">Secure your vault</h1>
-                <p className="text-muted mt-1 text-sm">
+                <p className="text-muted-foreground mt-1 text-sm">
                   You accessed your vault using your recovery key.
                   <br />
                   You must set a new password before continuing.

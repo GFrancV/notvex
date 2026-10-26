@@ -88,7 +88,7 @@ export function TagSelector({ noteId, onClose }: TagSelectorProps): ReactNode {
             if (e.key === 'Enter' && showCreate) void handleCreate()
           }}
           placeholder="Search tags…"
-          className="placeholder:text-muted w-full bg-transparent text-xs focus:outline-none"
+          className="placeholder:text-muted-foreground w-full bg-transparent text-xs focus:outline-none"
         />
       </div>
 
@@ -111,7 +111,7 @@ export function TagSelector({ noteId, onClose }: TagSelectorProps): ReactNode {
         ))}
 
         {available.length === 0 && !showCreate && (
-          <p className="text-muted px-3 py-2 text-xs">No tags found</p>
+          <p className="text-muted-foreground px-3 py-2 text-xs">No tags found</p>
         )}
 
         {showCreate && (
