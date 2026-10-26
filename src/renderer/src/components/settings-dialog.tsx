@@ -30,10 +30,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 // list instead would stretch every tab with it.
 const PANEL = 'border-border min-h-0 space-y-5 overflow-y-auto border-l py-1 pr-2 pl-6'
 
-// Active indicator on the left in the primary color; the same variant prefix as the shadcn
-// classes lets cn replace them instead of stacking on top.
-const TAB =
-  'pl-3 after:bg-primary group-data-[orientation=vertical]/tabs:after:right-auto group-data-[orientation=vertical]/tabs:after:left-0'
+const TAB = [
+  // The same row as the app sidebar: height, padding, icon size, hover and active fill.
+  "h-8.5 gap-2.5 border-0 px-2.75 font-normal text-muted-foreground hover:bg-accent [&_svg:not([class*='size-'])]:size-3.75",
+  // The line variant clears the active fill under group and dark: variants; important beats both.
+  'data-[state=active]:bg-accent! data-[state=active]:font-medium',
+  // The shared selection pill on the left. It takes the same variant prefix as the shadcn after:
+  // classes to match their specificity, but Tailwind emits ui/tabs' after:inset-y-0 later than a
+  // custom utility, so top and bottom are restated here; Tailwind orders those after inset.
+  'group-data-[orientation=vertical]/tabs:after:selection-indicator group-data-[orientation=vertical]/tabs:after:top-1.75 group-data-[orientation=vertical]/tabs:after:bottom-1.75 group-data-[orientation=vertical]/tabs:after:right-auto'
+].join(' ')
 
 // The warning dialog stays open while this runs, but the OS folder dialog hides it; the
 // toast is what reports progress and the result.
