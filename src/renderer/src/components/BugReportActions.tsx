@@ -22,7 +22,7 @@ export function BugReportActions(): ReactNode {
         className="flex-1"
         onClick={async () => copyToClipboard(await loadDebugInfo())}
       >
-        {isCopied ? <CheckIcon /> : <CopyIcon />}
+        {isCopied ? <CheckIcon className="text-success" /> : <CopyIcon />}
         {isCopied ? 'Copied' : 'Copy debug info'}
       </Button>
     </div>
