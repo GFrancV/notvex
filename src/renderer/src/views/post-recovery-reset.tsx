@@ -66,7 +66,7 @@ export function PostRecoveryReset(): ReactNode {
         {step === 'password' ? (
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
-              <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border shadow-[0_0_40px_-6px_oklch(0.701913_0.15768_160.4375/0.5)]">
+              <div className="border-primary/20 bg-primary/15 shadow-glow-primary flex h-14 w-14 items-center justify-center rounded-xl border">
                 <LockIcon className="text-primary h-7 w-7" />
               </div>
               <div className="text-center">
@@ -126,7 +126,7 @@ export function PostRecoveryReset(): ReactNode {
         ) : (
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
-              <div className="border-primary/20 bg-primary/15 flex h-14 w-14 items-center justify-center rounded-xl border shadow-[0_0_40px_-6px_oklch(0.701913_0.15768_160.4375/0.5)]">
+              <div className="border-primary/20 bg-primary/15 shadow-glow-primary flex h-14 w-14 items-center justify-center rounded-xl border">
                 <KeyRoundIcon className="text-primary h-7 w-7" />
               </div>
               <div className="text-center">

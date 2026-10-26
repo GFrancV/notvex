@@ -11,8 +11,8 @@ export function AppLogo({ className }: { className?: string }): React.JSX.Elemen
       className={cn(
         'flex size-14 items-center justify-center rounded-xl border',
         isDev
-          ? 'border-warning/20 bg-warning/15 shadow-[0_0_40px_-6px_oklch(0.769_0.188_70.08/0.5)]'
-          : 'border-primary/20 bg-primary/15 shadow-[0_0_40px_-6px_oklch(0.701913_0.15768_160.4375/0.5)]',
+          ? 'border-warning/20 bg-warning/15 shadow-glow-warning'
+          : 'border-primary/20 bg-primary/15 shadow-glow-primary',
         className
       )}
     >

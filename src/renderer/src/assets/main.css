@@ -48,6 +48,8 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --shadow-modal: 0 24px 60px -12px rgba(0, 0, 0, 0.85);
   --shadow-dropdown: 0 22px 50px -10px rgba(0, 0, 0, 0.85);
+  --shadow-glow-primary: 0 0 40px -6px color-mix(in oklch, var(--primary) 50%, transparent);
+  --shadow-glow-warning: 0 0 40px -6px color-mix(in oklch, var(--warning) 50%, transparent);
 }
 
 :root {
