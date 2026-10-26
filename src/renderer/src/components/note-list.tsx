@@ -149,8 +149,8 @@ export function NoteList(): ReactNode {
         </div>
       )}
 
-      {/* Note list */}
-      <ScrollArea className="min-h-0 flex-1 px-2.5">
+      {/* Padded inside the viewport so it doesn't clip the selection pill's overhang. */}
+      <ScrollArea className="min-h-0 flex-1 [&>[data-slot=scroll-area-viewport]]:px-2.5">
         {displayedNotes.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center justify-center p-8">
             <p className="text-sm">{emptyMessage()}</p>
