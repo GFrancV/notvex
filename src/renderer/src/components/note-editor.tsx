@@ -54,7 +54,7 @@ const notvexEditorTheme = EditorView.theme({
   '&': { backgroundColor: 'var(--background) !important', height: '100%' },
   '.cm-scroller': { backgroundColor: 'var(--background)' },
   '.cm-content': {
-    fontFamily: '"JetBrains Mono","Fira Code","Consolas",monospace',
+    fontFamily: 'var(--font-mono)',
     fontSize: '14px',
     lineHeight: '1.7',
     padding: '24px 26px',
@@ -71,7 +71,7 @@ const notvexEditorTheme = EditorView.theme({
   '&.cm-focused .cm-scroller .cm-selectionLayer .cm-selectionBackground': {
     background: 'color-mix(in oklch, var(--primary) 25%, transparent) !important'
   },
-  '.cm-activeLine': { backgroundColor: '#ffffff05' }
+  '.cm-activeLine': { backgroundColor: 'color-mix(in oklch, var(--foreground) 2%, transparent)' }
 })
 
 // Module scope: @uiw/react-codemirror reconfigures the view whenever these props change identity,
@@ -434,7 +434,7 @@ export function NoteEditor(): ReactNode {
               title={
                 editorMode === 'editing' ? 'Reading view (Ctrl+Shift+E)' : 'Edit (Ctrl+Shift+E)'
               }
-              className={editorMode === 'reading' ? 'text-primary' : 'text-muted-forground'}
+              className={editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'}
             >
               {editorMode === 'editing' ? (
                 <EyeIcon className="h-4 w-4" />
