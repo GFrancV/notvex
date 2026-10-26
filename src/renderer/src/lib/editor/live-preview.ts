@@ -549,7 +549,7 @@ export const livePreviewTheme = EditorView.theme({
   '.cm-md-bold': { fontWeight: 'bold' },
   '.cm-md-italic': { fontStyle: 'italic' },
   '.cm-md-inlinecode': {
-    fontFamily: '"JetBrains Mono","Fira Code",monospace',
+    fontFamily: 'var(--font-mono)',
     backgroundColor: 'var(--card)',
     borderRadius: '3px',
     padding: '0 3px'

@@ -24,7 +24,7 @@ export function RecoveryWordsGrid({ mnemonic }: RecoveryWordsGridProps): JSX.Ele
         <div className="grid grid-cols-6 gap-2">
           {words.map((word, i) => (
             <div key={i} className="flex flex-col items-center gap-0.5">
-              <span className="text-muted text-[10px]">{i + 1}</span>
+              <span className="text-muted-foreground text-[10px]">{i + 1}</span>
               <span className="text-primary font-mono text-xs">{word}</span>
             </div>
           ))}

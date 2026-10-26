@@ -6,7 +6,12 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 import unicorn from 'eslint-plugin-unicorn'
 import { defineConfig } from 'eslint/config'
 
+import colorTokens from './eslint-rules/color-tokens.mjs'
 import noHistoryComments from './eslint-rules/no-history-comments.mjs'
+
+const local = {
+  rules: { 'color-tokens': colorTokens, 'no-history-comments': noHistoryComments }
+}
 
 export default defineConfig(
   { ignores: ['**/node_modules', '**/dist', '**/out'] },
@@ -44,8 +49,15 @@ export default defineConfig(
   {
     files: ['**/*.{ts,tsx}'],
     ignores: ['src/renderer/src/components/ui/**'],
-    plugins: { local: { rules: { 'no-history-comments': noHistoryComments } } },
+    plugins: { local },
     rules: { 'local/no-history-comments': 'error' }
+  },
+  {
+    // shadcn primitives keep upstream classes; .ts files hold user-picked tag colors.
+    files: ['src/renderer/src/**/*.tsx'],
+    ignores: ['src/renderer/src/components/ui/**'],
+    plugins: { local },
+    rules: { 'local/color-tokens': 'error' }
   },
   {
     // Clipboard history and cloud sync are only opted out of when main writes the clipboard.

@@ -110,7 +110,7 @@ export function Setup(): ReactNode {
               Notvex
               {isDev && <Badge variant="secondary">Dev</Badge>}
             </h1>
-            <p className="text-muted mt-1 text-sm">Create your secure vault</p>
+            <p className="text-muted-foreground mt-1 text-sm">Create your secure vault</p>
           </div>
         </div>
 
@@ -138,7 +138,7 @@ export function Setup(): ReactNode {
                     <FolderOpenIcon className="h-4 w-4" />
                   </Button>
                 </div>
-                <FieldDescription className="text-muted text-xs">
+                <FieldDescription className="text-muted-foreground text-xs">
                   Your vault will be saved as a single <code className="text-primary">.nvx</code>{' '}
                   file. Copy it to back up everything.
                 </FieldDescription>
@@ -154,7 +154,7 @@ export function Setup(): ReactNode {
                 <span className="border-border w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="bg-background text-muted px-2">or</span>
+                <span className="bg-background text-muted-foreground px-2">or</span>
               </div>
             </div>
 
@@ -168,7 +168,7 @@ export function Setup(): ReactNode {
         {step === 'password' && (
           <div className="space-y-6">
             <div className="bg-sidebar rounded-lg border p-3">
-              <p className="text-muted text-xs">
+              <p className="text-muted-foreground text-xs">
                 <span className="text-muted-foreground">File:</span> {vaultPath}
               </p>
             </div>
@@ -222,7 +222,7 @@ export function Setup(): ReactNode {
               </Button>
             </div>
 
-            <p className="text-muted text-center text-xs">
+            <p className="text-muted-foreground text-center text-xs">
               This derives your encryption key using Argon2id. May take a few seconds.
             </p>
           </div>
@@ -267,7 +267,7 @@ export function Setup(): ReactNode {
           <p className="mt-6 text-center">
             <Button
               variant="link"
-              className="text-muted h-auto p-0 text-xs font-normal"
+              className="text-muted-foreground h-auto p-0 text-xs font-normal"
               onClick={handleBackToUnlock}
             >
               ← Back to unlock

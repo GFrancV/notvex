@@ -239,7 +239,7 @@ export function Unlock(): ReactNode {
               Notvex
               {isDev && <Badge variant="secondary">Dev</Badge>}
             </h1>
-            <p className="text-muted mt-1 text-sm">
+            <p className="text-muted-foreground mt-1 text-sm">
               {vaultExists === true && mode === 'recovery'
                 ? 'Account Recovery'
                 : 'Unlock your vault'}
@@ -253,7 +253,7 @@ export function Unlock(): ReactNode {
             <Button
               variant="outline"
               onClick={handleOpenOther}
-              className="text-muted mx-auto text-xs"
+              className="text-muted-foreground mx-auto text-xs"
             >
               <FolderOpenIcon />
 
@@ -291,7 +291,7 @@ export function Unlock(): ReactNode {
                   <span className="border-border w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-background text-muted px-2">or</span>
+                  <span className="bg-background text-muted-foreground px-2">or</span>
                 </div>
               </div>
 
@@ -398,7 +398,7 @@ export function Unlock(): ReactNode {
                 <p className="text-center">
                   <Button
                     variant="link"
-                    className="text-muted h-auto p-0 text-xs font-normal"
+                    className="text-muted-foreground h-auto p-0 text-xs font-normal"
                     onClick={(): void => {
                       void handleCreateNew()
                     }}
@@ -409,7 +409,7 @@ export function Unlock(): ReactNode {
               </>
             ) : (
               <>
-                <p className="text-muted text-sm">
+                <p className="text-muted-foreground text-sm">
                   Enter your 24 recovery words to regain access to your vault.
                 </p>
 
@@ -436,7 +436,7 @@ export function Unlock(): ReactNode {
                         {wordCount}/24 words
                       </span>
                     )}
-                    <p className="text-muted text-xs">
+                    <p className="text-muted-foreground text-xs">
                       Separate each word with a space or new line.
                     </p>
                   </FieldDescription>
@@ -489,7 +489,7 @@ export function Unlock(): ReactNode {
                     size="sm"
                     type="button"
                     onClick={switchToPassword}
-                    className="text-muted h-auto p-0 text-xs"
+                    className="text-muted-foreground h-auto p-0 text-xs"
                   >
                     ← Back to unlock
                   </Button>
@@ -502,7 +502,7 @@ export function Unlock(): ReactNode {
       {/* The sidebar's Help menu doesn't exist while the vault is locked. */}
       <Button
         variant="link"
-        className="text-muted absolute bottom-6 h-auto p-0 text-xs font-normal"
+        className="text-muted-foreground absolute bottom-6 h-auto p-0 text-xs font-normal"
         onClick={() => void openBugReport()}
       >
         Report a bug
