@@ -54,13 +54,15 @@ export function NoteListRow({
       <ContextMenuTrigger asChild>
         <button
           type="button"
+          aria-current={isActive || undefined}
           className={cn(
-            'mb-1.5 w-full rounded-md px-3 py-3.5 text-left transition-colors',
+            'relative mb-1.5 w-full rounded-md px-3 py-3.5 text-left transition-colors',
             'hover:bg-accent focus:outline-none',
-            isActive && 'bg-accent border-l-primary border-l-2'
+            isActive && 'bg-accent'
           )}
           onClick={() => onSelect(note.id)}
         >
+          {isActive && <span className="selection-indicator" />}
           <div className="mb-1 flex min-w-0 items-center gap-1.5">
             {note.isPinned && <PinIcon className="text-primary fill-primary size-3 shrink-0" />}
             <h3 className="flex-1 truncate text-sm font-medium text-pretty">

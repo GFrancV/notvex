@@ -55,6 +55,20 @@
   --shadow-glow-warning: 0 0 40px -6px color-mix(in oklch, var(--warning) 50%, transparent);
 }
 
+/* The selected-item mark: a fixed inset from the row's top and bottom, so it grows with the row.
+   Centered on the row's left edge, so no container may clip that overhang. */
+@utility selection-indicator {
+  position: absolute;
+  top: calc(var(--spacing) * 1.75);
+  bottom: calc(var(--spacing) * 1.75);
+  left: 0;
+  width: 3px;
+  translate: -50% 0;
+  border-radius: 9999px;
+  background-color: var(--color-primary);
+  pointer-events: none;
+}
+
 :root {
   --radius: 0.625rem;
   --background: oklch(0.145 0 0);
