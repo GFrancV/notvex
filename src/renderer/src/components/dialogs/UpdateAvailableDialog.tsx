@@ -82,7 +82,7 @@ export function UpdateAvailableDialog(): ReactNode {
         if (!v && dismissible) setState(null)
       }}
     >
-      <DialogContent className="max-w-md" showCloseButton={dismissible}>
+      <DialogContent>
         {state?.phase === 'available' && (
           <>
             <DialogHeader>

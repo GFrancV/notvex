@@ -73,7 +73,7 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
 
   return (
     <Dialog open={open} onOpenChange={(next) => (locked && !next ? undefined : setOpen(next))}>
-      <DialogContent className="max-w-md" showCloseButton={!locked}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Your new recovery key was never confirmed</DialogTitle>
           <DialogDescription>

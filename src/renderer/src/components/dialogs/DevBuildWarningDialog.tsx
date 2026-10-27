@@ -48,7 +48,7 @@ export function DevBuildWarningDialog(): ReactNode {
         if (!v) void respond(false)
       }}
     >
-      <DialogContent className="max-w-md" showCloseButton={false}>
+      <DialogContent>
         {state && (
           <>
             <DialogHeader>

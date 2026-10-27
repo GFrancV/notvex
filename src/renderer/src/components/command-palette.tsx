@@ -66,7 +66,12 @@ export function CommandPalette(): JSX.Element | null {
   }, [setCommandPaletteOpen])
 
   return (
-    <CommandDialog open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen}>
+    // Wider than the confirmation dialogs: it lists note titles next to shortcuts.
+    <CommandDialog
+      open={commandPaletteOpen}
+      onOpenChange={setCommandPaletteOpen}
+      className="sm:max-w-lg"
+    >
       <PaletteContent />
     </CommandDialog>
   )

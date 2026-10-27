@@ -81,6 +81,12 @@ describe('SettingsDialog', () => {
     expect(screen.getByRole('tabpanel').textContent).toMatch(/auto-lock/i)
   })
 
+  it('keeps its close button, as its tabs offer no other way out', async () => {
+    await renderDialog()
+
+    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
+  })
+
   it('names every section in a vertical tab list', async () => {
     await renderDialog()
 

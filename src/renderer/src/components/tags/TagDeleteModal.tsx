@@ -45,7 +45,7 @@ export function TagDeleteModal({ open, onClose, tag }: TagDeleteModalProps): Rea
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent>
         <DialogHeader className="border-b-0">
           <DialogTitle>Delete &ldquo;{tag?.name}&rdquo;?</DialogTitle>
           <DialogDescription>
