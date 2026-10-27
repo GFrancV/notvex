@@ -90,19 +90,9 @@ export function KeyFilePanel({
 
       {mnemonic === '' ? (
         <>
-          <Alert
-            className={
-              adding
-                ? 'border-warning/30 bg-warning/10 border'
-                : 'border-destructive/30 bg-destructive/10 border'
-            }
-          >
-            <AlertTriangleIcon
-              className={
-                adding ? 'stroke-warning mt-0.5 h-4 w-4' : 'text-destructive mt-0.5 h-4 w-4'
-              }
-            />
-            <AlertDescription className={adding ? 'text-warning' : 'text-destructive'}>
+          <Alert variant={adding ? 'warning' : 'destructive'}>
+            <AlertTriangleIcon />
+            <AlertDescription>
               <p>
                 {adding ? 'Adding' : 'Removing'} a key file changes your vault encryption. Your
                 current recovery codes will be <strong>invalidated</strong> and new ones generated,
@@ -167,9 +157,9 @@ export function KeyFilePanel({
       ) : (
         <div className="space-y-4">
           <h3 className="font-semibold">Save your new recovery key</h3>
-          <Alert className="border-warning/30 bg-warning/10 border">
-            <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4" />
-            <AlertDescription className="text-warning">
+          <Alert variant="warning">
+            <AlertTriangleIcon />
+            <AlertDescription>
               <p>
                 Key file {adding ? 'activated' : 'removed'}. Your recovery key has changed and the
                 previous one no longer works. Write it down by hand or copy it on a device you

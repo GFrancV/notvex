@@ -166,9 +166,9 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
       {step === 'mnemonic' && (
         <div className="mt-2 space-y-4">
           <h3 className="font-semibold">Save your new recovery key</h3>
-          <Alert className="border-warning/30 bg-warning/10 border">
-            <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-            <AlertDescription className="text-warning">
+          <Alert variant="warning">
+            <AlertTriangleIcon />
+            <AlertDescription>
               Your recovery key has changed and the previous one no longer works. Write it down by
               hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t be
               shown again.

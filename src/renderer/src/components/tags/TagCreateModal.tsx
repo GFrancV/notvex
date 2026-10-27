@@ -55,7 +55,7 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{editTag ? 'Edit tag' : 'New tag'}</DialogTitle>
         </DialogHeader>

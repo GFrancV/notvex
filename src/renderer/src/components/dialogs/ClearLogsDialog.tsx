@@ -36,7 +36,7 @@ export function ClearLogsDialog({ open, onOpenChange }: Props): ReactNode {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !clearing && onOpenChange(v)}>
-      <DialogContent className="max-w-md" showCloseButton={false}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Clear error logs?</DialogTitle>
         </DialogHeader>

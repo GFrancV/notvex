@@ -32,7 +32,7 @@ export function ReloadWindowDialog(): ReactNode {
 
   return (
     <Dialog open={reloadConfirmOpen} onOpenChange={(v) => !loading && setReloadConfirmOpen(v)}>
-      <DialogContent className="max-w-md" showCloseButton={false}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Reload window?</DialogTitle>
         </DialogHeader>

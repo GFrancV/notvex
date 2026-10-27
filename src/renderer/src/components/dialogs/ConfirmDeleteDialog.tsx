@@ -43,7 +43,7 @@ export function ConfirmDeleteDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !deleting && onOpenChange(v)}>
-      <DialogContent className="max-w-md" showCloseButton={false}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

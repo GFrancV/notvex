@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 // No @testing-library/jest-dom in this repo — stick to plain queries/assertions.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -45,6 +45,7 @@ async function renderOpenDialog(): Promise<void> {
 
 describe('DevBuildWarningDialog (issue #34)', () => {
   afterEach(() => {
+    cleanup()
     vi.clearAllMocks()
   })
 
@@ -52,6 +53,12 @@ describe('DevBuildWarningDialog (issue #34)', () => {
     await renderOpenDialog()
 
     expect(screen.getByText(TEST_VAULT_PATH)).not.toBeNull()
+  })
+
+  it('announces the risk as an alert', async () => {
+    await renderOpenDialog()
+
+    expect(screen.getByRole('alert').textContent).toMatch(/only continue if you know/i)
   })
 
   it('calls confirmDevBuildWarning(), not cancelDevBuildWarning(), when "Open anyway" is clicked', async () => {

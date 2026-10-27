@@ -73,14 +73,14 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
 
   return (
     <Dialog open={open} onOpenChange={(next) => (locked && !next ? undefined : setOpen(next))}>
-      <DialogContent className="max-w-md" showCloseButton={!locked}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Your new recovery key was never confirmed</DialogTitle>
-          <DialogDescription>
-            A new recovery key was created for this vault, but Notvex closed before you confirmed
-            you&apos;d saved it. The previous key no longer works.
-          </DialogDescription>
         </DialogHeader>
+        <DialogDescription>
+          A new recovery key was created for this vault, but Notvex closed before you confirmed
+          you&apos;d saved it. The previous key no longer works.
+        </DialogDescription>
 
         {mnemonic === '' ? (
           <div className="space-y-4">
@@ -127,9 +127,9 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
           </div>
         ) : (
           <div className="space-y-4">
-            <Alert className="border-warning/30 bg-warning/10 border">
-              <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-              <AlertDescription className="text-warning">
+            <Alert variant="warning">
+              <AlertTriangleIcon />
+              <AlertDescription>
                 Write it down by hand or copy it on a device you trust, and keep it somewhere safe.
                 It won&apos;t be shown again.
               </AlertDescription>

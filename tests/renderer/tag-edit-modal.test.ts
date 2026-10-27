@@ -24,6 +24,15 @@ function renderEditModal(): ReturnType<typeof vi.fn> {
   return updateTag
 }
 
+describe('TagCreateModal', () => {
+  it('closes from its Cancel button, with no separate close button', () => {
+    renderEditModal()
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+  })
+})
+
 describe('TagCreateModal in edit mode', () => {
   it('sends only the color when the name is unchanged', async () => {
     const updateTag = renderEditModal()
