@@ -10,7 +10,7 @@ import {
   screen,
   waitFor
 } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Note, NoteListItem } from '@shared/types'
 
@@ -318,6 +318,51 @@ describe('NoteEditor — trash', () => {
 
     expect(toastError).toHaveBeenCalledWith('DB locked')
     expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+})
+
+describe('NoteEditor — tags', () => {
+  const WORK = { id: 't-work', name: 'work', color: '#fff', createdAt: 0 }
+
+  beforeAll(() => {
+    // cmdk measures and scrolls its list, and Radix positions the popover; jsdom does neither.
+    globalThis.ResizeObserver ??= class {
+      observe = (): void => {}
+      unobserve = (): void => {}
+      disconnect = (): void => {}
+    }
+    Element.prototype.scrollIntoView ??= (): void => {}
+  })
+
+  async function openEditor(): Promise<void> {
+    useVaultStore.setState({ tags: [WORK], noteTagsMap: { a: [WORK.id] } })
+    ipc.get.mockResolvedValue({ success: true, data: note('a') })
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    await screen.findByDisplayValue('A')
+  }
+
+  it('opens the tag picker from its button, and Escape closes it', async () => {
+    await openEditor()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add tag' }))
+    const search = await screen.findByRole('combobox', { name: 'Search tags' })
+    fireEvent.keyDown(search, { key: 'Escape' })
+
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull())
+  })
+
+  it('opens both pickers from the command palette and clears the request on close', async () => {
+    await openEditor()
+
+    act(() => useUiStore.setState({ tagSelectorNoteId: 'a' }))
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: 'Search tags' }), {
+      key: 'Escape'
+    })
+    await waitFor(() => expect(useUiStore.getState().tagSelectorNoteId).toBeNull())
+
+    act(() => useUiStore.setState({ removeTagNoteId: 'a' }))
+    expect(await screen.findByRole('combobox', { name: 'Remove tag' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'work' })).toBeTruthy()
   })
 })
 
