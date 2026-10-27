@@ -37,6 +37,7 @@ import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { EditorContextMenu } from './editor-context-menu'
 import { EditorToolbar } from './editor/EditorToolbar'
 import { NoteReadingView } from './note-reading-view'
+import { Shortcut } from './Shortcut'
 import { TagChip } from './tags/TagChip'
 import { TagSelector } from './tags/TagSelector'
 import { Button } from './ui/button'
@@ -337,7 +338,9 @@ export function NoteEditor(): ReactNode {
         <div className="text-center">
           <FileTextIcon className="mx-auto mb-3 h-12 w-12 opacity-20" />
           <p className="text-sm">Select a note or create a new one</p>
-          <p className="mt-1 text-xs opacity-60">Ctrl+N to create</p>
+          <p className="mt-1 text-xs opacity-60">
+            <Shortcut keys="Mod-n" /> to create
+          </p>
         </div>
       </div>
     )

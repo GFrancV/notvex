@@ -163,13 +163,15 @@ describe('EditorToolbar', () => {
   it('shows the keyboard shortcut in the tooltip', async () => {
     render(createElement(EditorToolbar, { editorView: null }))
     fireEvent.focus(screen.getByRole('button', { name: 'Heading 2' }))
-    expect((await screen.findByRole('tooltip')).textContent).toBe('Heading 2 Ctrl+Shift+2')
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Heading 2 Ctrl Shift 2')
   })
 
   it('tells the user how to Tab out of the editor', async () => {
     render(createElement(EditorToolbar, { editorView: null }))
     fireEvent.focus(screen.getByRole('button', { name: 'Quote' }))
-    expect((await screen.findByRole('tooltip')).textContent).toContain('Ctrl+M')
+    expect((await screen.findByRole('tooltip')).textContent).toContain(
+      'Ctrl M, then Shift Tab, leaves the editor'
+    )
   })
 })
 

@@ -16,8 +16,8 @@ import {
 
 import { type FormattingAction, formattingShortcuts, toolbarActions } from '@/lib/editor/formatting'
 import { notvex } from '@/lib/ipc'
+import { Shortcut } from '../Shortcut'
 import { Button } from '../ui/button'
-import { Kbd } from '../ui/kbd'
 import { Separator } from '../ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 
@@ -39,19 +39,8 @@ const groups: [FormattingAction, LucideIcon][][] = [
   ]
 ]
 
-const isMac = notvex.platform === 'darwin'
-
-/** CodeMirror key notation ("Mod-Shift-1") to what the user presses ("Ctrl+Shift+1"). */
-function displayKey(key: string): string {
-  return key
-    .replace('Mod', isMac ? '⌘' : 'Ctrl')
-    .split('-')
-    .map((part) => (part.length === 1 ? part.toUpperCase() : part))
-    .join('+')
-}
-
 // indentWithTab keeps Tab inside the editor; CodeMirror's tab-focus mode is the way out.
-const tabOutHint = `${isMac ? 'Shift+Option+M' : 'Ctrl+M'}, then Shift+Tab, leaves the editor`
+const tabOutKeys = notvex.platform === 'darwin' ? 'Shift-Alt-m' : 'Mod-m'
 
 export function EditorToolbar({
   editorView
@@ -85,8 +74,13 @@ export function EditorToolbar({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {label} <Kbd>{displayKey(key)}</Kbd>
-                    {action === 'quote' && <p className="mt-1">{tabOutHint}</p>}
+                    {label} <Shortcut keys={key} />
+                    {action === 'quote' && (
+                      <p className="mt-1">
+                        <Shortcut keys={tabOutKeys} />, then <Shortcut keys="Shift-Tab" />, leaves
+                        the editor
+                      </p>
+                    )}
                   </TooltipContent>
                 </Tooltip>
               )

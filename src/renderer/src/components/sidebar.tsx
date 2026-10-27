@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 import {
-  ArrowBigUpIcon,
-  CommandIcon,
   FileIcon,
   PinIcon,
   PlusIcon,
@@ -23,13 +21,13 @@ import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
 import { HelpMenu } from './HelpMenu'
 import { SettingsDialog, type SettingsTab } from './settings-dialog'
+import { Shortcut } from './Shortcut'
 import { TagCreateModal } from './tags/TagCreateModal'
 import { TagDeleteModal } from './tags/TagDeleteModal'
 import { TagItem } from './tags/TagItem'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
-import { Kbd } from './ui/kbd'
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -146,10 +144,7 @@ export function Sidebar(): React.ReactNode {
                     <XIcon />
                   </Button>
                 ) : (
-                  <Kbd>
-                    {notvex.platform === 'darwin' ? <CommandIcon /> : 'Ctrl'} + <ArrowBigUpIcon /> +
-                    F
-                  </Kbd>
+                  <Shortcut keys="Mod-Shift-f" />
                 )}
               </InputGroupAddon>
             </InputGroup>
