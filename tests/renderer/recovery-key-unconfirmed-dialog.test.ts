@@ -63,6 +63,9 @@ describe('RecoveryKeyUnconfirmedDialog', () => {
     await renderDialog()
 
     expect(screen.getByText(TITLE)).toBeTruthy()
+    expect(
+      screen.getByRole('dialog', { description: /closed before you confirmed you'd saved it/ })
+    ).toBeTruthy()
   })
 
   it('generates a new key, shows it, and confirms it once saved', async () => {

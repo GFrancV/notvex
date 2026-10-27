@@ -46,14 +46,14 @@ export function TagDeleteModal({ open, onClose, tag }: TagDeleteModalProps): Rea
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
-        <DialogHeader className="border-b-0">
+        <DialogHeader>
           <DialogTitle>Delete &ldquo;{tag?.name}&rdquo;?</DialogTitle>
-          <DialogDescription>
-            {count > 0
-              ? `This will remove the tag from ${count} note${count === 1 ? '' : 's'}. The notes themselves won't be deleted.`
-              : 'This tag has no notes.'}
-          </DialogDescription>
         </DialogHeader>
+        <DialogDescription>
+          {count > 0
+            ? `This will remove the tag from ${count} note${count === 1 ? '' : 's'}. The notes themselves won't be deleted.`
+            : 'This tag has no notes.'}
+        </DialogDescription>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={loading}>
             Cancel

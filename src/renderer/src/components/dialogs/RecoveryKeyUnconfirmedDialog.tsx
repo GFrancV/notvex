@@ -76,11 +76,11 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Your new recovery key was never confirmed</DialogTitle>
-          <DialogDescription>
-            A new recovery key was created for this vault, but Notvex closed before you confirmed
-            you&apos;d saved it. The previous key no longer works.
-          </DialogDescription>
         </DialogHeader>
+        <DialogDescription>
+          A new recovery key was created for this vault, but Notvex closed before you confirmed
+          you&apos;d saved it. The previous key no longer works.
+        </DialogDescription>
 
         {mnemonic === '' ? (
           <div className="space-y-4">
