@@ -4,6 +4,7 @@ import { TriangleAlertIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -65,10 +66,10 @@ export function DevBuildWarningDialog(): ReactNode {
               corrupt the vault or make its data irreversibly inaccessible.
             </DialogDescription>
 
-            <div className="text-destructive bg-destructive/15 flex items-center gap-2 rounded-md px-3 py-2 text-sm">
-              <TriangleAlertIcon className="size-4 shrink-0" />
-              Only continue if you know what you&apos;re doing.
-            </div>
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertDescription>Only continue if you know what you&apos;re doing.</AlertDescription>
+            </Alert>
 
             <DialogFooter>
               <Button

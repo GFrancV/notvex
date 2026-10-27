@@ -4,11 +4,13 @@ import DOMPurify from 'dompurify'
 import { TagIcon, TriangleAlertIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
@@ -146,14 +148,14 @@ export function UpdateAvailableDialog(): ReactNode {
         {state?.phase === 'error' && (
           <>
             <DialogHeader>
-              <div className="flex items-center gap-3">
-                <div className="border-destructive/20 bg-destructive/15 flex size-10 shrink-0 items-center justify-center rounded-xl border">
-                  <TriangleAlertIcon className="text-destructive size-1/2" />
-                </div>
-                <DialogTitle className="text-destructive">Update failed</DialogTitle>
-              </div>
+              <DialogTitle>Update failed</DialogTitle>
             </DialogHeader>
-            <p className="text-muted-foreground text-sm">{state.message}</p>
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <DialogDescription asChild>
+                <AlertDescription>{state.message}</AlertDescription>
+              </DialogDescription>
+            </Alert>
             <DialogFooter>
               <Button variant="secondary" onClick={() => setState(null)}>
                 Close
