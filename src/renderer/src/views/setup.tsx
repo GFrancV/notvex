@@ -231,10 +231,10 @@ export function Setup(): ReactNode {
         {/* Step: Recovery key */}
         {step === 'recovery' && (
           <div className="space-y-6">
-            <Alert className="border-warning/30 bg-warning/10 border">
-              <AlertTriangleIcon className="stroke-warning mt-0.5 h-4 w-4 shrink-0" />
-              <AlertTitle className="text-warning">Save your recovery key</AlertTitle>
-              <AlertDescription className="text-warning/70">
+            <Alert variant="warning">
+              <AlertTriangleIcon />
+              <AlertTitle>Save your recovery key</AlertTitle>
+              <AlertDescription>
                 If you lose your password, this is the only way to recover your notes. Write it down
                 by hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t
                 be shown again.
