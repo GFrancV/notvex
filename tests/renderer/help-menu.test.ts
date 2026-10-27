@@ -56,7 +56,14 @@ describe('HelpMenu', () => {
     await openMenu()
 
     const labels = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim())
-    expect(labels).toEqual(['Documentation', 'Report a bug…', 'Copy debug info', 'About Notvex'])
+    expect(labels).toEqual(['Documentation', 'Report a bug', 'Copy debug info', 'About Notvex'])
+  })
+
+  it('says which items open the browser', async () => {
+    await openMenu()
+
+    expect(item(/^Documentation \(opens in your browser\)$/)).toBeTruthy()
+    expect(item(/^Report a bug \(opens in your browser\)$/)).toBeTruthy()
   })
 
   it('opens the documentation in the system browser', async () => {

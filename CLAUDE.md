@@ -159,6 +159,35 @@ dark mode by default. Do not add any light/dark toggle logic.
 Never use the `style` prop for colors, spacing, or layout. All styling goes 
 through Tailwind classes using the tokens above.
 
+### 5. Copy
+
+- **Sentence case** for every label, button, menu item, tab, heading and tooltip. Proper nouns
+  keep their capitals (Notvex, GitHub, Markdown). The native macOS menu (`main/app-menu.ts`)
+  follows the platform's Title Case.
+- **`…` (U+2026), never `...`**, and only on commands that ask for more input before acting
+  (`Open vault…`, `Tag note with…`). `pnpm lint` (`local/ellipsis`) rejects three dots.
+- **Actions that open the browser** get no ellipsis. They end with
+  `<ExternalLinkIcon aria-hidden />` and set an `aria-label` of the visible label plus
+  " (opens in your browser)". Menu and palette items keep their leading icon (the column every
+  item shares); buttons carry only the external icon, since two icons crowd a button.
+- **One name per action** everywhere it appears: menu, palette, button. A button may put a verb
+  in front (`Documentation` in a menu, `Open documentation` on a Settings button), since a
+  Settings row pairs a noun label with a verb button. Section headings use
+  shadcn's style (`text-xs font-medium text-muted-foreground`), not uppercase.
+
+```tsx
+// ✅
+<DropdownMenuItem onClick={openBugReport} aria-label="Report a bug (opens in your browser)">
+  <BugIcon />
+  Report a bug
+  <ExternalLinkIcon className="ml-auto" aria-hidden />
+</DropdownMenuItem>
+
+// ❌ Title Case, an ellipsis on a browser action, and a second name for it elsewhere
+<CommandItem>Report a Bug...</CommandItem>
+<Button>Report bug</Button>
+```
+
 ---
 
 ## Security Rules — never violate these

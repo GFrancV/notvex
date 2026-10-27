@@ -135,7 +135,7 @@ export function Sidebar(): React.ReactNode {
                     void handleNewNote()
                   }
                 }}
-                placeholder="Search ..."
+                placeholder="Search…"
               />
               <InputGroupAddon>
                 <SearchIcon />
@@ -185,7 +185,7 @@ export function Sidebar(): React.ReactNode {
                 }}
               >
                 <FileIcon />
-                All Notes
+                All notes
               </SidebarMenuButton>
               {allNotesCount > 0 && <SidebarMenuBadge>{allNotesCount}</SidebarMenuBadge>}
             </SidebarMenuItem>

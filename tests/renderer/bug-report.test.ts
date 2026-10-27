@@ -78,7 +78,7 @@ describe('BugReportActions', () => {
   it('opens the prefilled issue in the browser', async () => {
     render(createElement(BugReportActions))
 
-    fireEvent.click(screen.getByRole('button', { name: /report bug/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Report a bug (opens in your browser)' }))
 
     await waitFor(() =>
       expect(ipc.openExternal).toHaveBeenCalledWith(
@@ -106,7 +106,7 @@ describe('BugReportActions', () => {
     ipc.buildReport.mockResolvedValue({ success: false, error: 'EACCES' })
     render(createElement(BugReportActions))
 
-    fireEvent.click(screen.getByRole('button', { name: /report bug/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Report a bug (opens in your browser)' }))
 
     await waitFor(() => expect(ipc.openExternal).toHaveBeenCalledTimes(1))
     expect(ipc.openExternal.mock.calls[0][0]).toMatch(new RegExp(`^${ISSUE_URL}\\?`))

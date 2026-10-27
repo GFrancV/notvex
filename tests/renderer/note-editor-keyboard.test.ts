@@ -345,7 +345,7 @@ describe('NoteEditor — focus after opening a note', () => {
     render(createElement('div', null, createElement(CommandPalette), createElement(NoteEditor)))
     act(() => useUiStore.setState({ commandPaletteOpen: true }))
 
-    fireEvent.click(screen.getByText('New Note'))
+    fireEvent.click(screen.getByText('New note'))
 
     await waitFor(() => expect(document.activeElement).toBe(titleInput()))
     // Radix restores focus in a 0ms timeout queued when the dialog unmounts; let it run.

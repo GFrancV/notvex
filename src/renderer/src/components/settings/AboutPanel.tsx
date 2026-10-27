@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { BookOpenIcon, BugIcon, Loader2Icon, RefreshCwIcon } from 'lucide-react'
+import { ExternalLinkIcon, Loader2Icon, RefreshCwIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
@@ -78,18 +78,24 @@ export function AboutPanel(): ReactNode {
             variant="secondary"
             size="sm"
             onClick={() => void notvex.shell.openExternal(DOCS_URL)}
+            aria-label="Open documentation (opens in your browser)"
           >
-            <BookOpenIcon />
-            Open docs
+            Open documentation
+            <ExternalLinkIcon aria-hidden />
           </Button>
         </SettingRow>
         <SettingRow
-          label="Report an issue"
+          label="Bug reports"
           description="Opens a prefilled GitHub issue. You review it before anything is sent."
         >
-          <Button variant="secondary" size="sm" onClick={() => void openBugReport()}>
-            <BugIcon />
-            Report a bug…
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void openBugReport()}
+            aria-label="Report a bug (opens in your browser)"
+          >
+            Report a bug
+            <ExternalLinkIcon aria-hidden />
           </Button>
         </SettingRow>
       </SettingsSection>

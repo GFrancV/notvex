@@ -97,7 +97,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
             </TabsTrigger>
             <TabsTrigger value="vault" className={TAB} disabled={locked}>
               <DatabaseIcon />
-              Vault & Data
+              Vault & data
             </TabsTrigger>
             <TabsTrigger value="diagnostics" className={TAB} disabled={locked}>
               <ActivityIcon />

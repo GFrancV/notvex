@@ -88,7 +88,7 @@ describe('SettingsDialog', () => {
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       'Security',
       'Updates',
-      'Vault & Data',
+      'Vault & data',
       'Diagnostics',
       'About'
     ])
@@ -161,9 +161,9 @@ describe('SettingsDialog', () => {
     expect(setPref).toHaveBeenCalledWith('checkUpdatesOnStartup', false)
   })
 
-  it('runs a Vault & Data action', async () => {
+  it('runs a Vault & data action', async () => {
     await renderDialog()
-    fireEvent.mouseDown(tab('Vault & Data'))
+    fireEvent.mouseDown(tab('Vault & data'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Open backups folder' }))
 
@@ -172,7 +172,7 @@ describe('SettingsDialog', () => {
 
   it('warns about plaintext before exporting, on top of the settings', async () => {
     await renderDialog()
-    fireEvent.mouseDown(tab('Vault & Data'))
+    fireEvent.mouseDown(tab('Vault & data'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Export all notes…' }))
 
@@ -185,7 +185,7 @@ describe('SettingsDialog', () => {
   // dismissed Settings when the warning rendered beside DialogContent, so this passes either way.
   it('stays open when the export warning is cancelled', async () => {
     await renderDialog()
-    fireEvent.mouseDown(tab('Vault & Data'))
+    fireEvent.mouseDown(tab('Vault & data'))
     fireEvent.click(screen.getByRole('button', { name: 'Export all notes…' }))
 
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
@@ -278,7 +278,7 @@ describe('SettingsDialog: a rekey in progress', () => {
     await startPasswordChange()
 
     expect(screen.getByRole('button', { name: 'Security' }).hasAttribute('disabled')).toBe(true)
-    for (const name of ['Updates', 'Vault & Data', 'Diagnostics', 'About']) {
+    for (const name of ['Updates', 'Vault & data', 'Diagnostics', 'About']) {
       expect(tab(name).hasAttribute('disabled')).toBe(true)
     }
     expect(screen.queryByRole('button', { name: /close/i })).toBeNull()

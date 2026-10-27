@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   BugIcon,
   CopyIcon,
+  ExternalLinkIcon,
   EyeIcon,
   FileTextIcon,
   FolderOpenIcon,
@@ -125,7 +126,7 @@ function PaletteContent(): ReactNode {
             onSelect={() => run(handleCreate)}
           >
             <PlusIcon />
-            <span>New Note</span>
+            <span>New note</span>
             <CommandShortcut>Ctrl+N</CommandShortcut>
           </CommandItem>
           <CommandItem
@@ -133,7 +134,7 @@ function PaletteContent(): ReactNode {
             onSelect={() => run(toggleEditorMode)}
           >
             <EyeIcon />
-            <span>Toggle Reading View</span>
+            <span>Toggle reading view</span>
             <CommandShortcut>Ctrl+Shift+E</CommandShortcut>
           </CommandItem>
           <CommandItem
@@ -141,19 +142,19 @@ function PaletteContent(): ReactNode {
             onSelect={() => run(() => setShowTrash(true))}
           >
             <Trash2Icon />
-            <span>Show Trash</span>
+            <span>Show trash</span>
           </CommandItem>
           <CommandItem
             keywords={['close vault', 'logout', 'sign out', 'exit']}
             onSelect={() => run(lock)}
           >
             <LockIcon />
-            <span>Lock Vault</span>
+            <span>Lock vault</span>
             <CommandShortcut>Ctrl+L</CommandShortcut>
           </CommandItem>
           <CommandItem keywords={['refresh', 'restart']} onSelect={() => run(requestReload)}>
             <RotateCwIcon />
-            <span>Reload Window</span>
+            <span>Reload window</span>
             <CommandShortcut>Ctrl+R</CommandShortcut>
           </CommandItem>
           {activeNoteId && (
@@ -162,7 +163,7 @@ function PaletteContent(): ReactNode {
               onSelect={() => run(() => setTagSelectorNoteId(activeNoteId))}
             >
               <TagIcon />
-              <span>Tag note with...</span>
+              <span>Tag note with…</span>
             </CommandItem>
           )}
           {activeNoteId && noteHasTags && (
@@ -171,7 +172,7 @@ function PaletteContent(): ReactNode {
               onSelect={() => run(() => setRemoveTagNoteId(activeNoteId))}
             >
               <XIcon />
-              <span>Remove tag from note...</span>
+              <span>Remove tag from note…</span>
             </CommandItem>
           )}
           {activeNote && !activeNote.isTrashed && (
@@ -180,7 +181,7 @@ function PaletteContent(): ReactNode {
               onSelect={() => run(() => duplicateNote(activeNote.id))}
             >
               <CopyIcon />
-              <span>Duplicate Note</span>
+              <span>Duplicate note</span>
             </CommandItem>
           )}
         </CommandGroup>
@@ -189,23 +190,25 @@ function PaletteContent(): ReactNode {
           <CommandItem
             keywords={['bug', 'issue', 'feedback', 'problem', 'support']}
             onSelect={() => run(openBugReport)}
+            aria-label="Report a bug (opens in your browser)"
           >
             <BugIcon />
-            <span>Report a Bug…</span>
+            <span>Report a bug</span>
+            <ExternalLinkIcon className="ml-auto" aria-hidden />
           </CommandItem>
           <CommandItem
             keywords={['diagnostics', 'debug', 'version', 'system info']}
             onSelect={() => run(async () => copyToClipboard(await loadDebugInfo()))}
           >
             <CopyIcon />
-            <span>Copy Debug Info</span>
+            <span>Copy debug info</span>
           </CommandItem>
           <CommandItem
             keywords={['logs', 'errors', 'diagnostics']}
             onSelect={() => run(openLogsFolder)}
           >
             <FolderOpenIcon />
-            <span>Open Logs Folder</span>
+            <span>Open logs folder</span>
           </CommandItem>
         </CommandGroup>
 

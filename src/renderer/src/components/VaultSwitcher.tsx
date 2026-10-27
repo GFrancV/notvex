@@ -119,11 +119,11 @@ export function VaultSwitcher(): ReactNode {
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={handleOpenOther}>
             <FolderOpenIcon className="size-4" />
-            Open vault...
+            Open vault…
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={handleCreateNew}>
             <PlusIcon className="size-4" />
-            Create new vault...
+            Create new vault…
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => void lock()}>

@@ -91,9 +91,9 @@ export function MigrationRequiredDialog(): ReactNode {
                   Create a backup before updating
                 </FieldLabel>
                 <FieldDescription>
-                  A plain copy of your vault file, saved next to it before the update runs. Nothing
-                  you need to manage — safe to delete anytime, and not required to open the vault
-                  again.
+                  A plain copy of your vault file, saved in Notvex&apos;s app data before the update
+                  runs. Nothing you need to manage — safe to delete anytime, and not required to
+                  open the vault again.
                 </FieldDescription>
               </FieldContent>
             </Field>

@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react'
 
-import { BookOpenIcon, BugIcon, CircleHelpIcon, CopyIcon, InfoIcon } from 'lucide-react'
+import {
+  BookOpenIcon,
+  BugIcon,
+  CircleHelpIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  InfoIcon
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -33,15 +40,23 @@ export function HelpMenu({ onOpenAbout }: Props): ReactNode {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="right" sideOffset={4} className="w-56">
-        <DropdownMenuItem onClick={() => void notvex.shell.openExternal(DOCS_URL)}>
+        <DropdownMenuItem
+          onClick={() => void notvex.shell.openExternal(DOCS_URL)}
+          aria-label="Documentation (opens in your browser)"
+        >
           <BookOpenIcon />
           Documentation
+          <ExternalLinkIcon className="ml-auto" aria-hidden />
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => void openBugReport()}>
+          <DropdownMenuItem
+            onClick={() => void openBugReport()}
+            aria-label="Report a bug (opens in your browser)"
+          >
             <BugIcon />
-            Report a bug…
+            Report a bug
+            <ExternalLinkIcon className="ml-auto" aria-hidden />
           </DropdownMenuItem>
           <DropdownMenuItem onClick={async () => copyToClipboard(await loadDebugInfo())}>
             <CopyIcon />

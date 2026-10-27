@@ -143,7 +143,7 @@ describe('Unlock focus', () => {
       await renderUnlock()
       fireEvent.click(screen.getByRole('button', { name: /Use recovery key/ }))
       fireEvent.change(recoveryTextarea(), { target: { value: MNEMONIC } })
-      const recoverButton = screen.getByRole('button', { name: 'Recover Access' })
+      const recoverButton = screen.getByRole('button', { name: 'Recover access' })
       recoverButton.focus()
 
       fireEvent.click(recoverButton)
@@ -191,7 +191,7 @@ describe('Unlock focus', () => {
     await renderUnlock()
     fireEvent.click(screen.getByRole('button', { name: /Use recovery key/ }))
     fireEvent.change(recoveryTextarea(), { target: { value: MNEMONIC } })
-    const recoverButton = screen.getByRole('button', { name: 'Recover Access' })
+    const recoverButton = screen.getByRole('button', { name: 'Recover access' })
     recoverButton.focus()
 
     fireEvent.click(recoverButton)

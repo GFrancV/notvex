@@ -62,7 +62,7 @@ export function KeyFileInput({
               </span>
             </>
           ) : (
-            'Key file...'
+            'Key file…'
           )}
         </InputGroupAddon>
         <InputGroupAddon align="inline-end">

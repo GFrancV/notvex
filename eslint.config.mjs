@@ -7,10 +7,11 @@ import unicorn from 'eslint-plugin-unicorn'
 import { defineConfig } from 'eslint/config'
 
 import colorTokens from './eslint-rules/color-tokens.mjs'
+import ellipsis from './eslint-rules/ellipsis.mjs'
 import noHistoryComments from './eslint-rules/no-history-comments.mjs'
 
 const local = {
-  rules: { 'color-tokens': colorTokens, 'no-history-comments': noHistoryComments }
+  rules: { 'color-tokens': colorTokens, ellipsis, 'no-history-comments': noHistoryComments }
 }
 
 export default defineConfig(
@@ -57,7 +58,7 @@ export default defineConfig(
     files: ['src/renderer/src/**/*.tsx'],
     ignores: ['src/renderer/src/components/ui/**'],
     plugins: { local },
-    rules: { 'local/color-tokens': 'error' }
+    rules: { 'local/color-tokens': 'error', 'local/ellipsis': 'error' }
   },
   {
     // Clipboard history and cloud sync are only opted out of when main writes the clipboard.

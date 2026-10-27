@@ -28,10 +28,10 @@ describe('AboutPanel links', () => {
     vi.clearAllMocks()
   })
 
-  it('"Open docs" opens the repo in the system browser instead of navigating', () => {
+  it('"Open documentation" opens the repo in the system browser instead of navigating', () => {
     const url = 'https://github.com/GFrancV/notvex'
     render(createElement(AboutPanel))
-    const link = screen.getByRole('button', { name: 'Open docs' })
+    const link = screen.getByRole('button', { name: 'Open documentation (opens in your browser)' })
 
     fireEvent.click(link)
 
@@ -41,9 +41,9 @@ describe('AboutPanel links', () => {
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(url)
   })
 
-  it('"Report a bug…" opens a prefilled bug report in the system browser', async () => {
+  it('"Report a bug" opens a prefilled bug report in the system browser', async () => {
     render(createElement(AboutPanel))
-    const link = screen.getByRole('button', { name: 'Report a bug…' })
+    const link = screen.getByRole('button', { name: 'Report a bug (opens in your browser)' })
 
     fireEvent.click(link)
 

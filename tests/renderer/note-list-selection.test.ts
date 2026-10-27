@@ -68,3 +68,16 @@ describe('NoteList selected row', () => {
     expect(row('Recipes').getAttribute('aria-current')).toBe('true')
   })
 })
+
+describe('NoteList header', () => {
+  it.each([
+    [{}, 'All notes'],
+    [{ showPinned: true }, 'Pinned'],
+    [{ showTrash: true }, 'Trash']
+  ])('repeats the sidebar label for %o', (view, title) => {
+    useUiStore.setState(view)
+    render(createElement(NoteList))
+
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(title)
+  })
+})

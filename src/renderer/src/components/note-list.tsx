@@ -113,10 +113,10 @@ export function NoteList(): ReactNode {
 
   const listTitle = (): string => {
     if (showTrash) return 'Trash'
-    if (showPinned) return 'Pinned notes'
-    if (activeTags.length > 0) return query ? 'Search in tags' : 'Notes by Tags'
+    if (showPinned) return 'Pinned'
+    if (activeTags.length > 0) return query ? 'Search in tags' : 'Notes by tags'
     if (query) return 'Search results'
-    return 'All Notes'
+    return 'All notes'
   }
 
   return (

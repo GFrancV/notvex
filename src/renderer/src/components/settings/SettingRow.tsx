@@ -59,9 +59,7 @@ export function SettingsSection({
 }): ReactNode {
   return (
     <section className="space-y-3">
-      <h3 className="text-muted-foreground text-xs font-semibold tracking-[0.08em] uppercase">
-        {title}
-      </h3>
+      <h3 className="text-muted-foreground text-xs font-medium">{title}</h3>
       {children}
     </section>
   )
