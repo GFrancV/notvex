@@ -5,18 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rendererIndexPath } from '@main/url-guard'
 
 // The startup check is the app's only automatic network request, so the opt-out must hold in
-// main no matter what the renderer calls; the manual check stays available either way.
+// main no matter what the renderer calls; the manual check stays available either way. Dev
+// builds never run it: each check downloads latest.yml from the real release, and that
+// download count is the only signal of how many packaged installs exist.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
 const handlers = new Map<string, Handler>()
 const state = vi.hoisted(() => ({ checkUpdatesOnStartup: true }))
+const app = vi.hoisted(() => ({ isPackaged: true }))
 const checkForUpdates = vi.hoisted(() =>
   vi.fn(async () => ({ isUpdateAvailable: true, updateInfo: { version: '9.9.9' } }))
 )
 
 vi.mock('electron', () => ({
-  app: { isPackaged: false },
+  app,
   dialog: {},
   shell: {},
   ipcMain: {
@@ -56,6 +59,7 @@ beforeEach(async () => {
   vi.resetModules()
   vi.clearAllMocks()
   state.checkUpdatesOnStartup = true
+  app.isPackaged = true
   ipc = await import('@main/ipc-handlers')
   ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
 })
@@ -86,11 +90,27 @@ describe('updater:check-on-startup', () => {
     checkForUpdates.mockRejectedValueOnce(new Error('offline'))
     await expect(invoke('updater:check-on-startup')).resolves.toMatchObject({ success: false })
   })
+
+  it.each([true, false])('skips the check in a dev build (pref %s)', async (pref) => {
+    app.isPackaged = false
+    state.checkUpdatesOnStartup = pref
+    await expect(invoke('updater:check-on-startup')).resolves.toEqual({
+      success: true,
+      data: null
+    })
+    expect(checkForUpdates).not.toHaveBeenCalled()
+  })
 })
 
 describe('updater:check-now', () => {
   it('checks even when the startup pref is off', async () => {
     state.checkUpdatesOnStartup = false
+    await expect(invoke('updater:check-now')).resolves.toEqual({ success: true, data: '9.9.9' })
+    expect(checkForUpdates).toHaveBeenCalledOnce()
+  })
+
+  it('checks in a dev build', async () => {
+    app.isPackaged = false
     await expect(invoke('updater:check-now')).resolves.toEqual({ success: true, data: '9.9.9' })
     expect(checkForUpdates).toHaveBeenCalledOnce()
   })

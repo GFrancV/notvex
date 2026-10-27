@@ -1585,8 +1585,10 @@ export function registerIpcHandlers(
   handle('updater:check-now', checkForUpdates)
 
   // The opt-out is enforced here, not in the renderer, so a renderer bug can't leak the request.
+  // Each check downloads latest.yml from the real release, and its download count is the only
+  // signal of how many installs exist, so dev launches must not add to it.
   handle('updater:check-on-startup', () =>
-    getPref('checkUpdatesOnStartup') ? checkForUpdates() : ok(null)
+    app.isPackaged && getPref('checkUpdatesOnStartup') ? checkForUpdates() : ok(null)
   )
 
   handle('updater:download', async () => {
