@@ -86,6 +86,7 @@ const { NoteEditor } = await import('@/components/note-editor')
 const { NoteList } = await import('@/components/note-list')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const tag: Tag = { id: 't1', name: 'work', color: 'blue', createdAt: 0 }
 
@@ -196,7 +197,7 @@ describe('NoteEditor — Duplicate menu item', () => {
   it('duplicates the open note from the action menu', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a') })
     ipc.duplicate.mockResolvedValue({ success: true, data: listItem('b', 'Plan (copy)') })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await screen.findByDisplayValue('A')
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate' }))
@@ -209,7 +210,7 @@ describe('NoteEditor — Duplicate menu item', () => {
 
   it('is not offered for a trashed note', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', true) })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
 
     // Waiting for the title means the note, and with it isTrashed, has loaded.
     await screen.findByDisplayValue('A')
@@ -226,7 +227,7 @@ describe('NoteList — Duplicate context item', () => {
     ipc.duplicate.mockResolvedValue({ success: true, data: listItem('d', 'Other (copy)') })
     useVaultStore.setState({ notes: [other], noteTagsMap: {} })
     useUiStore.setState({ showTrash: false, showPinned: false, activeTags: [], searchQuery: '' })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Duplicate' }))
 
@@ -239,7 +240,7 @@ describe('NoteList — Duplicate context item', () => {
     ipc.list.mockResolvedValue({ success: true, data: [trashed] })
     useVaultStore.setState({ notes: [trashed], noteTagsMap: {} })
     useUiStore.setState({ showTrash: true, showPinned: false, activeTags: [], searchQuery: '' })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     expect(await screen.findByRole('menuitem', { name: /Restore/ })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: 'Duplicate' })).toBeNull()

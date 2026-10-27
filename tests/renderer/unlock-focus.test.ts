@@ -28,9 +28,10 @@ const { Unlock } = await import('@/views/unlock')
 const { notvex } = await import('@/lib/ipc')
 const { useVaultStore } = await import('@/store/vault.store')
 const { usePrefsStore } = await import('@/store/prefs.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 async function renderUnlock(): Promise<void> {
-  render(createElement(Unlock))
+  render(createElement(Unlock), { wrapper: TooltipProvider })
   // Let the mount-time throttle fetch settle so its state update lands inside act.
   await waitFor(() => expect(notvex.vault.getUnlockThrottleStatus).toHaveBeenCalled())
 }
@@ -102,7 +103,7 @@ describe('Unlock focus', () => {
 
   it('focuses the password input after picking a vault from the not-found state', async () => {
     usePrefsStore.setState({ recentVaults: [] })
-    render(createElement(Unlock))
+    render(createElement(Unlock), { wrapper: TooltipProvider })
 
     fireEvent.click(screen.getByRole('button', { name: 'Open existing vault' }))
 

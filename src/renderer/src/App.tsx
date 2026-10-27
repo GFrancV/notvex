@@ -8,6 +8,7 @@ import { MigrationRequiredDialog } from '@/components/dialogs/MigrationRequiredD
 import { ReloadWindowDialog } from '@/components/dialogs/ReloadWindowDialog'
 import { UpdateAvailableDialog } from '@/components/dialogs/UpdateAvailableDialog'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useClipboardGuard } from '@/hooks/use-clipboard-guard'
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
@@ -93,7 +94,8 @@ export default function App(): ReactNode {
   }
 
   return (
-    <>
+    // The one tooltip delay for the whole app.
+    <TooltipProvider delayDuration={500}>
       {pendingNewVaultPath || status === 'uninitialized' ? (
         <Setup />
       ) : status === 'locked' ? (
@@ -108,6 +110,6 @@ export default function App(): ReactNode {
       <MigrationRequiredDialog />
       <DevBuildWarningDialog />
       <ReloadWindowDialog />
-    </>
+    </TooltipProvider>
   )
 }

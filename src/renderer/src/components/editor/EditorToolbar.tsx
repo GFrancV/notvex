@@ -19,7 +19,7 @@ import { notvex } from '@/lib/ipc'
 import { Shortcut } from '../Shortcut'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 const groups: [FormattingAction, LucideIcon][][] = [
   [
@@ -54,40 +54,38 @@ export function EditorToolbar({
     }
 
   return (
-    <TooltipProvider delayDuration={500}>
-      <div className="bg-card text-muted-foreground flex items-center gap-0.5 border-y px-6.5 py-1.75">
-        {groups.map((group, i) => (
-          <Fragment key={group[0][0]}>
-            {i > 0 && <Separator orientation="vertical" className="mx-1.5" />}
-            {group.map(([action, Icon]) => {
-              const { label, key } = formattingShortcuts[action]
-              return (
-                <Tooltip key={action}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={label}
-                      onClick={act(toolbarActions[action])}
-                    >
-                      <Icon />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {label} <Shortcut keys={key} />
-                    {action === 'quote' && (
-                      <p className="mt-1">
-                        <Shortcut keys={tabOutKeys} />, then <Shortcut keys="Shift-Tab" />, leaves
-                        the editor
-                      </p>
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              )
-            })}
-          </Fragment>
-        ))}
-      </div>
-    </TooltipProvider>
+    <div className="bg-card text-muted-foreground flex items-center gap-0.5 border-y px-6.5 py-1.75">
+      {groups.map((group, i) => (
+        <Fragment key={group[0][0]}>
+          {i > 0 && <Separator orientation="vertical" className="mx-1.5" />}
+          {group.map(([action, Icon]) => {
+            const { label, key } = formattingShortcuts[action]
+            return (
+              <Tooltip key={action}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={label}
+                    onClick={act(toolbarActions[action])}
+                  >
+                    <Icon />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {label} <Shortcut keys={key} />
+                  {action === 'quote' && (
+                    <p className="mt-1">
+                      <Shortcut keys={tabOutKeys} />, then <Shortcut keys="Shift-Tab" />, leaves the
+                      editor
+                    </p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </Fragment>
+      ))}
+    </div>
   )
 }

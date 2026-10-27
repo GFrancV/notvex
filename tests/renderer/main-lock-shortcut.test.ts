@@ -27,6 +27,7 @@ vi.mock('@/components/ui/sidebar', () => ({
 const { Main } = await import('@/views/main')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 async function pressCtrlL(): Promise<void> {
   await act(async () => {
@@ -36,7 +37,7 @@ async function pressCtrlL(): Promise<void> {
 
 beforeEach(() => {
   useVaultStore.setState({ status: 'unlocked', refreshAll: async () => {} })
-  render(createElement(Main))
+  render(createElement(Main), { wrapper: TooltipProvider })
 })
 
 afterEach(() => {

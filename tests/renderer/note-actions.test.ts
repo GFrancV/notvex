@@ -88,6 +88,7 @@ const { NoteEditor } = await import('@/components/note-editor')
 const { NoteList } = await import('@/components/note-list')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 function listItem(id: string, overrides: Partial<NoteListItem> = {}): NoteListItem {
   return {
@@ -172,7 +173,7 @@ describe('useTogglePin', () => {
 describe('NoteEditor — pin', () => {
   it('keeps the note unpinned when the pin fails', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a') })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await screen.findByDisplayValue('A')
     ipc.update.mockResolvedValue({ success: false, error: 'DB locked' })
 
@@ -188,7 +189,7 @@ describe('NoteEditor — pin', () => {
 
   it('shows the note as pinned once the pin is saved', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a') })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await screen.findByDisplayValue('A')
 
     await act(async () => {
@@ -200,7 +201,7 @@ describe('NoteEditor — pin', () => {
 
   it('a pin that resolves after switching notes leaves the new note alone', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a') })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await screen.findByDisplayValue('A')
     const pin = deferred<{ success: true; data: null }>()
     ipc.update.mockReturnValue(pin.promise)
@@ -217,7 +218,7 @@ describe('NoteEditor — pin', () => {
 
   it('follows a pin made from the note list, and the next click unpins', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a') })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await screen.findByDisplayValue('A')
     // The reload never lands, so only the store patch made on save can flip the icon.
     ipc.list.mockReturnValue(new Promise(() => {}))
@@ -239,7 +240,7 @@ describe('NoteList — pin', () => {
   it('shows the error when the pin fails', async () => {
     ipc.list.mockResolvedValue({ success: true, data: [listItem('a')] })
     ipc.update.mockResolvedValue({ success: false, error: 'DB locked' })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     await act(async () => {
       fireEvent.click(await screen.findByRole('menuitem', { name: 'Pin' }))
@@ -308,7 +309,7 @@ describe('NoteEditor — trash', () => {
   it('keeps the note open when the trash fails', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a') })
     ipc.trash.mockResolvedValue({ success: false, error: 'DB locked' })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await screen.findByDisplayValue('A')
 
     await act(async () => {
@@ -330,7 +331,7 @@ describe('NoteList — trash view actions', () => {
 
   it('shows the error when restore fails', async () => {
     ipc.restore.mockResolvedValue({ success: false, error: 'DB locked' })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     await act(async () => {
       fireEvent.click(await screen.findByRole('menuitem', { name: /Restore/ }))
@@ -341,7 +342,7 @@ describe('NoteList — trash view actions', () => {
 
   it('keeps the open note when delete fails', async () => {
     ipc.delete.mockResolvedValue({ success: false, error: 'DB locked' })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
     await act(async () => {
@@ -354,7 +355,7 @@ describe('NoteList — trash view actions', () => {
 
   it('keeps the open note when empty trash fails', async () => {
     ipc.emptyTrash.mockRejectedValue(new Error('channel closed'))
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
     await act(async () => {
@@ -367,7 +368,7 @@ describe('NoteList — trash view actions', () => {
 
   it('deletes nothing until the delete is confirmed', async () => {
     ipc.delete.mockResolvedValue({ success: true, data: null })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
     expect(ipc.delete).not.toHaveBeenCalled()
@@ -381,7 +382,7 @@ describe('NoteList — trash view actions', () => {
   })
 
   it('cancelling the delete keeps the note', async () => {
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -391,7 +392,7 @@ describe('NoteList — trash view actions', () => {
   })
 
   it('cancelling empty trash keeps the notes', async () => {
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
@@ -401,7 +402,7 @@ describe('NoteList — trash view actions', () => {
 
   it('empty trash closes the open note and reloads the trash once confirmed', async () => {
     ipc.emptyTrash.mockResolvedValue({ success: true, data: null })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('button', { name: /Empty trash/ }))
     ipc.list.mockClear()
@@ -417,7 +418,7 @@ describe('NoteList — trash view actions', () => {
   it('the dialog cannot be dismissed while the delete runs', async () => {
     const del = deferred<{ success: true; data: null }>()
     ipc.delete.mockReturnValue(del.promise)
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
@@ -431,7 +432,7 @@ describe('NoteList — trash view actions', () => {
   it('a double click on confirm deletes once', async () => {
     const del = deferred<{ success: true; data: null }>()
     ipc.delete.mockReturnValue(del.promise)
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     fireEvent.click(await screen.findByRole('menuitem', { name: /Delete permanently/ }))
     const confirm = screen.getByRole('button', { name: 'Delete permanently' })
@@ -447,7 +448,7 @@ describe('NoteList — trash', () => {
   it('keeps the open note when the trash fails', async () => {
     ipc.list.mockResolvedValue({ success: true, data: [listItem('a')] })
     ipc.trash.mockResolvedValue({ success: false, error: 'DB locked' })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     await act(async () => {
       fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to trash' }))

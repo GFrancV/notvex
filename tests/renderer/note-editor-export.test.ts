@@ -33,6 +33,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 const { NoteEditor } = await import('@/components/note-editor')
 const { useVaultStore } = await import('@/store/vault.store')
 const { toast } = await import('sonner')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const NOTE: Note = {
   id: 'n1',
@@ -47,7 +48,7 @@ const NOTE: Note = {
 }
 
 async function openWarning(): Promise<void> {
-  render(createElement(NoteEditor))
+  render(createElement(NoteEditor), { wrapper: TooltipProvider })
   await waitFor(() => expect(ipc.get).toHaveBeenCalled())
   fireEvent.keyDown(screen.getByRole('button', { name: 'Note actions' }), { key: 'Enter' })
   const item = await screen.findByRole('menuitem', { name: 'Export note…' })
@@ -116,7 +117,7 @@ describe('NoteEditor: Export note…', () => {
 
   it('is not offered for a trashed note', async () => {
     ipc.get.mockResolvedValue({ success: true, data: { ...NOTE, isTrashed: true, trashedAt: 1 } })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     // Waiting for the title means the note, and with it isTrashed, has loaded.
     await screen.findByDisplayValue('Plan')
     fireEvent.keyDown(screen.getByRole('button', { name: 'Note actions' }), { key: 'Enter' })

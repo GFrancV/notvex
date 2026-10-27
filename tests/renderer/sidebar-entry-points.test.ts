@@ -30,6 +30,7 @@ vi.mock('@/components/settings-dialog', () => ({
 const { Sidebar } = await import('@/components/sidebar')
 const { SidebarProvider } = await import('@/components/ui/sidebar')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 beforeAll(() => {
   // SidebarProvider's mobile detection needs matchMedia, which jsdom lacks.
@@ -71,7 +72,9 @@ afterEach(() => {
 
 async function renderSidebar(): Promise<void> {
   await act(async () => {
-    render(createElement(SidebarProvider, null, createElement(Sidebar)))
+    render(createElement(SidebarProvider, null, createElement(Sidebar)), {
+      wrapper: TooltipProvider
+    })
   })
 }
 

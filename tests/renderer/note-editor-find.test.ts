@@ -31,6 +31,7 @@ Range.prototype.getBoundingClientRect = (): DOMRect => new DOMRect()
 const { NoteEditor } = await import('@/components/note-editor')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const findInput = (): HTMLElement | null => screen.queryByLabelText('Find in note')
 const editorHasFocus = (): boolean =>
@@ -63,7 +64,7 @@ async function openNote(): Promise<EditorView> {
     }
   })
   act(() => useVaultStore.getState().setActiveNoteId('a'))
-  render(createElement(NoteEditor))
+  render(createElement(NoteEditor), { wrapper: TooltipProvider })
   await waitFor(() => expect(editorHasFocus()).toBe(true))
   return EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)!
 }

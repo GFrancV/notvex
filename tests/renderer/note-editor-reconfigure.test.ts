@@ -33,6 +33,7 @@ vi.mock('@/lib/ipc', () => ({
 
 const { NoteEditor } = await import('@/components/note-editor')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const note: Note = {
   id: 'a',
@@ -63,7 +64,7 @@ describe('NoteEditor — typing', () => {
   it('keeps the same markdown language instead of reconfiguring the editor', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note })
     useVaultStore.setState({ activeNoteId: 'a', notes: [], tags: [], noteTagsMap: {} })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(document.querySelector('.cm-editor')).not.toBeNull())
 
     const view = editorView()

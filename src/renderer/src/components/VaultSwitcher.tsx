@@ -22,7 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 function displayName(path: string): string {
   const segments = path.split(/[\\/]/).filter(Boolean)
@@ -93,44 +93,40 @@ export function VaultSwitcher(): ReactNode {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="end" sideOffset={4} className="w-64">
-        <TooltipProvider>
-          <DropdownMenuLabel>Recent vaults</DropdownMenuLabel>
-          {recentVaults.map((vault) => {
-            const isCurrent = isSamePath(currentVaultPath, vault.path)
-            return (
-              <Tooltip key={vault.path}>
-                <TooltipTrigger asChild>
-                  <DropdownMenuItem
-                    className={
-                      isCurrent ? 'text-foreground' : 'text-muted-foreground cursor-pointer'
-                    }
-                    onSelect={() => {
-                      if (!isCurrent) void handleSwitch(vault.path)
-                    }}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{displayName(vault.path)}</span>
-                    {isCurrent && <CheckIcon className="text-primary ml-auto size-4 shrink-0" />}
-                  </DropdownMenuItem>
-                </TooltipTrigger>
-                <TooltipContent side="right">{vault.path}</TooltipContent>
-              </Tooltip>
-            )
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={handleOpenOther}>
-            <FolderOpenIcon className="size-4" />
-            Open vault…
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleCreateNew}>
-            <PlusIcon className="size-4" />
-            Create new vault…
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => void lock()}>
-            <LockIcon className="size-4" />
-            Lock vault
-          </DropdownMenuItem>
-        </TooltipProvider>
+        <DropdownMenuLabel>Recent vaults</DropdownMenuLabel>
+        {recentVaults.map((vault) => {
+          const isCurrent = isSamePath(currentVaultPath, vault.path)
+          return (
+            <Tooltip key={vault.path}>
+              <TooltipTrigger asChild>
+                <DropdownMenuItem
+                  className={isCurrent ? 'text-foreground' : 'text-muted-foreground cursor-pointer'}
+                  onSelect={() => {
+                    if (!isCurrent) void handleSwitch(vault.path)
+                  }}
+                >
+                  <span className="min-w-0 flex-1 truncate">{displayName(vault.path)}</span>
+                  {isCurrent && <CheckIcon className="text-primary ml-auto size-4 shrink-0" />}
+                </DropdownMenuItem>
+              </TooltipTrigger>
+              <TooltipContent side="right">{vault.path}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={handleOpenOther}>
+          <FolderOpenIcon className="size-4" />
+          Open vault…
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={handleCreateNew}>
+          <PlusIcon className="size-4" />
+          Create new vault…
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => void lock()}>
+          <LockIcon className="size-4" />
+          Lock vault
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
