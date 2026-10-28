@@ -16,12 +16,16 @@ import {
   PencilIcon,
   PinIcon,
   PlusIcon,
-  Trash2Icon
+  RotateCcwIcon,
+  Trash2Icon,
+  TrashIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { useExportNote } from '@/hooks/use-export-note'
+import { useRestoreNote } from '@/hooks/use-restore-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
 import { usePendingSave } from '@/hooks/use-pending-save'
@@ -33,6 +37,7 @@ import { countText, formatCount, type TextCount } from '@/lib/text-count'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Note, Tag } from '@shared/types'
+import { ConfirmDeleteDialog } from './dialogs/ConfirmDeleteDialog'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { EditorContextMenu } from './editor-context-menu'
 import { EditorToolbar } from './editor/EditorToolbar'
@@ -122,6 +127,7 @@ export function NoteEditor(): ReactNode {
   } = useVaultStore()
   const {
     editorMode,
+    setShowTrash,
     toggleEditorMode,
     tagSelectorNoteId,
     setTagSelectorNoteId,
@@ -139,6 +145,7 @@ export function NoteEditor(): ReactNode {
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false)
   const [removeTagSelectorOpen, setRemoveTagSelectorOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Derive open state from both local button clicks and command palette triggers
   const showTagSelector =
@@ -300,7 +307,7 @@ export function NoteEditor(): ReactNode {
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     const toContent = (e.key === 'Tab' && !e.shiftKey) || e.key === 'Enter'
     // editorView outlives the editor in reading mode: it still points at the destroyed view.
-    if (!toContent || e.nativeEvent.isComposing || editorMode !== 'editing' || !editorView) return
+    if (!toContent || e.nativeEvent.isComposing || viewMode !== 'editing' || !editorView) return
     e.preventDefault()
     editorView.dispatch({ selection: { anchor: 0 } })
     editorView.focus()
@@ -326,6 +333,19 @@ export function NoteEditor(): ReactNode {
   }
 
   const duplicateNote = useDuplicateNote()
+
+  // A trashed note is read-only: always in reading view, and its only actions are the trash
+  // view's, Restore and Delete.
+  const inTrash = note?.isTrashed ?? false
+  const viewMode = inTrash ? 'reading' : editorMode
+  const restoreNote = useRestoreNote()
+  const handleRestore = async (): Promise<void> => {
+    if (!note || !(await restoreNote(note.id))) return
+    setNote((current) => (current?.id === note.id ? { ...current, isTrashed: false } : current))
+    // The note has left the trash; show it where it now lives.
+    setShowTrash(false)
+  }
+  const deleteNote = useDeleteNote()
 
   // Derive assigned tags from noteTagsMap (kept in sync by optimistic store)
   const assignedTagIds = activeNoteId ? (noteTagsMap[activeNoteId] ?? []) : []
@@ -368,10 +388,14 @@ export function NoteEditor(): ReactNode {
               onBlur={handleTitleBlur}
               onKeyDown={handleTitleKeyDown}
               placeholder="Untitled"
+              readOnly={inTrash}
               className="titlebar-no-drag placeholder:text-muted-foreground z-10 flex-1 bg-transparent text-xl font-semibold tracking-tight focus:outline-none"
             />
           )}
         </div>
+        {inTrash && (
+          <p className="text-muted-foreground mt-1 text-xs">In the trash. Restore it to edit.</p>
+        )}
 
         {/* Tags + action icons row */}
         <div className="mt-1 flex min-h-8.5 shrink-0 items-center gap-2">
@@ -382,82 +406,96 @@ export function NoteEditor(): ReactNode {
                   <TagChip
                     key={tag.id}
                     tag={tag}
-                    onRemove={() =>
-                      void removeTagFromNote(activeNoteId, tag.id).catch((e: Error) =>
-                        toast.error(e.message)
-                      )
+                    onRemove={
+                      inTrash
+                        ? undefined
+                        : () =>
+                            void removeTagFromNote(activeNoteId, tag.id).catch((e: Error) =>
+                              toast.error(e.message)
+                            )
                     }
                   />
                 ))}
-                <RemoveTagSelector
-                  tags={assignedTags}
-                  open={showRemoveSelector && assignedTags.length > 0}
-                  onOpenChange={(open) => !open && handleRemoveSelectorClose()}
-                  onRemove={(tagId) => {
-                    void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
-                      toast.error(e.message)
-                    )
-                    handleRemoveSelectorClose()
-                  }}
-                >
-                  <div>
-                    <TagSelector
-                      noteId={activeNoteId}
-                      open={showTagSelector}
-                      onOpenChange={(open) =>
-                        open ? setTagSelectorOpen(true) : handleTagSelectorClose()
-                      }
-                    >
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className="text-muted-foreground border border-dashed"
+                {!inTrash && (
+                  <RemoveTagSelector
+                    tags={assignedTags}
+                    open={showRemoveSelector && assignedTags.length > 0}
+                    onOpenChange={(open) => !open && handleRemoveSelectorClose()}
+                    onRemove={(tagId) => {
+                      void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
+                        toast.error(e.message)
+                      )
+                      handleRemoveSelectorClose()
+                    }}
+                  >
+                    <div>
+                      <TagSelector
+                        noteId={activeNoteId}
+                        open={showTagSelector}
+                        onOpenChange={(open) =>
+                          open ? setTagSelectorOpen(true) : handleTagSelectorClose()
+                        }
                       >
-                        <PlusIcon className="size-3" /> Add tag
-                      </Button>
-                    </TagSelector>
-                  </div>
-                </RemoveTagSelector>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="text-muted-foreground border border-dashed"
+                        >
+                          <PlusIcon className="size-3" /> Add tag
+                        </Button>
+                      </TagSelector>
+                    </div>
+                  </RemoveTagSelector>
+                )}
               </>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
             {saving && <span className="text-muted-foreground text-xs">Saving…</span>}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handlePin}
-                  aria-label={isPinned ? 'Unpin' : 'Pin'}
-                  className={isPinned ? 'text-primary' : 'text-muted-foreground'}
-                >
-                  <PinIcon className={`size-4 ${isPinned ? 'fill-primary text-primary' : ''}`} />
-                </Button>
-              </TooltipTrigger>
-              {/* Opens below: above, the window controls drawn over the title bar cover it. */}
-              <TooltipContent side="bottom">{isPinned ? 'Unpin' : 'Pin'}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleEditorMode}
-                  aria-label={modeLabel}
-                  className={editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'}
-                >
-                  {editorMode === 'editing' ? (
-                    <EyeIcon className="h-4 w-4" />
-                  ) : (
-                    <PencilIcon className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {modeLabel} <Shortcut keys="Mod-Shift-e" />
-              </TooltipContent>
-            </Tooltip>
+            {/* A trashed note can't be pinned, and only has the reading view. */}
+            {!inTrash && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handlePin}
+                      aria-label={isPinned ? 'Unpin' : 'Pin'}
+                      className={isPinned ? 'text-primary' : 'text-muted-foreground'}
+                    >
+                      <PinIcon
+                        className={`size-4 ${isPinned ? 'fill-primary text-primary' : ''}`}
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  {/* Opens below: above, the window controls drawn over the title bar cover it. */}
+                  <TooltipContent side="bottom">{isPinned ? 'Unpin' : 'Pin'}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={toggleEditorMode}
+                      aria-label={modeLabel}
+                      className={
+                        editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'
+                      }
+                    >
+                      {editorMode === 'editing' ? (
+                        <EyeIcon className="h-4 w-4" />
+                      ) : (
+                        <PencilIcon className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {modeLabel} <Shortcut keys="Mod-Shift-e" />
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -486,10 +524,27 @@ export function NoteEditor(): ReactNode {
                   </>
                 )}
                 <DropdownMenuGroup>
-                  <DropdownMenuItem variant="destructive" onClick={handleTrash}>
-                    <Trash2Icon className="size-4" />
-                    Move to trash
-                  </DropdownMenuItem>
+                  {inTrash ? (
+                    <>
+                      <DropdownMenuItem onClick={() => void handleRestore()}>
+                        <RotateCcwIcon className="size-4" />
+                        Restore
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setConfirmDelete(true)}
+                      >
+                        <TrashIcon className="size-4" />
+                        Delete permanently
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <DropdownMenuItem variant="destructive" onClick={handleTrash}>
+                      <Trash2Icon className="size-4" />
+                      Move to trash
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -500,12 +555,22 @@ export function NoteEditor(): ReactNode {
               title="Export note"
               onConfirm={() => exportNote(activeNoteId)}
             />
+            <ConfirmDeleteDialog
+              open={confirmDelete}
+              onOpenChange={setConfirmDelete}
+              title="Delete note permanently?"
+              description="This note will be deleted for good. It can't be undone."
+              confirmLabel="Delete permanently"
+              onConfirm={async () => {
+                await deleteNote(activeNoteId)
+              }}
+            />
           </div>
         </div>
       </div>
 
       {/* Editor Toolbar */}
-      {editorMode !== 'reading' && !isLoading && <EditorToolbar editorView={editorView} />}
+      {viewMode !== 'reading' && !isLoading && <EditorToolbar editorView={editorView} />}
 
       {/* Editor / Reading view */}
       <div className="relative flex min-h-0 min-w-0 flex-1">
@@ -517,7 +582,7 @@ export function NoteEditor(): ReactNode {
             </div>
           </div>
         )}
-        {editorMode === 'reading' ? (
+        {viewMode === 'reading' ? (
           <NoteReadingView content={content} />
         ) : (
           // Mounted only once the note has decrypted: it takes focus on mount, and a keystroke

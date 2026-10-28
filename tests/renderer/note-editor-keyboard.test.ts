@@ -181,7 +181,7 @@ describe('NoteEditor — focus after opening a note', () => {
   const editorHasFocus = (): boolean =>
     document.activeElement?.classList.contains('cm-content') ?? false
 
-  function serve(id: string, title: string): void {
+  function serve(id: string, title: string, isTrashed = false): void {
     ipc.get.mockResolvedValue({
       success: true,
       data: {
@@ -189,7 +189,7 @@ describe('NoteEditor — focus after opening a note', () => {
         title,
         content: 'body',
         isPinned: false,
-        isTrashed: false,
+        isTrashed,
         createdAt: 0,
         updatedAt: 0,
         trashedAt: null,
@@ -327,6 +327,16 @@ describe('NoteEditor — focus after opening a note', () => {
     act(() => cm.dispatch({ selection: { anchor: 0, head: cm.state.doc.length } }))
     press(cm, { key: 'b', keyCode: 66, ctrlKey: true })
     expect(cm.state.doc.toString()).toBe('**body**')
+  })
+
+  it('shows a trashed note in reading view, with no editor to type into', async () => {
+    serve('a', 'A', true)
+    act(() => useVaultStore.getState().setActiveNoteId('a'))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
+
+    expect(document.querySelector('.cm-editor')).toBeNull()
+    expect(useUiStore.getState().editorMode).toBe('editing')
   })
 
   it('leaves Tab in the title to the browser in reading mode', async () => {

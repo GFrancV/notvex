@@ -8,7 +8,8 @@ import {
   render,
   renderHook,
   screen,
-  waitFor
+  waitFor,
+  within
 } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -384,6 +385,71 @@ describe('NoteEditor — trash', () => {
 
     expect(toastError).toHaveBeenCalledWith('DB locked')
     expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+})
+
+describe('NoteEditor — trashed note', () => {
+  async function openTrashed(): Promise<void> {
+    useUiStore.setState({ showTrash: true, editorMode: 'editing' })
+    useVaultStore.setState({
+      notes: [listItem('a', { isTrashed: true })],
+      tags: [{ id: 't-work', name: 'work', color: '#fff', createdAt: 0 }],
+      noteTagsMap: { a: ['t-work'] }
+    })
+    ipc.get.mockResolvedValue({ success: true, data: { ...note('a'), isTrashed: true } })
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    await screen.findByDisplayValue('A')
+  }
+
+  it('is read-only, only in reading view, and says how to edit it', async () => {
+    await openTrashed()
+
+    expect(screen.getByLabelText('Note title').hasAttribute('readonly')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Reading view' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    expect(screen.getByText('In the trash. Restore it to edit.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Pin' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add tag' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove tag work' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull()
+  })
+
+  it('offers the same actions as the list: Restore and Delete permanently', async () => {
+    await openTrashed()
+
+    const actions = screen.getAllByRole('menuitem').map((m) => m.textContent?.trim())
+    expect(actions).toEqual(['Restore', 'Delete permanently'])
+  })
+
+  it('becomes editable in place once restored, back in All notes', async () => {
+    ipc.restore.mockResolvedValue({ success: true, data: null })
+    await openTrashed()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Restore' }))
+    })
+
+    expect(ipc.restore).toHaveBeenCalledExactlyOnceWith('a')
+    expect(screen.getByLabelText('Note title').hasAttribute('readonly')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Pin' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reading view' })).toBeTruthy()
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+    expect(useUiStore.getState().showTrash).toBe(false)
+  })
+
+  it('confirms before deleting it for good, then closes it', async () => {
+    ipc.delete.mockResolvedValue({ success: true, data: null })
+    await openTrashed()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently' }))
+    expect(ipc.delete).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog', { name: 'Delete note permanently?' })
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete permanently' }))
+    })
+
+    expect(ipc.delete).toHaveBeenCalledExactlyOnceWith('a')
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
   })
 })
 

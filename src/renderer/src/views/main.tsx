@@ -44,10 +44,14 @@ export function Main(): ReactNode {
             e.preventDefault()
             setShowTrash(true)
             return
-          case 'e':
+          case 'e': {
             e.preventDefault()
+            const { notes, activeNoteId } = useVaultStore.getState()
+            // A trashed note only has the reading view.
+            if (notes.find((n) => n.id === activeNoteId)?.isTrashed) return
             toggleEditorMode()
             return
+          }
           default:
             break
         }

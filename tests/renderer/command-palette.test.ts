@@ -275,6 +275,26 @@ describe('command palette duplicate note', () => {
   })
 })
 
+describe('command palette note-editing commands', () => {
+  const editOptions = (): HTMLElement[] => [
+    ...screen.queryAllByRole('option', { name: /^Tag note with/ }),
+    ...screen.queryAllByRole('option', { name: /^Remove tag from note/ }),
+    ...screen.queryAllByRole('option', { name: /^Toggle reading view/ })
+  ]
+
+  it('are offered for the open note', () => {
+    useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
+    openPalette([note('n-1', 'alpha')])
+    expect(editOptions()).toHaveLength(3)
+  })
+
+  it('are hidden when the open note is in the trash, which is read-only', () => {
+    useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
+    openPalette([note('n-1', 'alpha', true)])
+    expect(editOptions()).toHaveLength(0)
+  })
+})
+
 describe('command palette reload', () => {
   // requestReload() decides whether to confirm first; the palette only closes and hands over.
   it('closes and requests a reload', async () => {

@@ -138,14 +138,11 @@ export function NoteListRow({
         ) : (
           <>
             <ContextMenuItem onClick={() => void onRestore(note)}>
-              <RotateCcwIcon className="mr-2 h-4 w-4" /> Restore
+              <RotateCcwIcon className="size-4" /> Restore
             </ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem
-              onClick={() => void onDelete(note)}
-              className="text-destructive focus:text-destructive"
-            >
-              <TrashIcon className="mr-2 h-4 w-4" /> Delete permanently
+            <ContextMenuItem variant="destructive" onClick={() => void onDelete(note)}>
+              <TrashIcon className="size-4" /> Delete permanently
             </ContextMenuItem>
           </>
         )}
