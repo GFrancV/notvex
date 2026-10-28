@@ -24,8 +24,11 @@ import { TagFilter } from './tags/TagFilter'
 import { Button } from './ui/button'
 import { ScrollArea } from './ui/scroll-area'
 
+const LOADING_DELAY = 300
+
 export function NoteList(): ReactNode {
-  const { notes, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } = useVaultStore()
+  const { notes, notesTrashed, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } =
+    useVaultStore()
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
@@ -36,6 +39,20 @@ export function NoteList(): ReactNode {
   useEffect(() => {
     void loadNotes({ trashed: showTrash })
   }, [showTrash, showPinned, loadNotes])
+
+  // Until the new view's notes arrive, the loaded ones belong to the other view, and their rows
+  // would offer this view's actions (a live note with Delete permanently). Show none instead.
+  const loading = notesTrashed !== showTrash
+  const [slowLoad, setSlowLoad] = useState(false)
+  useEffect(() => {
+    if (!loading) return
+    // A fast load would only flash a loader, so it waits before saying anything.
+    const timer = setTimeout(() => setSlowLoad(true), LOADING_DELAY)
+    return (): void => {
+      clearTimeout(timer)
+      setSlowLoad(false)
+    }
+  }, [loading])
 
   const query = searchQuery.trim().toLowerCase()
 
@@ -129,7 +146,7 @@ export function NoteList(): ReactNode {
       <TagFilter count={filteredNotes.length} />
 
       {/* Empty trash button */}
-      {showTrash && notes.length > 0 && (
+      {showTrash && !loading && notes.length > 0 && (
         <div className="px-4 py-3">
           <Button
             variant="destructive"
@@ -146,7 +163,9 @@ export function NoteList(): ReactNode {
 
       {/* Padded inside the viewport so it doesn't clip the selection pill's overhang. */}
       <ScrollArea className="min-h-0 flex-1 [&>[data-slot=scroll-area-viewport]]:px-2.5">
-        {displayedNotes.length === 0 ? (
+        {loading ? (
+          slowLoad && <p className="text-muted-foreground p-8 text-center text-sm">Loading…</p>
+        ) : displayedNotes.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center justify-center p-8">
             <p className="text-sm">{emptyMessage()}</p>
             {!showTrash && !query && activeTags.length === 0 && (

@@ -22,6 +22,8 @@ interface VaultStore {
   pendingNewVaultPath: string | null
   pendingOpenVaultPath: string | null
   notes: NoteListItem[]
+  /** Which view `notes` was loaded for: the trash, or every live note. */
+  notesTrashed: boolean
   noteCounts: NoteCounts
   tags: Tag[]
   tagCounts: Record<string, number>
@@ -74,6 +76,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   pendingNewVaultPath: null,
   pendingOpenVaultPath: null,
   notes: [],
+  notesTrashed: false,
   noteCounts: NO_COUNTS,
   tags: [],
   tagCounts: {},
@@ -102,6 +105,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     const { pendingNewVaultPath, pendingOpenVaultPath } = get()
     set({
       notes: [],
+      notesTrashed: false,
       noteCounts: NO_COUNTS,
       activeNoteId: null,
       tags: [],
@@ -133,7 +137,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     // List reloads follow note mutations, so the badges refresh with them.
     void get().loadNoteCounts()
     const res = await notvex.notes.list(filter)
-    if (res.success) set({ notes: res.data })
+    if (res.success) set({ notes: res.data, notesTrashed: filter.trashed ?? false })
   },
 
   loadNoteCounts: async (): Promise<void> => {

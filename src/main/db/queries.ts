@@ -323,11 +323,22 @@ export async function trashNote(db: sqlite3.Database, id: string): Promise<void>
   await dbRun(db, 'UPDATE notes SET is_trashed = 1, trashed_at = ? WHERE id = ?', [Date.now(), id])
 }
 
+// Restore and permanent delete only make sense for a trashed note. The UI can still offer them for
+// one that isn't: a list from the previous view, or an Undo whose note was emptied from the trash.
+async function requireTrashed(db: sqlite3.Database, id: string, action: string): Promise<void> {
+  const row = await dbGet<{ is_trashed: number }>(db, 'SELECT is_trashed FROM notes WHERE id = ?', [
+    id
+  ])
+  if (!row?.is_trashed) throw new Error(`Couldn't ${action} the note: it isn't in the trash`)
+}
+
 export async function restoreNote(db: sqlite3.Database, id: string): Promise<void> {
+  await requireTrashed(db, id, 'restore')
   await dbRun(db, 'UPDATE notes SET is_trashed = 0, trashed_at = NULL WHERE id = ?', [id])
 }
 
 export async function deleteNote(db: sqlite3.Database, id: string): Promise<void> {
+  await requireTrashed(db, id, 'delete')
   await dbRun(db, 'DELETE FROM notes WHERE id = ?', [id])
 }
 

@@ -184,6 +184,14 @@ describe('useCreateNote', () => {
     await act(() => result.current())
     expect(createNote).toHaveBeenCalledWith(undefined)
   })
+
+  it('leaves the trash, where a new note has no place', async () => {
+    useUiStore.setState({ showTrash: true })
+    const { result } = renderHook(() => useCreateNote())
+    await act(() => result.current())
+    expect(useUiStore.getState().showTrash).toBe(false)
+    expect(useVaultStore.getState().activeNoteId).toBe('n-new')
+  })
 })
 
 describe('command palette create note from query', () => {
