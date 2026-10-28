@@ -12,8 +12,10 @@ import type { EditorState, Text } from '@codemirror/state'
 import { type EditorView, runScopeHandlers } from '@codemirror/view'
 import { ChevronDownIcon, ChevronUpIcon, XIcon } from 'lucide-react'
 
+import { Shortcut } from '../Shortcut'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 type Match = { from: number; to: number }
 
@@ -76,40 +78,58 @@ export function FindBar({ view, state }: { view: EditorView; state: EditorState 
           {counter}
         </span>
       )}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label="Previous match"
-        title="Previous match (Shift+Enter)"
-        onClick={() => findPrevious(view)}
-      >
-        <ChevronUpIcon />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label="Next match"
-        title="Next match (Enter)"
-        onClick={() => findNext(view)}
-      >
-        <ChevronDownIcon />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label="Close find"
-        title="Close (Esc)"
-        className="ml-auto"
-        onClick={() => {
-          closeSearchPanel(view)
-          // closeSearchPanel refocuses the editor only if focus is inside the bar, and a click
-          // doesn't always leave it on the button.
-          view.focus()
-        }}
-      >
-        {/* Same color as the chevrons, but its full-height strokes read brighter at the same size. */}
-        <XIcon className="size-2.5" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Previous match"
+            onClick={() => findPrevious(view)}
+          >
+            <ChevronUpIcon />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          Previous match <Shortcut keys="Shift-Enter" />
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Next match"
+            onClick={() => findNext(view)}
+          >
+            <ChevronDownIcon />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          Next match <Shortcut keys="Enter" />
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Close find"
+            className="ml-auto"
+            onClick={() => {
+              closeSearchPanel(view)
+              // closeSearchPanel refocuses the editor only if focus is inside the bar, and a click
+              // doesn't always leave it on the button.
+              view.focus()
+            }}
+          >
+            {/* Same color as the chevrons, but its full-height strokes read brighter at the same size. */}
+            <XIcon className="size-2.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          Close find <Shortcut keys="Escape" />
+        </TooltipContent>
+      </Tooltip>
     </search>
   )
 }

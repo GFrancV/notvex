@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { notvex } from '@/lib/ipc'
 import { Button } from './ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Checkbox } from './ui/checkbox'
 
 function Pre({ children }: React.ComponentProps<'pre'>): React.JSX.Element {
@@ -23,20 +24,24 @@ function Pre({ children }: React.ComponentProps<'pre'>): React.JSX.Element {
     <div className="border-border overflow-hidden rounded-md border">
       <div className="bg-card text-muted-foreground flex items-center justify-between border-b px-3 py-1.5">
         <span className="font-mono text-xs">{language ?? 'text'}</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void copyToClipboard(preRef.current?.textContent ?? '')}
-          className="text-muted-foreground size-6"
-          title="Copy code"
-          aria-label="Copy code"
-        >
-          {isCopied ? (
-            <CheckIcon className="text-success size-3.5" />
-          ) : (
-            <CopyIcon className="size-3.5" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => void copyToClipboard(preRef.current?.textContent ?? '')}
+              className="text-muted-foreground size-6"
+              aria-label="Copy code"
+            >
+              {isCopied ? (
+                <CheckIcon className="text-success size-3.5" />
+              ) : (
+                <CopyIcon className="size-3.5" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Copy code</TooltipContent>
+        </Tooltip>
       </div>
       <pre ref={preRef} className="m-0! rounded-none! border-0! bg-transparent! p-0!">
         {children}

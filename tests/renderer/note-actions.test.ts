@@ -82,6 +82,16 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
+
 const { useTogglePin } = await import('@/hooks/use-toggle-pin')
 const { useTrashNote } = await import('@/hooks/use-trash-note')
 const { NoteEditor } = await import('@/components/note-editor')
@@ -171,6 +181,16 @@ describe('useTogglePin', () => {
 })
 
 describe('NoteEditor — pin', () => {
+  it('says what the pin button does in a tooltip', async () => {
+    ipc.get.mockResolvedValue({ success: true, data: note('a') })
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    await screen.findByDisplayValue('A')
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Pin' }))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Pin')
+  }, 20_000)
+
   it('keeps the note unpinned when the pin fails', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a') })
     render(createElement(NoteEditor), { wrapper: TooltipProvider })
@@ -178,12 +198,12 @@ describe('NoteEditor — pin', () => {
     ipc.update.mockResolvedValue({ success: false, error: 'DB locked' })
 
     await act(async () => {
-      fireEvent.click(screen.getByTitle('Pin'))
+      fireEvent.click(screen.getByRole('button', { name: 'Pin' }))
     })
 
     expect(toastError).toHaveBeenCalledWith('DB locked')
-    expect(screen.getByTitle('Pin')).toBeTruthy()
-    expect(screen.queryByTitle('Unpin')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Pin' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Unpin' })).toBeNull()
     // The first full NoteEditor render in this file, slow on a cold worker.
   }, 20_000)
 
@@ -193,10 +213,10 @@ describe('NoteEditor — pin', () => {
     await screen.findByDisplayValue('A')
 
     await act(async () => {
-      fireEvent.click(screen.getByTitle('Pin'))
+      fireEvent.click(screen.getByRole('button', { name: 'Pin' }))
     })
 
-    expect(screen.getByTitle('Unpin')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Unpin' })).toBeTruthy()
   })
 
   it('a pin that resolves after switching notes leaves the new note alone', async () => {
@@ -206,14 +226,14 @@ describe('NoteEditor — pin', () => {
     const pin = deferred<{ success: true; data: null }>()
     ipc.update.mockReturnValue(pin.promise)
 
-    fireEvent.click(screen.getByTitle('Pin'))
+    fireEvent.click(screen.getByRole('button', { name: 'Pin' }))
     ipc.get.mockResolvedValue({ success: true, data: note('b') })
     act(() => useVaultStore.setState({ activeNoteId: 'b' }))
     await screen.findByDisplayValue('B')
     await act(async () => pin.resolve({ success: true, data: null }))
 
-    expect(screen.getByTitle('Pin')).toBeTruthy()
-    expect(screen.queryByTitle('Unpin')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Pin' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Unpin' })).toBeNull()
   })
 
   it('follows a pin made from the note list, and the next click unpins', async () => {
@@ -228,9 +248,9 @@ describe('NoteEditor — pin', () => {
       await result.current(listItem('a'))
     })
 
-    expect(screen.getByTitle('Unpin')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Unpin' })).toBeTruthy()
     await act(async () => {
-      fireEvent.click(screen.getByTitle('Unpin'))
+      fireEvent.click(screen.getByRole('button', { name: 'Unpin' }))
     })
     expect(ipc.update).toHaveBeenLastCalledWith('a', { isPinned: false })
   })
@@ -325,12 +345,7 @@ describe('NoteEditor — tags', () => {
   const WORK = { id: 't-work', name: 'work', color: '#fff', createdAt: 0 }
 
   beforeAll(() => {
-    // cmdk measures and scrolls its list, and Radix positions the popover; jsdom does neither.
-    globalThis.ResizeObserver ??= class {
-      observe = (): void => {}
-      unobserve = (): void => {}
-      disconnect = (): void => {}
-    }
+    // cmdk scrolls its list; jsdom doesn't implement scrolling.
     Element.prototype.scrollIntoView ??= (): void => {}
   })
 

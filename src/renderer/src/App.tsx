@@ -11,6 +11,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useClipboardGuard } from '@/hooks/use-clipboard-guard'
 import { notvex } from '@/lib/ipc'
+import { TOOLTIP_DELAY } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import { Main } from '@/views/main'
@@ -94,8 +95,7 @@ export default function App(): ReactNode {
   }
 
   return (
-    // The one tooltip delay for the whole app.
-    <TooltipProvider delayDuration={500}>
+    <TooltipProvider delayDuration={TOOLTIP_DELAY}>
       {pendingNewVaultPath || status === 'uninitialized' ? (
         <Setup />
       ) : status === 'locked' ? (

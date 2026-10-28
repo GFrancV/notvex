@@ -11,6 +11,7 @@ import {
   InputGroupInput
 } from '@/components/ui/input-group'
 import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { summarizeImport } from '@/lib/import-summary'
 import { notvex } from '@/lib/ipc'
@@ -92,12 +93,17 @@ export function VaultDataPanel({ onExportAll }: Props): ReactNode {
                 value={truncatePath(vaultPath, 80)}
               />
               <InputGroupAddon align="inline-end">
-                <InputGroupButton
-                  onClick={() => copyToClipboard(vaultPath)}
-                  title="Copy to clipboard"
-                >
-                  {isCopied ? <CheckIcon className="text-success" /> : <CopyIcon />}
-                </InputGroupButton>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton
+                      onClick={() => copyToClipboard(vaultPath)}
+                      aria-label="Copy to clipboard"
+                    >
+                      {isCopied ? <CheckIcon className="text-success" /> : <CopyIcon />}
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>Copy to clipboard</TooltipContent>
+                </Tooltip>
               </InputGroupAddon>
             </InputGroup>
           </div>

@@ -11,6 +11,7 @@ vi.mock('@/lib/ipc', () => ({ notvex: {} }))
 const { TagCreateModal } = await import('@/components/tags/TagCreateModal')
 const { PRESET_COLORS } = await import('@/lib/tag-colors')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 // Longer than TAG_NAME_MAX, as tags stored before main enforced it can be.
 const legacy: Tag = { id: 't-old', name: 'a'.repeat(30), color: PRESET_COLORS[0], createdAt: 0 }
@@ -20,7 +21,9 @@ afterEach(cleanup)
 function renderEditModal(): ReturnType<typeof vi.fn> {
   const updateTag = vi.fn(() => Promise.resolve())
   useVaultStore.setState({ tags: [legacy], updateTag })
-  render(createElement(TagCreateModal, { open: true, onClose: () => {}, editTag: legacy }))
+  render(createElement(TagCreateModal, { open: true, onClose: () => {}, editTag: legacy }), {
+    wrapper: TooltipProvider
+  })
   return updateTag
 }
 

@@ -42,6 +42,7 @@ import {
   SidebarMenuItem,
   SidebarSeparator
 } from './ui/sidebar'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { VaultSwitcher } from './VaultSwitcher'
 
 export function Sidebar(): React.ReactNode {
@@ -151,17 +152,24 @@ export function Sidebar(): React.ReactNode {
           </div>
 
           {!showTrash && !showPinned && (
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={(): void => {
-                void handleNewNote()
-              }}
-              title="New note (Ctrl+N)"
-              className="text-muted-foreground shrink-0"
-            >
-              <PlusIcon className="size-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={(): void => {
+                    void handleNewNote()
+                  }}
+                  aria-label="New note"
+                  className="text-muted-foreground shrink-0"
+                >
+                  <PlusIcon className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                New note <Shortcut keys="Mod-n" />
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </SidebarHeader>
@@ -208,15 +216,20 @@ export function Sidebar(): React.ReactNode {
         {/* Tags */}
         <SidebarGroup>
           <SidebarGroupLabel>Tags</SidebarGroupLabel>
-          <SidebarGroupAction
-            title="New tag"
-            onClick={() => {
-              setCreateModalKey((k) => k + 1)
-              setCreateModalOpen(true)
-            }}
-          >
-            <PlusIcon />
-          </SidebarGroupAction>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarGroupAction
+                aria-label="New tag"
+                onClick={() => {
+                  setCreateModalKey((k) => k + 1)
+                  setCreateModalOpen(true)
+                }}
+              >
+                <PlusIcon />
+              </SidebarGroupAction>
+            </TooltipTrigger>
+            <TooltipContent>New tag</TooltipContent>
+          </Tooltip>
           <SidebarMenu>
             {tags.length === 0 ? (
               <div className="px-2 py-1">

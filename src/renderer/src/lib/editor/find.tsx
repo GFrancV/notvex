@@ -6,11 +6,19 @@ import type { EditorState } from '@codemirror/state'
 import { EditorView, type Panel } from '@codemirror/view'
 
 import { FindBar } from '@/components/editor/FindBar'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { TOOLTIP_DELAY } from '@/lib/utils'
 
 function createFindPanel(view: EditorView): Panel {
   const dom = document.createElement('div')
   const root = createRoot(dom)
-  const render = (state: EditorState): void => root.render(<FindBar view={view} state={state} />)
+  // A separate React root, out of reach of the app's TooltipProvider.
+  const render = (state: EditorState): void =>
+    root.render(
+      <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+        <FindBar view={view} state={state} />
+      </TooltipProvider>
+    )
   return {
     dom,
     top: true,

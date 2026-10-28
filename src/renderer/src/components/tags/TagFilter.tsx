@@ -5,6 +5,7 @@ import { XIcon } from 'lucide-react'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { TagChip } from './TagChip'
 
 // count comes from the note list so it matches the header after the title search is applied.
@@ -40,15 +41,20 @@ export function TagFilter({ count }: { count: number }): JSX.Element | null {
           ({count} note{count === 1 ? '' : 's'})
         </span>
       </div>
-      <Button
-        variant="ghost"
-        size="xs"
-        onClick={clearActiveTags}
-        title="Clear tag filter"
-        className="text-muted-foreground"
-      >
-        <XIcon className="size-3" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={clearActiveTags}
+            aria-label="Clear tag filter"
+            className="text-muted-foreground"
+          >
+            <XIcon className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Clear tag filter</TooltipContent>
+      </Tooltip>
     </div>
   )
 }

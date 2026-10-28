@@ -50,6 +50,7 @@ import {
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
 import { Skeleton } from './ui/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 const notvexEditorTheme = EditorView.theme({
   '&': { backgroundColor: 'var(--background) !important', height: '100%' },
@@ -332,6 +333,8 @@ export function NoteEditor(): ReactNode {
     .map((id) => allTags.find((t) => t.id === id))
     .filter((t): t is Tag => t != null)
 
+  const modeLabel = editorMode === 'editing' ? 'Reading view' : 'Edit'
+
   if (!activeNoteId) {
     return (
       <div className="text-muted-foreground flex flex-1 items-center justify-center select-none">
@@ -420,30 +423,41 @@ export function NoteEditor(): ReactNode {
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
             {saving && <span className="text-muted-foreground text-xs">Saving…</span>}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handlePin}
-              title={isPinned ? 'Unpin' : 'Pin'}
-              className={isPinned ? 'text-primary' : 'text-muted-foreground'}
-            >
-              <PinIcon className={`size-4 ${isPinned ? 'fill-primary text-primary' : ''}`} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleEditorMode}
-              title={
-                editorMode === 'editing' ? 'Reading view (Ctrl+Shift+E)' : 'Edit (Ctrl+Shift+E)'
-              }
-              className={editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'}
-            >
-              {editorMode === 'editing' ? (
-                <EyeIcon className="h-4 w-4" />
-              ) : (
-                <PencilIcon className="h-4 w-4" />
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handlePin}
+                  aria-label={isPinned ? 'Unpin' : 'Pin'}
+                  className={isPinned ? 'text-primary' : 'text-muted-foreground'}
+                >
+                  <PinIcon className={`size-4 ${isPinned ? 'fill-primary text-primary' : ''}`} />
+                </Button>
+              </TooltipTrigger>
+              {/* Opens below: above, the window controls drawn over the title bar cover it. */}
+              <TooltipContent side="bottom">{isPinned ? 'Unpin' : 'Pin'}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleEditorMode}
+                  aria-label={modeLabel}
+                  className={editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'}
+                >
+                  {editorMode === 'editing' ? (
+                    <EyeIcon className="h-4 w-4" />
+                  ) : (
+                    <PencilIcon className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {modeLabel} <Shortcut keys="Mod-Shift-e" />
+              </TooltipContent>
+            </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

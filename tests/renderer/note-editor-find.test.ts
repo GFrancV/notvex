@@ -69,6 +69,16 @@ async function openNote(): Promise<EditorView> {
   return EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)!
 }
 
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
+
 beforeEach(() => {
   ipc.get.mockReset()
   useVaultStore.setState({ activeNoteId: null, notes: [], tags: [], noteTagsMap: {} })
@@ -158,6 +168,14 @@ describe('NoteEditor — find bar', () => {
     expect(selected(cm)).toEqual([0, 3])
     fireEvent.click(screen.getByRole('button', { name: 'Previous match' }))
     expect(selected(cm)).toEqual([8, 11])
+  })
+
+  it('shows the key of each button in its tooltip', async () => {
+    await find('one')
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Previous match' }))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Previous match Shift Enter')
   })
 
   it('closes on Escape from one of its buttons', async () => {

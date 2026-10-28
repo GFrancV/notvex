@@ -25,12 +25,13 @@ vi.mock('sonner', () => ({
 const { VaultDataPanel } = await import('@/components/settings/VaultDataPanel')
 const { useVaultStore } = await import('@/store/vault.store')
 const { toast } = await import('sonner')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const refreshAll = vi.fn<() => Promise<void>>()
 const onExportAll = vi.fn()
 
 function renderMenu(): void {
-  render(createElement(VaultDataPanel, { onExportAll }))
+  render(createElement(VaultDataPanel, { onExportAll }), { wrapper: TooltipProvider })
 }
 
 async function click(name: string): Promise<void> {
@@ -88,7 +89,9 @@ describe('VaultDataPanel: Import Markdown…', () => {
     expect(refreshAll).not.toHaveBeenCalled()
     const [message, options] = vi.mocked(toast.warning).mock.calls[0]
     expect(message).toBe('Imported 0 notes')
-    render(createElement('div', null, (options as { description: ReactNode }).description))
+    render(createElement('div', null, (options as { description: ReactNode }).description), {
+      wrapper: TooltipProvider
+    })
     expect(screen.getByText('big.md: larger than 5 MB')).not.toBeNull()
   })
 
