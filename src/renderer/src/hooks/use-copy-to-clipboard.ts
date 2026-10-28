@@ -29,7 +29,7 @@ export function useCopyToClipboard(): UseCopyToClipboardReturn {
         .write(content, { secret, fromUnlockedView })
         .catch(() => ({ success: false }) as const)
       if (!result.success) {
-        toast.error('Failed to copy to clipboard')
+        toast.error("Couldn't copy to the clipboard")
         return
       }
       toast.success('Copied to clipboard')

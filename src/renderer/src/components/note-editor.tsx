@@ -181,7 +181,7 @@ export function NoteEditor(): ReactNode {
       const result = await notvex.notes.update(id, { content: newContent })
       setSaving(false)
       if (!result.success) {
-        toast.error('Failed to save note. Your changes may not be saved.')
+        toast.error("Couldn't save the note. Your latest changes may be lost.")
         return
       }
       void loadNotes({ trashed: useUiStore.getState().showTrash })
@@ -194,7 +194,7 @@ export function NoteEditor(): ReactNode {
       if (newTitle === persistedTitleRef.current) return
       const result = await notvex.notes.update(id, { title: newTitle })
       if (!result.success) {
-        toast.error('Failed to save note title. Your changes may not be saved.')
+        toast.error("Couldn't save the title. Your latest changes may be lost.")
         return
       }
       // A flush fired by a note switch resolves after the next note has loaded

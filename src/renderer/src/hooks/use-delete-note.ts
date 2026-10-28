@@ -11,7 +11,7 @@ export function useDeleteNote(): (id: string) => Promise<boolean> {
 
   return useCallback(
     async (id) => {
-      if (!(await ipcSucceeded(notvex.notes.delete(id), 'Failed to delete note'))) return false
+      if (!(await ipcSucceeded(notvex.notes.delete(id), "Couldn't delete the note"))) return false
       if (useVaultStore.getState().activeNoteId === id) setActiveNoteId(null)
       void loadNotes({ trashed: useUiStore.getState().showTrash })
       return true

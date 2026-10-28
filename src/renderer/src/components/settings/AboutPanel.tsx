@@ -28,7 +28,7 @@ export function AboutPanel(): ReactNode {
 
     const result = await notvex.updater.checkNow()
     if (!result.success) {
-      toast.error('Failed to check for updates')
+      toast.error("Couldn't check for updates")
     } else if (result.data === null) {
       toast.success("You're up to date")
     }

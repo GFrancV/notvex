@@ -106,7 +106,7 @@ function PaletteContent(): ReactNode {
     try {
       await handleNewNote(title)
     } catch {
-      toast.error('Failed to create note')
+      toast.error("Couldn't create the note")
     }
   }
 

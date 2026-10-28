@@ -46,7 +46,7 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
       setName('')
       onClose()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to save tag')
+      toast.error(e instanceof Error ? e.message : "Couldn't save the tag")
     } finally {
       setLoading(false)
     }

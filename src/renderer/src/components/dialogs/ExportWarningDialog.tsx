@@ -38,7 +38,7 @@ export function ExportWarningDialog({
       try {
         await flushAllPending()
       } catch {
-        toast.error('Your latest edits could not be saved, so nothing was exported')
+        toast.error("Your latest edits couldn't be saved, so nothing was exported")
         return
       }
       await onConfirm()

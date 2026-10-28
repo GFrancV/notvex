@@ -228,7 +228,7 @@ async function readImportFile(file: string): Promise<ImportRead> {
     fd = openSync(file, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0))
   } catch (e) {
     logError('notes:import: open failed:', e)
-    return { skip: 'could not be read' }
+    return { skip: "couldn't be read" }
   }
   let buf: Buffer | undefined
   try {
@@ -245,7 +245,7 @@ async function readImportFile(file: string): Promise<ImportRead> {
     return { note: parseMarkdownFile(text, basename(file)) }
   } catch (e) {
     logError('notes:import: read failed:', e)
-    return { skip: 'could not be read' }
+    return { skip: "couldn't be read" }
   } finally {
     if (buf) memzero(buf)
     closeSync(fd)
@@ -598,7 +598,7 @@ export function registerIpcHandlers(
         try {
           fileBytes = readFileSync(filePath)
         } catch {
-          return fail('Vault file not found or could not be read.')
+          return fail("Vault file not found or couldn't be read.")
         }
 
         let migrationOccurred = false
@@ -747,7 +747,7 @@ export function registerIpcHandlers(
           try {
             fileBytes = readFileSync(filePath)
           } catch {
-            return fail('Vault file not found or could not be read.')
+            return fail("Vault file not found or couldn't be read.")
           }
 
           try {
@@ -952,7 +952,7 @@ export function registerIpcHandlers(
         await packContainer()
       } catch (e) {
         logError('vault:save-copy-as: sync before copy failed:', e)
-        return fail('Failed to sync the vault before copying — try again')
+        return fail("Couldn't sync the vault before copying. Try again.")
       }
 
       const vaultDir = dirname(vaultPath)
@@ -1002,7 +1002,7 @@ export function registerIpcHandlers(
       return ok({ path: result.filePath, contents: new Uint8Array(bytes), filename })
     } catch {
       // fs errors quote the path, and the renderer shows this error as is.
-      return fail('Could not save the key file')
+      return fail("Couldn't save the key file")
     }
   })
 
@@ -1024,7 +1024,7 @@ export function registerIpcHandlers(
       const fd = openSync(filePath, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0))
       try {
         const stat = fstatSync(fd)
-        if (!stat.isFile()) return fail('Could not read the selected key file')
+        if (!stat.isFile()) return fail("Couldn't read the selected key file")
         // Only the first KEY_FILE_MAX_BYTES feed the key, so a file of any size costs at most that.
         const buf = new Uint8Array(Math.min(stat.size, KEY_FILE_MAX_BYTES))
         const read = readFully(fd, buf)
@@ -1035,7 +1035,7 @@ export function registerIpcHandlers(
       }
     } catch {
       // fs errors quote the path, and the renderer shows this error as is.
-      return fail('Could not read the selected key file')
+      return fail("Couldn't read the selected key file")
     }
   })
 
@@ -1250,7 +1250,7 @@ export function registerIpcHandlers(
         writeFileSync(filePath, bytes, { mode: EXPORT_MODE })
       } catch (e) {
         logError('notes:export: write failed:', e)
-        return fail('Could not write the exported file')
+        return fail("Couldn't write the exported file")
       } finally {
         memzero(bytes)
       }
@@ -1291,7 +1291,7 @@ export function registerIpcHandlers(
           } catch (e) {
             logError('notes:export-all: write failed:', e)
             return fail(
-              `Export stopped after ${written} of ${ids.length} notes: a file could not be written`
+              `Export stopped after ${written} of ${ids.length} notes: a file couldn't be written`
             )
           } finally {
             memzero(bytes)

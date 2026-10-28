@@ -15,7 +15,7 @@ export function useTrashNote(): (id: string) => Promise<boolean> {
 
   return useCallback(
     async (id) => {
-      if (!(await ipcSucceeded(notvex.notes.trash(id), 'Failed to move note to trash'))) {
+      if (!(await ipcSucceeded(notvex.notes.trash(id), "Couldn't move the note to the trash"))) {
         return false
       }
       const wasOpen = useVaultStore.getState().activeNoteId === id

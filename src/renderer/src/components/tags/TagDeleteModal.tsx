@@ -36,7 +36,7 @@ export function TagDeleteModal({ open, onClose, tag }: TagDeleteModalProps): Rea
       if (activeTags.includes(tag.id)) clearActiveTags()
       onClose()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to delete tag')
+      toast.error(e instanceof Error ? e.message : "Couldn't delete the tag")
     } finally {
       setLoading(false)
     }

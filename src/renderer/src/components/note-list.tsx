@@ -110,7 +110,7 @@ export function NoteList(): ReactNode {
   }, [])
 
   const handleEmptyTrash = async (): Promise<void> => {
-    if (!(await ipcSucceeded(notvex.notes.emptyTrash(), 'Failed to empty trash'))) return
+    if (!(await ipcSucceeded(notvex.notes.emptyTrash(), "Couldn't empty the trash"))) return
     setActiveNoteId(null)
     void loadNotes({ trashed: true })
   }

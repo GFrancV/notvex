@@ -250,7 +250,7 @@ describe('command palette create note from query', () => {
     openPalette([])
     type(query)
     await act(async () => fireEvent.click(screen.getByRole('option', { name })))
-    expect(toast.error).toHaveBeenCalledWith('Failed to create note')
+    expect(toast.error).toHaveBeenCalledWith("Couldn't create the note")
   })
 })
 

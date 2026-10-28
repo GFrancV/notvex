@@ -174,6 +174,10 @@ through Tailwind classes using the tokens above.
   in front (`Documentation` in a menu, `Open documentation` on a Settings button), since a
   Settings row pairs a noun label with a verb button. Section headings use
   shadcn's style (`text-xs font-medium text-muted-foreground`), not uppercase.
+- **Errors start "Couldn't …"** (`Couldn't move the note to the trash`), never "Failed to …" or
+  "Could not …". This covers main's IPC errors too, since the renderer shows them as-is.
+- **Success toasts only when the result isn't on screen** (copied, exported, logs cleared), and
+  never "successfully". A change the user can see (a new tag in the sidebar) needs no toast.
 
 ```tsx
 // ✅

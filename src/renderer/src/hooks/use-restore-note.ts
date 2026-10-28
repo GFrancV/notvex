@@ -11,7 +11,7 @@ export function useRestoreNote(): (id: string) => Promise<boolean> {
 
   return useCallback(
     async (id) => {
-      if (!(await ipcSucceeded(notvex.notes.restore(id), 'Failed to restore note'))) return false
+      if (!(await ipcSucceeded(notvex.notes.restore(id), "Couldn't restore the note"))) return false
       void loadNotes({ trashed: useUiStore.getState().showTrash })
       // Tag counts leave trashed notes out, so a restored note counts again.
       void loadTagCounts()

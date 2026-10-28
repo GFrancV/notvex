@@ -114,12 +114,12 @@ describe('TagSelector', () => {
   })
 
   it('shows the error and stays open when assigning fails', async () => {
-    addTagToNote.mockRejectedValueOnce(new Error('Failed to assign tag'))
+    addTagToNote.mockRejectedValueOnce(new Error("Couldn't add the tag"))
     openAdd()
 
     await press('Enter')
 
-    expect(toast.error).toHaveBeenCalledWith('Failed to assign tag')
+    expect(toast.error).toHaveBeenCalledWith("Couldn't add the tag")
     expect(onOpenChange).not.toHaveBeenCalledWith(false)
   })
 

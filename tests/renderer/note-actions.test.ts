@@ -178,7 +178,7 @@ describe('useTogglePin', () => {
     })
 
     expect(ok).toBe(false)
-    expect(toastError).toHaveBeenCalledWith('Failed to update note')
+    expect(toastError).toHaveBeenCalledWith("Couldn't update the note")
   })
 })
 
@@ -355,7 +355,7 @@ describe('useTrashNote', () => {
 
     await trashAndUndo('a')
 
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to restore note'))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Couldn't restore the note"))
     expect(useVaultStore.getState().activeNoteId).toBeNull()
   })
 
@@ -367,7 +367,7 @@ describe('useTrashNote', () => {
       await result.current('a')
     })
 
-    expect(toastError).toHaveBeenCalledWith('Failed to move note to trash')
+    expect(toastError).toHaveBeenCalledWith("Couldn't move the note to the trash")
     expect(useVaultStore.getState().activeNoteId).toBe('a')
   })
 })
@@ -534,7 +534,7 @@ describe('NoteList — trash view actions', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Empty trash' }))
     })
 
-    expect(toastError).toHaveBeenCalledWith('Failed to empty trash')
+    expect(toastError).toHaveBeenCalledWith("Couldn't empty the trash")
     expect(useVaultStore.getState().activeNoteId).toBe('a')
   })
 
