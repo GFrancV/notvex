@@ -32,9 +32,12 @@ export function TagFilter({ count }: { count: number }): JSX.Element | null {
         {query && (
           <>
             <span className="text-muted-foreground">and</span>
-            <span className="max-w-full truncate" title={query}>
-              title contains &quot;{query}&quot;
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="max-w-full truncate">title contains &quot;{query}&quot;</span>
+              </TooltipTrigger>
+              <TooltipContent>{query}</TooltipContent>
+            </Tooltip>
           </>
         )}
         <span className="text-muted-foreground">

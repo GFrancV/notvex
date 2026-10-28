@@ -31,11 +31,22 @@ const { TagItem } = await import('@/components/tags/TagItem')
 const { SidebarMenu, SidebarProvider } = await import('@/components/ui/sidebar')
 const { TagFilter } = await import('@/components/tags/TagFilter')
 const { NoteList } = await import('@/components/note-list')
+const { NoteListRow } = await import('@/components/note-list-row')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const work: Tag = { id: 't-work', name: 'work', color: '#22c55e', createdAt: 0 }
+
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
 
 beforeAll(() => {
   // SidebarProvider's mobile detection needs matchMedia, which jsdom lacks.
@@ -191,6 +202,37 @@ describe('note list under a tag filter', () => {
 
     await waitFor(() => expect(screen.getByText('work plan')).toBeTruthy())
     expect(screen.getByText('seed phrase')).toBeTruthy()
+  })
+})
+
+describe('note row tags', () => {
+  it('names the tags behind +N in a tooltip', async () => {
+    const tag = (id: string, name: string): Tag => ({ id, name, color: '#fff', createdAt: 0 })
+    const note: NoteListItem = {
+      ...ipcNotes.all[0],
+      tags: [work, tag('t-home', 'home'), tag('t-errands', 'errands')]
+    }
+    const noop = vi.fn(async () => undefined)
+    render(
+      createElement(NoteListRow, {
+        note,
+        isActive: false,
+        inTrash: false,
+        date: 0,
+        onSelect: vi.fn(),
+        onPin: noop,
+        onDuplicate: noop,
+        onExport: vi.fn(),
+        onTrash: noop,
+        onRestore: noop,
+        onDelete: noop
+      }),
+      { wrapper: TooltipProvider }
+    )
+
+    fireEvent.pointerMove(screen.getByText('+2'))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('home, errands')
   })
 })
 

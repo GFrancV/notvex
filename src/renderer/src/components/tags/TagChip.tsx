@@ -17,9 +17,12 @@ export function TagChip({ tag, onRemove }: TagChipProps): ReactNode {
       style={{ backgroundColor: tag.color + '26', color: tag.color }}
     >
       <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
-      <span className="truncate" title={tag.name}>
-        {tag.name}
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="truncate">{tag.name}</span>
+        </TooltipTrigger>
+        <TooltipContent>{tag.name}</TooltipContent>
+      </Tooltip>
       {onRemove && (
         <Tooltip>
           <TooltipTrigger asChild>

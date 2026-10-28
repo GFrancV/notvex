@@ -16,6 +16,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem
 } from '../ui/sidebar'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 interface TagItemProps {
   tag: Tag
@@ -51,7 +52,12 @@ export function TagItem({
           className="size-2 rounded-full group-focus-within/menu-item:invisible group-hover/menu-item:invisible"
           style={{ backgroundColor: tag.color }}
         />
-        <span title={tag.name}>{tag.name}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>{tag.name}</span>
+          </TooltipTrigger>
+          <TooltipContent>{tag.name}</TooltipContent>
+        </Tooltip>
       </SidebarMenuButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
