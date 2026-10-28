@@ -57,6 +57,10 @@ jobs:
             build-arg: --linux
 
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v5
 
@@ -77,3 +81,15 @@ jobs:
         run: pnpm exec electron-builder ${{ matrix.build-arg }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Attests the files electron-builder just uploaded; updater metadata (latest*.yml,
+      # *.blockmap) is left out since users never download and run it.
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
