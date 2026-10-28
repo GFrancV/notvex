@@ -22,6 +22,7 @@ const { VaultSwitcher } = await import('@/components/VaultSwitcher')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { useVaultStore } = await import('@/store/vault.store')
 const { toast } = await import('sonner')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const CURRENT = 'C:/vaults/work.nvx'
 const OTHER = 'C:/vaults/home.nvx'
@@ -39,7 +40,7 @@ const note: NoteListItem = {
 }
 
 async function switchToOther(): Promise<void> {
-  render(createElement(VaultSwitcher))
+  render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
   fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
   fireEvent.click(await screen.findByRole('menuitem', { name: /home\.nvx/ }))
 }

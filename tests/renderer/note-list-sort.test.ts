@@ -47,6 +47,7 @@ const { NoteList } = await import('@/components/note-list')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const titles = (): string[] =>
   screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent ?? '')
@@ -81,7 +82,7 @@ afterEach(() => {
 
 describe('note list sort menu', () => {
   it('reorders the list and saves the choice when a field is picked', async () => {
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
     expect(titles()).toEqual(['Beta', 'Alpha', 'Gamma'])
 
     openSortMenu()
@@ -97,7 +98,7 @@ describe('note list sort menu', () => {
 
   it('starts a date field newest first when coming from title', async () => {
     usePrefsStore.setState({ noteSort: { field: 'title', direction: 'asc' } })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     openSortMenu()
     await pick('Date created')
@@ -110,7 +111,7 @@ describe('note list sort menu', () => {
 
   it('keeps the direction when the already-checked field is picked again', async () => {
     usePrefsStore.setState({ noteSort: { field: 'title', direction: 'desc' } })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     openSortMenu()
     await pick('Title')
@@ -121,7 +122,7 @@ describe('note list sort menu', () => {
 
   it('labels the direction for the active field and saves a direction change', async () => {
     usePrefsStore.setState({ noteSort: { field: 'title', direction: 'asc' } })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
     expect(titles()).toEqual(['Alpha', 'Beta', 'Gamma'])
 
     openSortMenu()
@@ -139,14 +140,14 @@ describe('note list sort menu', () => {
   })
 
   it('offers newest/oldest labels for date fields', async () => {
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
     openSortMenu()
     expect(await screen.findByRole('menuitemradio', { name: 'Newest first' })).toBeDefined()
     expect(screen.getByRole('menuitemradio', { name: 'Oldest first' })).toBeDefined()
   })
 
   it('shows the created date on each row only when sorting by date created', () => {
-    const { rerender } = render(createElement(NoteList))
+    const { rerender } = render(createElement(NoteList), { wrapper: TooltipProvider })
     expect(screen.getByText('about 1 hour ago')).toBeDefined()
 
     act(() => usePrefsStore.setState({ noteSort: { field: 'createdAt', direction: 'desc' } }))
@@ -171,7 +172,7 @@ describe('note list sort sources', () => {
       checkUpdatesOnStartup: true
     }
     ipc.prefs.get.mockResolvedValue({ success: true, data: saved })
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
     expect(titles()).toEqual(['Beta', 'Alpha', 'Gamma'])
 
     await act(() => usePrefsStore.getState().load())

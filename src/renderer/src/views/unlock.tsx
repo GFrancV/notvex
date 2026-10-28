@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { openBugReport } from '@/lib/bug-report'
@@ -257,14 +257,12 @@ export function Unlock(): ReactNode {
             >
               <FolderOpenIcon />
 
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>{truncatePath(vaultPath)}</span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{vaultPath}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>{truncatePath(vaultPath)}</span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{vaultPath}</TooltipContent>
+              </Tooltip>
             </Button>
           </div>
         )}

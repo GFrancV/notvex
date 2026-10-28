@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
@@ -121,13 +122,17 @@ export function Setup(): ReactNode {
               <Field>
                 <FieldLabel>Vault file</FieldLabel>
                 <div className="flex gap-2">
-                  <Input
-                    value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
-                    placeholder="Choose where to save…"
-                    readOnly
-                    title={vaultPath}
-                    className="flex-1"
-                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Input
+                        value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
+                        placeholder="Choose where to save…"
+                        readOnly
+                        className="flex-1"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>{vaultPath}</TooltipContent>
+                  </Tooltip>
                   <Button
                     variant="outline"
                     size="icon"

@@ -31,6 +31,7 @@ vi.mock('@/lib/ipc', () => ({
 
 const { NoteEditor } = await import('@/components/note-editor')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const note = (id: string, content: string): Note => ({
   id,
@@ -62,7 +63,7 @@ describe('NoteEditor — switching notes right after typing', () => {
     const notes: Record<string, Note> = { a: note('a', 'alpha text'), b: note('b', 'bravo') }
     ipc.get.mockImplementation(async (id: string) => ({ success: true, data: notes[id] }))
     useVaultStore.setState({ activeNoteId: 'a', notes: [], tags: [], noteTagsMap: {} })
-    render(createElement(NoteEditor), { reactStrictMode: true })
+    render(createElement(NoteEditor), { reactStrictMode: true, wrapper: TooltipProvider })
     await waitFor(() => expect(editorDoc()).toBe('alpha text'))
 
     // A user edit (no external-change annotation) puts @uiw/react-codemirror in its typing
@@ -89,7 +90,7 @@ describe('NoteEditor — switching notes right after typing', () => {
         : Promise.resolve({ success: true, data: notes[id] })
     )
     useVaultStore.setState({ activeNoteId: 'a', notes: [], tags: [], noteTagsMap: {} })
-    render(createElement(NoteEditor), { reactStrictMode: true })
+    render(createElement(NoteEditor), { reactStrictMode: true, wrapper: TooltipProvider })
     await waitFor(() => expect(editorDoc()).toBe('alpha text'))
 
     act(() => useVaultStore.setState({ activeNoteId: 'b' }))

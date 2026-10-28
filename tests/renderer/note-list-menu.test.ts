@@ -28,6 +28,7 @@ const { NoteList } = await import('@/components/note-list')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 function note(overrides: Partial<NoteListItem> = {}): NoteListItem {
   return {
@@ -47,7 +48,7 @@ function renderList(item: NoteListItem, inTrash: boolean): void {
   ipc.notes.list.mockImplementation(() => ok([item]))
   useUiStore.setState({ activeTags: [], searchQuery: '', showTrash: inTrash, showPinned: false })
   useVaultStore.setState({ notes: [item], noteTagsMap: {}, activeNoteId: null })
-  render(createElement(NoteList))
+  render(createElement(NoteList), { wrapper: TooltipProvider })
 }
 
 const row = (): HTMLElement => screen.getByRole('button', { name: /Groceries/ })

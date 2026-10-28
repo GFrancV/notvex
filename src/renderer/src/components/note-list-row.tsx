@@ -20,6 +20,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from './ui/context-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 interface NoteListRowProps {
   note: NoteListItem
@@ -79,20 +80,25 @@ export function NoteListRow({
                     className="size-1.5 shrink-0 rounded-full"
                     style={{ backgroundColor: note.tags[0].color }}
                   />
-                  <span className="truncate" title={note.tags[0].name}>
-                    {note.tags[0].name}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="truncate">{note.tags[0].name}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>{note.tags[0].name}</TooltipContent>
+                  </Tooltip>
                 </span>
                 {note.tags.length > 1 && (
-                  <span
-                    className="shrink-0"
-                    title={note.tags
-                      .slice(1)
-                      .map((t) => t.name)
-                      .join(', ')}
-                  >
-                    +{note.tags.length - 1}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="shrink-0">+{note.tags.length - 1}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {note.tags
+                        .slice(1)
+                        .map((t) => t.name)
+                        .join(', ')}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
               </>
             )}

@@ -31,6 +31,7 @@ const { Sidebar } = await import('@/components/sidebar')
 const { SidebarProvider } = await import('@/components/ui/sidebar')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const COUNTS: NoteCounts = { live: 3, pinned: 1, trashed: 2 }
 const ZERO: NoteCounts = { live: 0, pinned: 0, trashed: 0 }
@@ -83,7 +84,9 @@ afterEach(() => {
 
 async function renderSidebar(): Promise<void> {
   await act(async () => {
-    render(createElement(SidebarProvider, null, createElement(Sidebar)))
+    render(createElement(SidebarProvider, null, createElement(Sidebar)), {
+      wrapper: TooltipProvider
+    })
   })
 }
 

@@ -31,6 +31,7 @@ Range.prototype.getBoundingClientRect = (): DOMRect => new DOMRect()
 const { NoteEditor } = await import('@/components/note-editor')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const findInput = (): HTMLElement | null => screen.queryByLabelText('Find in note')
 const editorHasFocus = (): boolean =>
@@ -63,10 +64,20 @@ async function openNote(): Promise<EditorView> {
     }
   })
   act(() => useVaultStore.getState().setActiveNoteId('a'))
-  render(createElement(NoteEditor))
+  render(createElement(NoteEditor), { wrapper: TooltipProvider })
   await waitFor(() => expect(editorHasFocus()).toBe(true))
   return EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)!
 }
+
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
 
 beforeEach(() => {
   ipc.get.mockReset()
@@ -157,6 +168,14 @@ describe('NoteEditor — find bar', () => {
     expect(selected(cm)).toEqual([0, 3])
     fireEvent.click(screen.getByRole('button', { name: 'Previous match' }))
     expect(selected(cm)).toEqual([8, 11])
+  })
+
+  it('shows the key of each button in its tooltip', async () => {
+    await find('one')
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Previous match' }))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Previous match Shift Enter')
   })
 
   it('closes on Escape from one of its buttons', async () => {

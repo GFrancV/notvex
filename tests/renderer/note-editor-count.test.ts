@@ -56,6 +56,7 @@ vi.mock('@/lib/ipc', () => ({
 const { NoteEditor } = await import('@/components/note-editor')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 function note(id: string, content: string): Note {
   return {
@@ -104,7 +105,7 @@ describe('NoteEditor — word/character count', () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', 'hello world') })
     useVaultStore.setState({ activeNoteId: 'a' })
 
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
 
     await waitFor(() => expect(screen.getByText('2 words · 11 characters')).toBeTruthy())
   })
@@ -112,7 +113,7 @@ describe('NoteEditor — word/character count', () => {
   it('2 · a burst of keystrokes recomputes once, after the pause', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', 'x') })
     useVaultStore.setState({ activeNoteId: 'a' })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(screen.getByText('1 word · 1 character')).toBeTruthy())
     fakeTimers()
     countSpy.mockClear()
@@ -134,7 +135,7 @@ describe('NoteEditor — word/character count', () => {
   it('3 · a timer left pending by the previous note never overwrites the next note’s count', async () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', 'a') })
     useVaultStore.setState({ activeNoteId: 'a' })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(body().value).toBe('a'))
     fakeTimers()
 
@@ -155,7 +156,7 @@ describe('NoteEditor — word/character count', () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', 'read me') })
     useVaultStore.setState({ activeNoteId: 'a' })
 
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
 
     await waitFor(() => expect(screen.getByText('2 words · 7 characters')).toBeTruthy())
   })

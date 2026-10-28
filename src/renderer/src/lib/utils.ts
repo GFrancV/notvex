@@ -1,6 +1,9 @@
 import { format, formatDistanceToNow } from 'date-fns'
 import millify from 'millify'
 
+// Every TooltipProvider uses it, so hover hints wait the same everywhere.
+export const TOOLTIP_DELAY = 500
+
 export function formatTimeAgo(timestamp: number): string {
   return formatDistanceToNow(new Date(timestamp), { addSuffix: true })
 }

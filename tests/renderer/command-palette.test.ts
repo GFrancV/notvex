@@ -20,7 +20,10 @@ const note = (id: string, title: string, isTrashed = false): NoteListItem => ({
 const duplicate = vi.hoisted(() => vi.fn(async (): Promise<void> => undefined))
 
 const clipboardWrite = vi.hoisted(() => vi.fn(async () => ({ success: true, data: null })))
-vi.mock('@/lib/ipc', () => ({ notvex: { clipboard: { write: clipboardWrite } } }))
+const ipc = vi.hoisted(() => ({
+  notvex: { platform: 'win32', clipboard: { write: clipboardWrite } }
+}))
+vi.mock('@/lib/ipc', () => ipc)
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 // The duplicate flow itself is covered in duplicate-note.test.ts; here only the wiring matters.
 vi.mock('@/hooks/use-duplicate-note', () => ({ useDuplicateNote: () => duplicate }))
@@ -58,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  ipc.notvex.platform = 'win32'
   vi.clearAllMocks()
 })
 
@@ -137,6 +141,24 @@ describe('command palette notes', () => {
       .getAllByRole('option')
       .filter((el) => el.getAttribute('aria-selected') === 'true')
     expect(selected).toHaveLength(1)
+  })
+})
+
+describe('command palette shortcuts', () => {
+  const newNoteKeys = (): string[] =>
+    [
+      ...screen.getByRole('option', { name: /^New note/ }).querySelectorAll('[data-slot="kbd"]')
+    ].map((k) => k.textContent ?? '')
+
+  it('shows Ctrl on Windows', () => {
+    openPalette([])
+    expect(newNoteKeys()).toEqual(['Ctrl', 'N'])
+  })
+
+  it('shows ⌘ on macOS, where Cmd is what works', () => {
+    ipc.notvex.platform = 'darwin'
+    openPalette([])
+    expect(newNoteKeys()).toEqual(['⌘', 'N'])
   })
 })
 

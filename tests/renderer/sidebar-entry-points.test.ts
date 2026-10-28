@@ -30,6 +30,17 @@ vi.mock('@/components/settings-dialog', () => ({
 const { Sidebar } = await import('@/components/sidebar')
 const { SidebarProvider } = await import('@/components/ui/sidebar')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
+
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
 
 beforeAll(() => {
   // SidebarProvider's mobile detection needs matchMedia, which jsdom lacks.
@@ -71,11 +82,21 @@ afterEach(() => {
 
 async function renderSidebar(): Promise<void> {
   await act(async () => {
-    render(createElement(SidebarProvider, null, createElement(Sidebar)))
+    render(createElement(SidebarProvider, null, createElement(Sidebar)), {
+      wrapper: TooltipProvider
+    })
   })
 }
 
 describe('Sidebar entry points', () => {
+  it('shows the new-note shortcut in its tooltip', async () => {
+    await renderSidebar()
+
+    fireEvent.focus(screen.getByRole('button', { name: 'New note' }))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('New note Ctrl N')
+  })
+
   it('opens Settings straight from the gear button', async () => {
     await renderSidebar()
 

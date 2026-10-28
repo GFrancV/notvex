@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { XIcon } from 'lucide-react'
 
 import type { Tag } from '@shared/types'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 interface TagChipProps {
   tag: Tag
@@ -16,21 +17,29 @@ export function TagChip({ tag, onRemove }: TagChipProps): ReactNode {
       style={{ backgroundColor: tag.color + '26', color: tag.color }}
     >
       <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
-      <span className="truncate" title={tag.name}>
-        {tag.name}
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="truncate">{tag.name}</span>
+        </TooltipTrigger>
+        <TooltipContent>{tag.name}</TooltipContent>
+      </Tooltip>
       {onRemove && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="inline-flex h-3 w-0 shrink-0 items-center justify-center overflow-hidden transition-all duration-300 ease-in-out group-hover:w-3"
-          title={`Remove tag ${tag.name}`}
-        >
-          <XIcon className="h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove()
+              }}
+              className="inline-flex h-3 w-0 shrink-0 items-center justify-center overflow-hidden transition-all duration-300 ease-in-out group-hover:w-3"
+              aria-label={`Remove tag ${tag.name}`}
+            >
+              <XIcon className="h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Remove tag {tag.name}</TooltipContent>
+        </Tooltip>
       )}
     </span>
   )

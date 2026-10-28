@@ -20,6 +20,7 @@ const { NoteList } = await import('@/components/note-list')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 function note(id: string, title: string): NoteListItem {
   return {
@@ -53,14 +54,14 @@ afterEach(() => {
 
 describe('NoteList selected row', () => {
   it('marks only the open note as current', () => {
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     expect(row('Groceries').getAttribute('aria-current')).toBe('true')
     expect(row('Recipes').hasAttribute('aria-current')).toBe(false)
   })
 
   it('moves the mark when another note opens', () => {
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     act(() => useVaultStore.setState({ activeNoteId: 'n2' }))
 
@@ -76,7 +77,7 @@ describe('NoteList header', () => {
     [{ showTrash: true }, 'Trash']
   ])('repeats the sidebar label for %o', (view, title) => {
     useUiStore.setState(view)
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
 
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(title)
   })

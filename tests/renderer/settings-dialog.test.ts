@@ -43,13 +43,16 @@ const { toast } = await import('sonner')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const setPref = vi.fn(async () => undefined)
 const onOpenChange = vi.fn()
 
 async function renderDialog(initialTab?: 'about'): Promise<void> {
   await act(async () => {
-    render(createElement(SettingsDialog, { open: true, onOpenChange, initialTab }))
+    render(createElement(SettingsDialog, { open: true, onOpenChange, initialTab }), {
+      wrapper: TooltipProvider
+    })
   })
 }
 
@@ -102,7 +105,9 @@ describe('SettingsDialog', () => {
 
   it('starts fresh on every open: the requested tab, no subpage left over', async () => {
     const props = { onOpenChange }
-    const { rerender } = render(createElement(SettingsDialog, { ...props, open: true }))
+    const { rerender } = render(createElement(SettingsDialog, { ...props, open: true }), {
+      wrapper: TooltipProvider
+    })
     fireEvent.click(screen.getByRole('button', { name: /change password/i }))
     expect(currentCrumb()).not.toBeNull()
 

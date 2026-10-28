@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 const FIELDS: { value: NoteSortField; label: string }[] = [
   { value: 'updatedAt', label: 'Date modified' },
@@ -32,17 +33,21 @@ export function NoteSortMenu(): ReactNode {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Sort notes"
-          title="Sort notes"
-          className="titlebar-no-drag text-muted-foreground z-50"
-        >
-          <ArrowUpDownIcon />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Sort notes"
+              className="titlebar-no-drag text-muted-foreground z-50"
+            >
+              <ArrowUpDownIcon />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Sort notes</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Sort by</DropdownMenuLabel>
         <DropdownMenuRadioGroup

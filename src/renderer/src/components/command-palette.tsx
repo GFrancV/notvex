@@ -24,6 +24,7 @@ import { loadDebugInfo, openBugReport, openLogsFolder } from '@/lib/bug-report'
 import { requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
+import { Shortcut } from './Shortcut'
 import {
   CommandDialog,
   CommandEmpty,
@@ -132,7 +133,9 @@ function PaletteContent(): ReactNode {
           >
             <PlusIcon />
             <span>New note</span>
-            <CommandShortcut>Ctrl+N</CommandShortcut>
+            <CommandShortcut>
+              <Shortcut keys="Mod-n" />
+            </CommandShortcut>
           </CommandItem>
           <CommandItem
             keywords={['preview', 'read mode', 'edit mode', 'markdown']}
@@ -140,7 +143,9 @@ function PaletteContent(): ReactNode {
           >
             <EyeIcon />
             <span>Toggle reading view</span>
-            <CommandShortcut>Ctrl+Shift+E</CommandShortcut>
+            <CommandShortcut>
+              <Shortcut keys="Mod-Shift-e" />
+            </CommandShortcut>
           </CommandItem>
           <CommandItem
             keywords={['deleted notes', 'bin', 'recycle', 'restore']}
@@ -155,12 +160,16 @@ function PaletteContent(): ReactNode {
           >
             <LockIcon />
             <span>Lock vault</span>
-            <CommandShortcut>Ctrl+L</CommandShortcut>
+            <CommandShortcut>
+              <Shortcut keys="Mod-l" />
+            </CommandShortcut>
           </CommandItem>
           <CommandItem keywords={['refresh', 'restart']} onSelect={() => run(requestReload)}>
             <RotateCwIcon />
             <span>Reload window</span>
-            <CommandShortcut>Ctrl+R</CommandShortcut>
+            <CommandShortcut>
+              <Shortcut keys="Mod-r" />
+            </CommandShortcut>
           </CommandItem>
           {activeNoteId && (
             <CommandItem

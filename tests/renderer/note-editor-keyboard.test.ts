@@ -51,6 +51,7 @@ const { NoteEditor } = await import('@/components/note-editor')
 const { CommandPalette } = await import('@/components/command-palette')
 const { useVaultStore } = await import('@/store/vault.store')
 const { useUiStore } = await import('@/store/ui.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 let view: EditorView | null = null
 
@@ -155,21 +156,23 @@ describe('EditorToolbar', () => {
   ]
 
   it('gives every button an accessible name', () => {
-    render(createElement(EditorToolbar, { editorView: null }))
+    render(createElement(EditorToolbar, { editorView: null }), { wrapper: TooltipProvider })
     const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))
     expect(names).toEqual(labels)
   })
 
   it('shows the keyboard shortcut in the tooltip', async () => {
-    render(createElement(EditorToolbar, { editorView: null }))
+    render(createElement(EditorToolbar, { editorView: null }), { wrapper: TooltipProvider })
     fireEvent.focus(screen.getByRole('button', { name: 'Heading 2' }))
-    expect((await screen.findByRole('tooltip')).textContent).toBe('Heading 2 Ctrl+Shift+2')
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Heading 2 Ctrl Shift 2')
   })
 
   it('tells the user how to Tab out of the editor', async () => {
-    render(createElement(EditorToolbar, { editorView: null }))
+    render(createElement(EditorToolbar, { editorView: null }), { wrapper: TooltipProvider })
     fireEvent.focus(screen.getByRole('button', { name: 'Quote' }))
-    expect((await screen.findByRole('tooltip')).textContent).toContain('Ctrl+M')
+    expect((await screen.findByRole('tooltip')).textContent).toContain(
+      'Ctrl M, then Shift Tab, leaves the editor'
+    )
   })
 })
 
@@ -222,7 +225,7 @@ describe('NoteEditor — focus after opening a note', () => {
   })
 
   it('focuses the title of a note created from the empty state', async () => {
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     createNote('n')
     await waitFor(() => expect(document.activeElement).toBe(titleInput()))
   })
@@ -230,7 +233,7 @@ describe('NoteEditor — focus after opening a note', () => {
   it('focuses the title of a note created while another note is open', async () => {
     serve('a', 'A')
     act(() => useVaultStore.getState().setActiveNoteId('a'))
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(editorHasFocus()).toBe(true))
 
     createNote('n')
@@ -238,7 +241,7 @@ describe('NoteEditor — focus after opening a note', () => {
   })
 
   it('focuses the editor when an existing note is opened', async () => {
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     serve('a', 'A')
     act(() => useVaultStore.getState().setActiveNoteId('a'))
     await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
@@ -248,7 +251,7 @@ describe('NoteEditor — focus after opening a note', () => {
   it('ignores title-focus requests made before the editor mounted', async () => {
     // A request already handled by a previous instance, e.g. one unmounted by a lock.
     useUiStore.setState({ focusTitleRequest: 3 })
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     serve('a', 'A')
     act(() => useVaultStore.getState().setActiveNoteId('a'))
     await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
@@ -256,7 +259,7 @@ describe('NoteEditor — focus after opening a note', () => {
   })
 
   it('does not pass the request of a note that failed to load to the next note', async () => {
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     ipc.get.mockResolvedValueOnce({ success: false, error: 'boom' })
     act(() => {
       useVaultStore.getState().setActiveNoteId('n')
@@ -273,7 +276,7 @@ describe('NoteEditor — focus after opening a note', () => {
   it('does not pass the request of a new note to a note opened before it loaded', async () => {
     serve('a', 'A')
     act(() => useVaultStore.getState().setActiveNoteId('a'))
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(editorHasFocus()).toBe(true))
 
     let resolveNew!: (v: unknown) => void
@@ -294,7 +297,7 @@ describe('NoteEditor — focus after opening a note', () => {
   async function titleFocusedWithCursorAtEnd(): Promise<EditorView> {
     serve('a', 'A')
     act(() => useVaultStore.getState().setActiveNoteId('a'))
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect((titleInput() as HTMLInputElement).value).toBe('A'))
     const cm = EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)!
     act(() => cm.dispatch({ selection: { anchor: cm.state.doc.length } }))
@@ -342,7 +345,9 @@ describe('NoteEditor — focus after opening a note', () => {
   it('focuses the title of a note created from the command palette', async () => {
     ipc.create.mockResolvedValue({ success: true, data: { id: 'n', title: 'Untitled' } })
     serve('n', 'Untitled')
-    render(createElement('div', null, createElement(CommandPalette), createElement(NoteEditor)))
+    render(createElement('div', null, createElement(CommandPalette), createElement(NoteEditor)), {
+      wrapper: TooltipProvider
+    })
     act(() => useUiStore.setState({ commandPaletteOpen: true }))
 
     fireEvent.click(screen.getByText('New note'))

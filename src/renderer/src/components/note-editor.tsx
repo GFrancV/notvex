@@ -37,8 +37,9 @@ import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { EditorContextMenu } from './editor-context-menu'
 import { EditorToolbar } from './editor/EditorToolbar'
 import { NoteReadingView } from './note-reading-view'
+import { Shortcut } from './Shortcut'
 import { TagChip } from './tags/TagChip'
-import { TagSelector } from './tags/TagSelector'
+import { RemoveTagSelector, TagSelector } from './tags/TagSelector'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -49,6 +50,7 @@ import {
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
 import { Skeleton } from './ui/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 const notvexEditorTheme = EditorView.theme({
   '&': { backgroundColor: 'var(--background) !important', height: '100%' },
@@ -331,13 +333,17 @@ export function NoteEditor(): ReactNode {
     .map((id) => allTags.find((t) => t.id === id))
     .filter((t): t is Tag => t != null)
 
+  const modeLabel = editorMode === 'editing' ? 'Reading view' : 'Edit'
+
   if (!activeNoteId) {
     return (
       <div className="text-muted-foreground flex flex-1 items-center justify-center select-none">
         <div className="text-center">
           <FileTextIcon className="mx-auto mb-3 h-12 w-12 opacity-20" />
           <p className="text-sm">Select a note or create a new one</p>
-          <p className="mt-1 text-xs opacity-60">Ctrl+N to create</p>
+          <p className="mt-1 text-xs opacity-60">
+            <Shortcut keys="Mod-n" /> to create
+          </p>
         </div>
       </div>
     )
@@ -383,65 +389,75 @@ export function NoteEditor(): ReactNode {
                     }
                   />
                 ))}
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setTagSelectorOpen(true)}
-                    className="text-muted-foreground border border-dashed"
-                  >
-                    <PlusIcon className="size-3" /> Add tag
-                  </Button>
-                  {showTagSelector && (
-                    <div className="absolute top-full left-0 z-50 mt-1">
-                      <TagSelector noteId={activeNoteId} onClose={handleTagSelectorClose} />
-                    </div>
-                  )}
-                </div>
-                {/* Remove-tag selector (for command palette) */}
-                {showRemoveSelector && assignedTags.length > 0 && (
-                  <div className="absolute z-50 mt-8">
-                    <RemoveTagSelector
-                      tags={assignedTags}
-                      onRemove={(tagId) => {
-                        void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
-                          toast.error(e.message)
-                        )
-                        handleRemoveSelectorClose()
-                      }}
-                      onClose={handleRemoveSelectorClose}
-                    />
+                <RemoveTagSelector
+                  tags={assignedTags}
+                  open={showRemoveSelector && assignedTags.length > 0}
+                  onOpenChange={(open) => !open && handleRemoveSelectorClose()}
+                  onRemove={(tagId) => {
+                    void removeTagFromNote(activeNoteId, tagId).catch((e: Error) =>
+                      toast.error(e.message)
+                    )
+                    handleRemoveSelectorClose()
+                  }}
+                >
+                  <div>
+                    <TagSelector
+                      noteId={activeNoteId}
+                      open={showTagSelector}
+                      onOpenChange={(open) =>
+                        open ? setTagSelectorOpen(true) : handleTagSelectorClose()
+                      }
+                    >
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-muted-foreground border border-dashed"
+                      >
+                        <PlusIcon className="size-3" /> Add tag
+                      </Button>
+                    </TagSelector>
                   </div>
-                )}
+                </RemoveTagSelector>
               </>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
             {saving && <span className="text-muted-foreground text-xs">Saving…</span>}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handlePin}
-              title={isPinned ? 'Unpin' : 'Pin'}
-              className={isPinned ? 'text-primary' : 'text-muted-foreground'}
-            >
-              <PinIcon className={`size-4 ${isPinned ? 'fill-primary text-primary' : ''}`} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleEditorMode}
-              title={
-                editorMode === 'editing' ? 'Reading view (Ctrl+Shift+E)' : 'Edit (Ctrl+Shift+E)'
-              }
-              className={editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'}
-            >
-              {editorMode === 'editing' ? (
-                <EyeIcon className="h-4 w-4" />
-              ) : (
-                <PencilIcon className="h-4 w-4" />
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handlePin}
+                  aria-label={isPinned ? 'Unpin' : 'Pin'}
+                  className={isPinned ? 'text-primary' : 'text-muted-foreground'}
+                >
+                  <PinIcon className={`size-4 ${isPinned ? 'fill-primary text-primary' : ''}`} />
+                </Button>
+              </TooltipTrigger>
+              {/* Opens below: above, the window controls drawn over the title bar cover it. */}
+              <TooltipContent side="bottom">{isPinned ? 'Unpin' : 'Pin'}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleEditorMode}
+                  aria-label={modeLabel}
+                  className={editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'}
+                >
+                  {editorMode === 'editing' ? (
+                    <EyeIcon className="h-4 w-4" />
+                  ) : (
+                    <PencilIcon className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {modeLabel} <Shortcut keys="Mod-Shift-e" />
+              </TooltipContent>
+            </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -537,52 +553,6 @@ export function NoteEditor(): ReactNode {
           {formatCount(counts.chars, 'character', 'characters')}
         </footer>
       )}
-    </div>
-  )
-}
-
-function RemoveTagSelector({
-  tags,
-  onRemove,
-  onClose
-}: {
-  tags: Tag[]
-  onRemove: (tagId: string) => void
-  onClose: () => void
-}): ReactNode {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey, true)
-    return (): void => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
-
-  return (
-    <div className="bg-sidebar w-48 overflow-hidden rounded-md border shadow-xl">
-      <div className="border-b px-3 py-1.5">
-        <p className="text-muted-foreground text-xs">Remove tag</p>
-      </div>
-      <div className="py-1">
-        {tags.map((tag) => (
-          <Button
-            key={tag.id}
-            variant="ghost"
-            size="xs"
-            onClick={() => onRemove(tag.id)}
-            className="w-full"
-          >
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: tag.color }}
-            />
-            {tag.name}
-          </Button>
-        ))}
-      </div>
     </div>
   )
 }

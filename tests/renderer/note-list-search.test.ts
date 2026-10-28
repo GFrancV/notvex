@@ -36,6 +36,7 @@ vi.mock('@/lib/ipc', () => ({
 const { NoteList } = await import('@/components/note-list')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const settle = (): Promise<void> => act(() => new Promise<void>((r) => setTimeout(r, 50)))
 
@@ -58,7 +59,7 @@ afterEach(() => {
 
 async function renderList(): Promise<void> {
   await act(async () => {
-    render(createElement(NoteList))
+    render(createElement(NoteList), { wrapper: TooltipProvider })
   })
   await settle()
 }

@@ -43,9 +43,10 @@ const { notvex } = await import('@/lib/ipc')
 const { Setup } = await import('@/views/setup')
 const { useVaultStore } = await import('@/store/vault.store')
 const { usePrefsStore } = await import('@/store/prefs.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 async function finishSetup(): Promise<void> {
-  render(createElement(Setup))
+  render(createElement(Setup), { wrapper: TooltipProvider })
   fireEvent.change(screen.getByLabelText('Master password'), { target: { value: PASSWORD } })
   fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: PASSWORD } })
   fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
@@ -95,7 +96,7 @@ describe('Setup finish', () => {
           finishLoad = () => resolve({ success: true, data: prefsAfterCreate })
         })
     )
-    render(createElement(Setup))
+    render(createElement(Setup), { wrapper: TooltipProvider })
     fireEvent.change(screen.getByLabelText('Master password'), { target: { value: PASSWORD } })
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: PASSWORD } })
     fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
@@ -126,7 +127,7 @@ describe('Setup on first run', () => {
 
   // Prefs still have no vault until Setup finishes, so only this path tells Unlock where it is.
   it('a lock on the recovery step leaves Unlock pointed at the created vault', async () => {
-    render(createElement(Setup))
+    render(createElement(Setup), { wrapper: TooltipProvider })
     fireEvent.click(
       screen.getByPlaceholderText('Choose where to save…').nextElementSibling as HTMLElement
     )

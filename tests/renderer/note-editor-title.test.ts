@@ -33,6 +33,7 @@ vi.mock('@/lib/ipc', () => ({
 const { NoteEditor } = await import('@/components/note-editor')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 function note(id: string, title: string): Note {
   return {
@@ -77,7 +78,7 @@ describe('NoteEditor — title persistence', () => {
     ipc.get.mockResolvedValue({ success: true, data: { ...note('t', 'Old'), isTrashed: true } })
     useVaultStore.setState({ activeNoteId: 't' })
 
-    const view = render(createElement(NoteEditor))
+    const view = render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(titleInput().value).toBe('Old'))
 
     fireEvent.change(titleInput(), { target: { value: 'Old renamed' } })
@@ -92,7 +93,7 @@ describe('NoteEditor — title persistence', () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', 'A') })
     useVaultStore.setState({ activeNoteId: 'a' })
 
-    const view = render(createElement(NoteEditor))
+    const view = render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(titleInput().value).toBe('A'))
 
     fireEvent.change(titleInput(), { target: { value: 'A renamed' } })
@@ -111,7 +112,7 @@ describe('NoteEditor — title persistence', () => {
     ipc.get.mockResolvedValue({ success: true, data: note('a', 'A') })
     useVaultStore.setState({ activeNoteId: 'a' })
 
-    render(createElement(NoteEditor))
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
     await waitFor(() => expect(titleInput().value).toBe('A'))
 
     const slowSave = deferred<{ success: true; data: null }>()

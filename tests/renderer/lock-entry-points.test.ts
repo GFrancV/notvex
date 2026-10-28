@@ -48,6 +48,7 @@ vi.mock('@/components/dialogs/ReloadWindowDialog', () => ({ ReloadWindowDialog: 
 
 const { default: App } = await import('@/App')
 const { useVaultStore } = await import('@/store/vault.store')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 const tag: Tag = { id: 't1', name: 'secret tag', color: '#888888', createdAt: 0 }
 const note: NoteListItem = {
@@ -63,7 +64,7 @@ const note: NoteListItem = {
 
 // With no recent vaults, App's startup settles on 'uninitialized'; the session is seeded after.
 const renderUnlockedApp = async (extra: { needsRecoveryReset?: boolean } = {}): Promise<void> => {
-  render(createElement(App))
+  render(createElement(App), { wrapper: TooltipProvider })
   await waitFor(() => expect(useVaultStore.getState().status).toBe('uninitialized'))
   act(() => {
     useVaultStore.setState({

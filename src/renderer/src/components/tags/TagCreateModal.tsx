@@ -9,6 +9,7 @@ import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Field, FieldError, FieldLabel } from '../ui/field'
 import { Input } from '../ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 interface TagCreateModalProps {
   open: boolean
@@ -83,20 +84,23 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
             <FieldLabel>Color</FieldLabel>
             <div className="flex flex-wrap gap-2">
               {PRESET_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  aria-label={`Color: ${COLOR_NAMES[c] ?? c}`}
-                  aria-pressed={color === c}
-                  title={COLOR_NAMES[c] ?? c}
-                  className={`h-5 w-5 rounded-full transition-all ${
-                    color === c
-                      ? 'ring-offset-background ring-foreground scale-110 ring-2 ring-offset-1'
-                      : 'opacity-70 hover:opacity-100'
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
+                <Tooltip key={c}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setColor(c)}
+                      aria-label={`Color: ${COLOR_NAMES[c] ?? c}`}
+                      aria-pressed={color === c}
+                      className={`h-5 w-5 rounded-full transition-all ${
+                        color === c
+                          ? 'ring-offset-background ring-foreground scale-110 ring-2 ring-offset-1'
+                          : 'opacity-70 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>{COLOR_NAMES[c] ?? c}</TooltipContent>
+                </Tooltip>
               ))}
             </div>
           </Field>
