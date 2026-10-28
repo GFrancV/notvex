@@ -188,6 +188,13 @@ through Tailwind classes using the tokens above.
 <Button>Report bug</Button>
 ```
 
+### 6. Hints and shortcuts
+
+- **Hover hints use `Tooltip`, never `title=`.** A native title ignores the theme and the delay.
+  An icon-only button also gets an `aria-label`: a tooltip describes, it doesn't name.
+- **Shortcuts use `<Shortcut keys="Mod-Shift-e" />`** (CodeMirror notation), never hand-written
+  key text. It shows `Ctrl Shift E`, or `⌘ ⇧ E` on macOS.
+
 ---
 
 ## Security Rules — never violate these
