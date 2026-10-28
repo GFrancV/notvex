@@ -29,7 +29,9 @@ const Toaster = ({ ...props }: ToasterProps): ReactNode => {
           toast: 'group !border transition-colors',
           success: '!border-primary/40 !border-l-[3px] !border-l-primary',
           error: '!border-destructive/40 !border-l-[3px] !border-l-destructive',
-          warning: '!border-warning/40 !border-l-[3px] !border-l-warning'
+          warning: '!border-warning/40 !border-l-[3px] !border-l-warning',
+          // Sonner inverts the toast's colors for its action button; match Button's secondary.
+          actionButton: '!bg-secondary !text-secondary-foreground hover:!bg-secondary/80'
         }
       }}
       style={

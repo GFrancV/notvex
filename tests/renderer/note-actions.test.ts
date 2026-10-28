@@ -27,7 +27,8 @@ const ipc = vi.hoisted(() => ({
 
 const toastError = vi.hoisted(() => vi.fn())
 
-vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(toast, { error: toastError }) }))
 
 // Radix menus keep module-level state that leaks between jsdom tests; render items inline.
 vi.mock('@/components/ui/dropdown-menu', async () => {
@@ -310,6 +311,51 @@ describe('useTrashNote', () => {
     expect(toastError).toHaveBeenCalledWith('DB locked')
     expect(useVaultStore.getState().activeNoteId).toBe('a')
     expect(ipc.list).not.toHaveBeenCalled()
+  })
+
+  async function trashAndUndo(id: string, beforeUndo?: () => void): Promise<void> {
+    ipc.trash.mockResolvedValue({ success: true, data: null })
+    const { result } = renderHook(() => useTrashNote())
+    await act(async () => {
+      await result.current(id)
+    })
+    const [message, options] = toast.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } }
+    ]
+    expect(message).toBe('Moved to trash')
+    expect(options.action.label).toBe('Undo')
+    beforeUndo?.()
+    await act(async () => {
+      options.action.onClick()
+    })
+  }
+
+  it('offers Undo, which restores the note and reopens it', async () => {
+    ipc.restore.mockResolvedValue({ success: true, data: null })
+
+    await trashAndUndo('a')
+
+    expect(ipc.restore).toHaveBeenCalledExactlyOnceWith('a')
+    await waitFor(() => expect(useVaultStore.getState().activeNoteId).toBe('a'))
+  })
+
+  it('Undo leaves a note opened in the meantime alone', async () => {
+    ipc.restore.mockResolvedValue({ success: true, data: null })
+
+    await trashAndUndo('a', () => useVaultStore.setState({ activeNoteId: 'b' }))
+
+    await waitFor(() => expect(ipc.restore).toHaveBeenCalledWith('a'))
+    expect(useVaultStore.getState().activeNoteId).toBe('b')
+  })
+
+  it('Undo shows the error and keeps the note closed when the restore fails', async () => {
+    ipc.restore.mockRejectedValue(new Error('vault locked'))
+
+    await trashAndUndo('a')
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to restore note'))
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
   })
 
   it('treats a rejected invoke as a failure', async () => {
