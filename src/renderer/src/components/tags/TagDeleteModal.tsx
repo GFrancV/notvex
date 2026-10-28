@@ -34,7 +34,6 @@ export function TagDeleteModal({ open, onClose, tag }: TagDeleteModalProps): Rea
     try {
       await deleteTag(tag.id)
       if (activeTags.includes(tag.id)) clearActiveTags()
-      toast.success('Tag deleted')
       onClose()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete tag')

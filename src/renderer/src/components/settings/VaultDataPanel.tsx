@@ -29,7 +29,7 @@ const handleSaveCopy = async (): Promise<void> => {
     return
   }
   if (result.data) {
-    toast.success('Copy saved successfully', { id: toastId })
+    toast.success('Copy saved', { id: toastId })
   } else {
     toast.dismiss(toastId) // user canceled the save dialog
   }

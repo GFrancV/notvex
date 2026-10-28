@@ -40,10 +40,8 @@ export function TagCreateModal({ open, onClose, editTag }: TagCreateModalProps):
         // would make a color-only edit fail.
         const trimmed = name.trim()
         await updateTag(editTag.id, trimmed === editTag.name ? { color } : { name: trimmed, color })
-        toast.success('Tag updated')
       } else {
         await createTag({ name: name.trim(), color })
-        toast.success('Tag created')
       }
       setName('')
       onClose()

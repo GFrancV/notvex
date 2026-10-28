@@ -56,7 +56,7 @@ export function PostRecoveryReset(): ReactNode {
     await notvex.vault.confirmRecoverySaved()
     setMnemonic('')
     setNeedsRecoveryReset(false)
-    toast.success('Password updated successfully')
+    toast.success('Password updated')
   }
 
   return (
