@@ -176,6 +176,9 @@ through Tailwind classes using the tokens above.
   shadcn's style (`text-xs font-medium text-muted-foreground`), not uppercase.
 - **Errors start "Couldn't …"** (`Couldn't move the note to the trash`), never "Failed to …" or
   "Could not …". This covers main's IPC errors too, since the renderer shows them as-is.
+- **A field's validation message says what to do** (`Use at least 12 characters`,
+  `Passwords don't match`), shown as a `FieldError` once the field is left or the form submitted.
+  "Couldn't …" is for an action that failed.
 - **Success toasts only when the result isn't on screen** (copied, exported, logs cleared), and
   never "successfully". A change the user can see (a new tag in the sidebar) needs no toast.
 

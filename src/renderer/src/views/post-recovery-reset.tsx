@@ -1,17 +1,16 @@
 import { type ReactNode, useEffect, useState } from 'react'
 
-import { AlertTriangleIcon, InfoIcon, KeyRoundIcon, LockIcon } from 'lucide-react'
+import { KeyRoundIcon, LockIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
-import { passwordStrength } from '@/lib/utils'
+import { confirmError, newPasswordError } from '@/lib/password-rules'
 import { useVaultStore } from '@/store/vault.store'
 
 type Step = 'password' | 'recovery'
@@ -25,7 +24,6 @@ export function PostRecoveryReset(): ReactNode {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [mnemonic, setMnemonic] = useState('')
-  const [confirmed, setConfirmed] = useState(false)
   const [hadKeyFile, setHadKeyFile] = useState(false)
 
   useEffect(() => {
@@ -34,13 +32,14 @@ export function PostRecoveryReset(): ReactNode {
     })
   }, [])
 
-  const passwordsMatch = newPassword === confirmPassword
-  const confirmTouched = confirmPassword.length > 0
-  const strength = passwordStrength(newPassword)
-  const canSubmit = !loading && passwordsMatch && (strength === 'medium' || strength === 'strong')
+  const fields = useFieldErrors({
+    newPassword: newPasswordError(newPassword),
+    confirm: confirmError(newPassword, confirmPassword)
+  })
 
   const handleSetPassword = async (): Promise<void> => {
     setError('')
+    if (!fields.submit()) return
     setLoading(true)
     const res = await notvex.vault.rotateCredentials(newPassword)
     setLoading(false)
@@ -80,42 +79,42 @@ export function PostRecoveryReset(): ReactNode {
             </div>
 
             <FieldGroup>
-              <Field>
+              <Field data-invalid={!!fields.error('newPassword')}>
                 <FieldLabel htmlFor="new-password">New password</FieldLabel>
                 <PasswordInput
                   id="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  onBlur={fields.touch('newPassword')}
                   placeholder="At least 12 characters"
+                  aria-invalid={!!fields.error('newPassword')}
                 />
                 {newPassword.length > 0 && <PasswordStrengthBar password={newPassword} />}
+                <FieldError>{fields.error('newPassword')}</FieldError>
               </Field>
 
-              <Field data-invalid={confirmTouched && !passwordsMatch}>
+              <Field data-invalid={!!fields.error('confirm')}>
                 <FieldLabel htmlFor="confirm-password">Confirm new password</FieldLabel>
                 <PasswordInput
                   id="confirm-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  onBlur={fields.touch('confirm')}
                   placeholder="Repeat password"
                   onKeyDown={(e): void => {
-                    if (e.key === 'Enter' && canSubmit) void handleSetPassword()
+                    if (e.key === 'Enter' && !loading) void handleSetPassword()
                   }}
-                  aria-invalid={confirmTouched && !passwordsMatch}
+                  aria-invalid={!!fields.error('confirm')}
                 />
-                {confirmTouched && !passwordsMatch && (
-                  <FieldDescription className="text-destructive">
-                    ✕ Passwords do not match
-                  </FieldDescription>
-                )}
+                <FieldError>{fields.error('confirm')}</FieldError>
               </Field>
             </FieldGroup>
 
-            {error && <p className="text-destructive text-sm">{error}</p>}
+            <FieldError>{error}</FieldError>
 
             <Button
               className="w-full"
-              disabled={!canSubmit}
+              disabled={loading}
               onClick={(): void => {
                 void handleSetPassword()
               }}
@@ -134,48 +133,17 @@ export function PostRecoveryReset(): ReactNode {
               </div>
             </div>
 
-            <Alert variant="warning">
-              <AlertTriangleIcon />
-              <AlertDescription>
-                Your recovery key has changed and the previous one no longer works. Write it down by
-                hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t be
-                shown again.
-              </AlertDescription>
-            </Alert>
-
-            <RecoveryWordsGrid mnemonic={mnemonic} />
-
-            {hadKeyFile && (
-              <Alert className="border-border border">
-                <InfoIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
-                <AlertDescription className="text-muted-foreground text-sm">
-                  Your key file has not changed. You will still need it along with your new password
-                  to unlock your vault.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <Field orientation="horizontal">
-              <Checkbox
-                id="confirm-recovery"
-                checked={confirmed}
-                onCheckedChange={(c) => setConfirmed(c === true)}
-              />
-              <FieldLabel htmlFor="confirm-recovery">
-                I&apos;ve saved my recovery key somewhere safe. I understand I cannot recover it if
-                lost.
-              </FieldLabel>
-            </Field>
-
-            <Button
-              className="w-full"
-              disabled={!confirmed}
-              onClick={(): void => {
-                void handleContinue()
-              }}
-            >
-              Continue to my notes
-            </Button>
+            <RecoveryKeyStep
+              mnemonic={mnemonic}
+              context={KEY_REPLACED}
+              note={
+                hadKeyFile
+                  ? 'Your key file has not changed. You will still need it along with your new password to unlock your vault.'
+                  : undefined
+              }
+              confirmLabel="Done"
+              onConfirm={() => void handleContinue()}
+            />
           </div>
         )}
       </div>

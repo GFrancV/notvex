@@ -1,13 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { AlertTriangleIcon } from 'lucide-react'
-
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
 
@@ -30,7 +27,6 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
   // Shared with Settings: Ctrl+L also waits on it (see settingsLocked).
   const locked = useUiStore((s) => s.settingsLocked)
   const setLocked = useUiStore((s) => s.setSettingsLocked)
@@ -44,10 +40,14 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
     })
   }, [])
 
-  const canSubmit = !loading && password !== '' && (!hasKeyFile || keyFileContents !== null)
+  const fields = useFieldErrors({
+    password: password ? null : 'Enter your password',
+    keyFile: hasKeyFile && !keyFileContents ? 'Choose your key file' : null
+  })
 
   const handleGenerate = async (): Promise<void> => {
     setError('')
+    if (loading || !fields.submit()) return
     setLoading(true)
     setLocked(true)
     // A rejected call must still release the lock, or the dialog could never be left.
@@ -87,7 +87,7 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
             <p className="text-muted-foreground text-sm">
               If you didn&apos;t save it, generate a new one now. Your password stays the same.
             </p>
-            <Field>
+            <Field data-invalid={!!fields.error('password')}>
               <FieldLabel htmlFor="regenerate-password">Password</FieldLabel>
               <PasswordInput
                 id="regenerate-password"
@@ -95,28 +95,32 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
                 value={password}
                 disabled={loading}
                 onChange={(e) => setPassword(e.target.value)}
+                onBlur={fields.touch('password')}
                 onKeyDown={(e): void => {
-                  if (e.key === 'Enter' && canSubmit) void handleGenerate()
+                  if (e.key === 'Enter') void handleGenerate()
                 }}
+                aria-invalid={!!fields.error('password')}
               />
+              <FieldError>{fields.error('password')}</FieldError>
             </Field>
             {hasKeyFile && (
-              <Field>
+              <Field data-invalid={!!fields.error('keyFile')}>
                 <FieldLabel>Key file</FieldLabel>
                 <KeyFileInput
                   disabled={loading}
                   onChange={(c) => setKeyFileContents(c)}
                   onClear={() => setKeyFileContents(null)}
                 />
+                <FieldError>{fields.error('keyFile')}</FieldError>
               </Field>
             )}
-            {error && <p className="text-destructive text-sm">{error}</p>}
+            <FieldError>{error}</FieldError>
             <DialogFooter>
               <Button variant="ghost" disabled={loading} onClick={() => setOpen(false)}>
                 Later
               </Button>
               <Button
-                disabled={!canSubmit}
+                disabled={loading}
                 onClick={(): void => {
                   void handleGenerate()
                 }}
@@ -127,30 +131,12 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
           </div>
         ) : (
           <div className="space-y-4">
-            <Alert variant="warning">
-              <AlertTriangleIcon />
-              <AlertDescription>
-                Write it down by hand or copy it on a device you trust, and keep it somewhere safe.
-                It won&apos;t be shown again.
-              </AlertDescription>
-            </Alert>
-
-            <RecoveryWordsGrid mnemonic={mnemonic} />
-
-            <Field orientation="horizontal">
-              <Checkbox
-                id="regenerate-confirm-recovery"
-                checked={mnemonicConfirmed}
-                onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
-              />
-              <FieldLabel htmlFor="regenerate-confirm-recovery">
-                I&apos;ve saved my new recovery key somewhere safe.
-              </FieldLabel>
-            </Field>
-
-            <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
-              Done
-            </Button>
+            <RecoveryKeyStep
+              mnemonic={mnemonic}
+              context={KEY_REPLACED}
+              confirmLabel="Done"
+              onConfirm={finish}
+            />
           </div>
         )}
       </DialogContent>

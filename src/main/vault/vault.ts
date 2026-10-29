@@ -9,7 +9,7 @@ import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 
-import { CURRENT_VERSION_MIN, type VaultVersion } from '@shared/types'
+import { CURRENT_VERSION_MIN, PASSWORD_MIN_LENGTH, type VaultVersion } from '@shared/types'
 import { logError } from '../log'
 import { runMigrations, type SchemaMigrationGate } from '../db/migrations'
 import { dbAll, dbGet, dbRun } from '../db/queries'
@@ -302,6 +302,15 @@ export interface CreateVaultResult {
   mnemonic: string
 }
 
+// Runs before any KDF work, so a refused password costs nothing.
+function requireNewPasswordLength(password: string): void {
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    throw new Error(
+      `Couldn't set the password: it needs at least ${PASSWORD_MIN_LENGTH} characters`
+    )
+  }
+}
+
 export async function createVault(
   filePath: string,
   password: string,
@@ -309,12 +318,7 @@ export async function createVault(
 ): Promise<CreateVaultResult> {
   await initSodium()
 
-  if (!password || password.trim().length === 0) {
-    throw new Error('PASSWORD_EMPTY')
-  }
-  if (password.length < 8) {
-    throw new Error('PASSWORD_TOO_SHORT')
-  }
+  requireNewPasswordLength(password)
 
   if (existsSync(filePath) && isValidNotvexFile(filePath)) {
     throw new Error('A vault already exists at this location.')
@@ -615,6 +619,7 @@ async function doChangePassword(
   newPassword: string,
   keyFileContents?: Uint8Array
 ): Promise<{ mnemonic: string }> {
+  requireNewPasswordLength(newPassword)
   if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
@@ -714,6 +719,7 @@ export function rotateVaultCredentials(newPassword: string): Promise<{ mnemonic:
 }
 
 async function doRotateVaultCredentials(newPassword: string): Promise<{ mnemonic: string }> {
+  requireNewPasswordLength(newPassword)
   if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }

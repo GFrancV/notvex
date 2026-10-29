@@ -4,11 +4,11 @@ import { AlertTriangleIcon } from 'lucide-react'
 
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
+import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
 import { SubpageHeader } from './SettingRow'
 
@@ -39,15 +39,17 @@ export function KeyFilePanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
 
-  const canSubmit = !loading && password !== '' && keyFile !== null
+  const fields = useFieldErrors({
+    keyFile: keyFile ? null : 'Choose your key file',
+    password: password ? null : 'Enter your current password'
+  })
   const submitLabel = adding
     ? { idle: 'Activate', busy: 'Activating…' }
     : { idle: 'Remove', busy: 'Removing…' }
 
   const handleSubmit = async (): Promise<void> => {
-    if (!canSubmit || !keyFile) return
+    if (loading || !fields.submit() || !keyFile) return
     setLoading(true)
     setError('')
     onLockChange(true)
@@ -104,7 +106,7 @@ export function KeyFilePanel({
             </AlertDescription>
           </Alert>
 
-          <Field>
+          <Field data-invalid={!!fields.error('keyFile')}>
             <FieldLabel>Key file</FieldLabel>
             <KeyFileInput
               initialFile={
@@ -122,23 +124,27 @@ export function KeyFilePanel({
                 generated .nvxkey file.
               </p>
             )}
+            <FieldError>{fields.error('keyFile')}</FieldError>
           </Field>
 
-          <Field>
+          <Field data-invalid={!!fields.error('password')}>
             <FieldLabel htmlFor="kf-password">Current password</FieldLabel>
             <PasswordInput
               id="kf-password"
               autoFocus={adding}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onBlur={fields.touch('password')}
               placeholder="Enter your password to confirm"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleSubmit()
               }}
+              aria-invalid={!!fields.error('password')}
             />
+            <FieldError>{fields.error('password')}</FieldError>
           </Field>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          <FieldError>{error}</FieldError>
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={onBack} disabled={loading}>
@@ -147,7 +153,7 @@ export function KeyFilePanel({
             <Button
               size="sm"
               variant={adding ? 'default' : 'destructive'}
-              disabled={!canSubmit}
+              disabled={loading}
               onClick={() => void handleSubmit()}
             >
               {loading ? submitLabel.busy : submitLabel.idle}
@@ -157,30 +163,12 @@ export function KeyFilePanel({
       ) : (
         <div className="space-y-4">
           <h3 className="font-semibold">Save your new recovery key</h3>
-          <Alert variant="warning">
-            <AlertTriangleIcon />
-            <AlertDescription>
-              <p>
-                Key file {adding ? 'activated' : 'removed'}. Your recovery key has changed and the
-                previous one no longer works. Write it down by hand or copy it on a device you
-                trust, and keep it somewhere safe. It won&apos;t be shown again.
-              </p>
-            </AlertDescription>
-          </Alert>
-          <RecoveryWordsGrid mnemonic={mnemonic} />
-          <Field orientation="horizontal">
-            <Checkbox
-              id="kf-confirm"
-              checked={mnemonicConfirmed}
-              onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
-            />
-            <FieldLabel htmlFor="kf-confirm">
-              I&apos;ve saved my new recovery key somewhere safe.
-            </FieldLabel>
-          </Field>
-          <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
-            Done
-          </Button>
+          <RecoveryKeyStep
+            mnemonic={mnemonic}
+            context={`Key file ${adding ? 'activated' : 'removed'}. ${KEY_REPLACED}`}
+            confirmLabel="Done"
+            onConfirm={finish}
+          />
         </div>
       )}
     </div>

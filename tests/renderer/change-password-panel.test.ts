@@ -84,7 +84,7 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(true)
     expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()
@@ -99,7 +99,7 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     await submitValidForm()
 
     await screen.findByRole('heading', { name: 'Save your new recovery key' })
-    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(onLockChange).toHaveBeenLastCalledWith(false)
@@ -122,5 +122,52 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     expect(onLockChange.mock.calls).toEqual([[true], [false]])
     expect(screen.getByText('Incorrect password')).toBeTruthy()
     expect(back().hasAttribute('disabled')).toBe(false)
+  })
+})
+
+describe('ChangePasswordPanel: validation', () => {
+  const errors = (): string[] => screen.queryAllByRole('alert').map((e) => e.textContent ?? '')
+
+  beforeEach(async () => {
+    await act(async () => {
+      render(createElement(ChangePasswordPanel, { onBack, onLockChange }))
+    })
+  })
+
+  it('says why the new password is refused when it matches the current one', () => {
+    fireEvent.change(screen.getByLabelText('Current password'), {
+      target: { value: 'same password 1' }
+    })
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'same password 1' }
+    })
+    fireEvent.blur(screen.getByLabelText('New password'))
+
+    expect(errors()).toEqual(['Use a different password from the current one'])
+  })
+
+  it('shows every error on submit and changes nothing; the button stays usable', async () => {
+    const button = screen.getByRole('button', { name: 'Change password' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+
+    await act(async () => {
+      fireEvent.click(button)
+    })
+
+    expect(errors()).toEqual(['Enter your current password', 'Use at least 12 characters'])
+    expect(ipc.changePassword).not.toHaveBeenCalled()
+    expect(onLockChange).not.toHaveBeenCalled()
+  })
+
+  it('flags a confirmation that differs once it is left', () => {
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'new password 456' }
+    })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), {
+      target: { value: 'new password 45' }
+    })
+    fireEvent.blur(screen.getByLabelText('Confirm new password'))
+
+    expect(errors()).toEqual(["Passwords don't match"])
   })
 })

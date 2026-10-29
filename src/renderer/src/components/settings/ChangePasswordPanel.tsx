@@ -1,16 +1,14 @@
 import { type ReactNode, useEffect, useState } from 'react'
 
-import { AlertTriangleIcon } from 'lucide-react'
-
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
+import { confirmError, newPasswordError } from '@/lib/password-rules'
 import { SubpageHeader } from './SettingRow'
 
 interface ChangePasswordPanelProps {
@@ -30,7 +28,6 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
   const [hasKeyFile, setHasKeyFile] = useState(false)
   const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
 
@@ -40,16 +37,12 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
     })
   }, [])
 
-  const validationError = (): string => {
-    if (!currentPw || !newPw || !confirmPw) return 'All fields are required'
-    if (hasKeyFile && !keyFileContents) return 'Key file is required'
-    if (newPw.length < 12) return 'New password must be at least 12 characters'
-    if (newPw === currentPw) return 'New password must differ from the current one'
-    if (newPw !== confirmPw) return 'New passwords do not match'
-    return ''
-  }
-
-  const canSubmit = !loading && !validationError()
+  const fields = useFieldErrors({
+    current: currentPw ? null : 'Enter your current password',
+    keyFile: hasKeyFile && !keyFileContents ? 'Choose your key file' : null,
+    newPw: newPasswordError(newPw, currentPw),
+    confirm: confirmError(newPw, confirmPw)
+  })
 
   // Main has already re-keyed the vault by the time the mnemonic arrives, so it must be seen.
   const locked = loading || step === 'mnemonic'
@@ -62,12 +55,8 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
   }
 
   const handleSubmit = async (): Promise<void> => {
-    const ve = validationError()
-    if (ve) {
-      setError(ve)
-      return
-    }
     setError('')
+    if (!fields.submit()) return
     setLoading(true)
     onLockChange(true)
     // A rejected call must still release the lock, or the dialog could never be left.
@@ -96,55 +85,65 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
       {step === 'form' && (
         <div className="mt-2 space-y-4">
           {/* Current password */}
-          <Field>
+          <Field data-invalid={!!fields.error('current')}>
             <FieldLabel htmlFor="current-password">Current password</FieldLabel>
             <PasswordInput
               id="current-password"
               autoFocus
               value={currentPw}
               onChange={(e) => setCurrentPw(e.target.value)}
+              onBlur={fields.touch('current')}
               placeholder="Your current password"
+              aria-invalid={!!fields.error('current')}
             />
+            <FieldError>{fields.error('current')}</FieldError>
           </Field>
 
           {/* Key file (only shown when vault has one configured) */}
           {hasKeyFile && (
-            <Field>
+            <Field data-invalid={!!fields.error('keyFile')}>
               <FieldLabel>Key file</FieldLabel>
               <KeyFileInput
                 onChange={(c) => setKeyFileContents(c)}
                 onClear={() => setKeyFileContents(null)}
               />
+              <FieldError>{fields.error('keyFile')}</FieldError>
             </Field>
           )}
 
           {/* New password */}
-          <Field>
+          <Field data-invalid={!!fields.error('newPw')}>
             <FieldLabel htmlFor="new-password">New password</FieldLabel>
             <PasswordInput
               id="new-password"
               value={newPw}
               onChange={(e) => setNewPw(e.target.value)}
+              onBlur={fields.touch('newPw')}
               placeholder="At least 12 characters"
+              aria-invalid={!!fields.error('newPw')}
             />
             {newPw.length > 0 && <PasswordStrengthBar password={newPw} />}
+            <FieldError>{fields.error('newPw')}</FieldError>
           </Field>
 
           {/* Confirm new password */}
-          <Field>
+          <Field data-invalid={!!fields.error('confirm')}>
             <FieldLabel htmlFor="confirm-password">Confirm new password</FieldLabel>
             <PasswordInput
               id="confirm-password"
               value={confirmPw}
               onChange={(e) => setConfirmPw(e.target.value)}
+              onBlur={fields.touch('confirm')}
               placeholder="Repeat new password"
               onKeyDown={(e): void => {
-                if (e.key === 'Enter' && canSubmit) void handleSubmit()
+                if (e.key === 'Enter' && !loading) void handleSubmit()
               }}
+              aria-invalid={!!fields.error('confirm')}
             />
+            <FieldError>{fields.error('confirm')}</FieldError>
           </Field>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          <FieldError>{error}</FieldError>
 
           <div className="flex gap-3 pt-1">
             <Button variant="outline" className="flex-1" onClick={onBack} disabled={loading}>
@@ -155,7 +154,7 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
               onClick={(): void => {
                 void handleSubmit()
               }}
-              disabled={!canSubmit}
+              disabled={loading}
             >
               {loading ? 'Re-encrypting vault…' : 'Change password'}
             </Button>
@@ -166,31 +165,12 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
       {step === 'mnemonic' && (
         <div className="mt-2 space-y-4">
           <h3 className="font-semibold">Save your new recovery key</h3>
-          <Alert variant="warning">
-            <AlertTriangleIcon />
-            <AlertDescription>
-              Your recovery key has changed and the previous one no longer works. Write it down by
-              hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t be
-              shown again.
-            </AlertDescription>
-          </Alert>
-
-          <RecoveryWordsGrid mnemonic={mnemonic} />
-
-          <Field orientation="horizontal">
-            <Checkbox
-              id="cpd-confirm-recovery"
-              checked={mnemonicConfirmed}
-              onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
-            />
-            <FieldLabel htmlFor="cpd-confirm-recovery">
-              I&apos;ve saved my new recovery key somewhere safe.
-            </FieldLabel>
-          </Field>
-
-          <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
-            Done
-          </Button>
+          <RecoveryKeyStep
+            mnemonic={mnemonic}
+            context={KEY_REPLACED}
+            confirmLabel="Done"
+            onConfirm={finish}
+          />
         </div>
       )}
     </div>

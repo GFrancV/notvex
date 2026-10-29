@@ -1,21 +1,28 @@
 import { type ReactNode, useState } from 'react'
 
-import { AlertTriangleIcon, FolderOpenIcon } from 'lucide-react'
+import { FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useFieldErrors } from '@/hooks/use-field-errors'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
+import { confirmError, newPasswordError } from '@/lib/password-rules'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 
@@ -39,12 +46,13 @@ export function Setup(): ReactNode {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const passwordsMatch = password === confirm
-  const confirmTouched = confirm.length > 0
+  const fields = useFieldErrors({
+    password: newPasswordError(password),
+    confirm: confirmError(password, confirm)
+  })
 
   const handleChooseFile = async (): Promise<void> => {
     const res = await notvex.vault.chooseFile('new')
@@ -61,14 +69,7 @@ export function Setup(): ReactNode {
 
   const handleCreate = async (): Promise<void> => {
     setError('')
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters.')
-      return
-    }
-    if (!passwordsMatch) {
-      setError('Passwords do not match.')
-      return
-    }
+    if (!fields.submit()) return
     setLoading(true)
     const res = await notvex.vault.create(vaultPath, password)
     setLoading(false)
@@ -117,7 +118,7 @@ export function Setup(): ReactNode {
 
         {/* Step: Location */}
         {step === 'location' && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             <FieldGroup>
               <Field>
                 <FieldLabel>Vault file</FieldLabel>
@@ -154,14 +155,7 @@ export function Setup(): ReactNode {
               </Button>
             </FieldGroup>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="border-border w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-background text-muted-foreground px-2">or</span>
-              </div>
-            </div>
+            <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
 
             <Button variant="outline" className="w-full" onClick={handleOpenExisting}>
               Open existing vault
@@ -179,38 +173,38 @@ export function Setup(): ReactNode {
             </div>
 
             <FieldGroup>
-              <Field>
+              <Field data-invalid={!!fields.error('password')}>
                 <FieldLabel htmlFor="password">Master password</FieldLabel>
                 <PasswordInput
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onBlur={fields.touch('password')}
                   placeholder="At least 12 characters"
+                  aria-invalid={!!fields.error('password')}
                 />
                 {password.length > 0 && <PasswordStrengthBar password={password} />}
+                <FieldError>{fields.error('password')}</FieldError>
               </Field>
 
-              <Field data-invalid={confirmTouched && !passwordsMatch}>
+              <Field data-invalid={!!fields.error('confirm')}>
                 <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
                 <PasswordInput
                   id="confirm"
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
+                  onBlur={fields.touch('confirm')}
                   placeholder="Repeat password"
                   onKeyDown={(e): void => {
                     if (e.key === 'Enter') void handleCreate()
                   }}
-                  aria-invalid={confirmTouched && !passwordsMatch}
+                  aria-invalid={!!fields.error('confirm')}
                 />
-                {confirmTouched && !passwordsMatch && (
-                  <FieldDescription className="text-destructive">
-                    ✕ Passwords do not match
-                  </FieldDescription>
-                )}
+                <FieldError>{fields.error('confirm')}</FieldError>
               </Field>
             </FieldGroup>
 
-            {error && <p className="text-destructive text-sm">{error}</p>}
+            <FieldError>{error}</FieldError>
 
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setStep('location')}>
@@ -236,33 +230,13 @@ export function Setup(): ReactNode {
         {/* Step: Recovery key */}
         {step === 'recovery' && (
           <div className="space-y-6">
-            <Alert variant="warning">
-              <AlertTriangleIcon />
-              <AlertTitle>Save your recovery key</AlertTitle>
-              <AlertDescription>
-                If you lose your password, this is the only way to recover your notes. Write it down
-                by hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t
-                be shown again.
-              </AlertDescription>
-            </Alert>
-
-            <RecoveryWordsGrid mnemonic={mnemonic} />
-
-            <Field orientation="horizontal">
-              <Checkbox
-                id="setup-confirm-recovery"
-                checked={confirmed}
-                onCheckedChange={(c) => setConfirmed(c === true)}
-              />
-              <FieldLabel htmlFor="setup-confirm-recovery">
-                I&apos;ve saved my recovery key somewhere safe. I understand that if I lose both my
-                password and this key, my notes are irrecoverable.
-              </FieldLabel>
-            </Field>
-
-            <Button className="w-full" disabled={!confirmed} onClick={() => void handleFinish()}>
-              Start using Notvex
-            </Button>
+            <h3 className="font-semibold">Save your recovery key</h3>
+            <RecoveryKeyStep
+              mnemonic={mnemonic}
+              context="If you lose your password, this is the only way to recover your notes."
+              confirmLabel="Start using Notvex"
+              onConfirm={() => void handleFinish()}
+            />
           </div>
         )}
 
