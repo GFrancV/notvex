@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useFieldErrors } from '@/hooks/use-field-errors'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
@@ -48,11 +49,10 @@ export function Setup(): ReactNode {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // A field's error shows once it's been left, and every error once the form is submitted.
-  const [touched, setTouched] = useState({ password: false, confirm: false })
-  const [submitted, setSubmitted] = useState(false)
-  const passwordError = submitted || touched.password ? newPasswordError(password) : null
-  const confirmMismatch = submitted || touched.confirm ? confirmError(password, confirm) : null
+  const fields = useFieldErrors({
+    password: newPasswordError(password),
+    confirm: confirmError(password, confirm)
+  })
 
   const handleChooseFile = async (): Promise<void> => {
     const res = await notvex.vault.chooseFile('new')
@@ -69,8 +69,7 @@ export function Setup(): ReactNode {
 
   const handleCreate = async (): Promise<void> => {
     setError('')
-    setSubmitted(true)
-    if (newPasswordError(password) || confirmError(password, confirm)) return
+    if (!fields.submit()) return
     setLoading(true)
     const res = await notvex.vault.create(vaultPath, password)
     setLoading(false)
@@ -174,34 +173,34 @@ export function Setup(): ReactNode {
             </div>
 
             <FieldGroup>
-              <Field data-invalid={!!passwordError}>
+              <Field data-invalid={!!fields.error('password')}>
                 <FieldLabel htmlFor="password">Master password</FieldLabel>
                 <PasswordInput
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+                  onBlur={fields.touch('password')}
                   placeholder="At least 12 characters"
-                  aria-invalid={!!passwordError}
+                  aria-invalid={!!fields.error('password')}
                 />
                 {password.length > 0 && <PasswordStrengthBar password={password} />}
-                <FieldError>{passwordError}</FieldError>
+                <FieldError>{fields.error('password')}</FieldError>
               </Field>
 
-              <Field data-invalid={!!confirmMismatch}>
+              <Field data-invalid={!!fields.error('confirm')}>
                 <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
                 <PasswordInput
                   id="confirm"
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
-                  onBlur={() => setTouched((t) => ({ ...t, confirm: true }))}
+                  onBlur={fields.touch('confirm')}
                   placeholder="Repeat password"
                   onKeyDown={(e): void => {
                     if (e.key === 'Enter') void handleCreate()
                   }}
-                  aria-invalid={!!confirmMismatch}
+                  aria-invalid={!!fields.error('confirm')}
                 />
-                <FieldError>{confirmMismatch}</FieldError>
+                <FieldError>{fields.error('confirm')}</FieldError>
               </Field>
             </FieldGroup>
 
