@@ -123,7 +123,7 @@ export function VaultSwitcher(): ReactNode {
           Create new vault…
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={() => void lock()}>
+        <DropdownMenuItem onSelect={() => void lock()}>
           <LockIcon />
           Lock vault
         </DropdownMenuItem>

@@ -1,13 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import {
-  FileKeyIcon,
-  FolderOpenIcon,
-  LockIcon,
-  ShieldCheckIcon,
-  ShieldOffIcon,
-  Trash2Icon
-} from 'lucide-react'
+import { ShieldCheckIcon, ShieldOffIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -207,7 +200,6 @@ export function SecurityPanel({
             autoFocus={returnsFocusTo('password')}
             onClick={() => openSubpage({ kind: 'password' }, 'password')}
           >
-            <LockIcon />
             Change password
           </Button>
         </SettingRow>
@@ -237,7 +229,6 @@ export function SecurityPanel({
               autoFocus={returnsFocusTo('remove', 'generate', 'existing')}
               onClick={() => openSubpage({ kind: 'key-file', mode: { kind: 'remove' } }, 'remove')}
             >
-              <Trash2Icon />
               Remove…
             </Button>
           ) : (
@@ -248,7 +239,6 @@ export function SecurityPanel({
                 autoFocus={returnsFocusTo('generate', 'remove')}
                 onClick={() => void addKeyFile('generate')}
               >
-                <FileKeyIcon />
                 Generate…
               </Button>
               <Button
@@ -257,7 +247,6 @@ export function SecurityPanel({
                 autoFocus={returnsFocusTo('existing')}
                 onClick={() => void addKeyFile('existing')}
               >
-                <FolderOpenIcon />
                 Use existing…
               </Button>
             </div>

@@ -146,12 +146,11 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
 
           <FieldError>{error}</FieldError>
 
-          <div className="flex gap-3 pt-1">
-            <Button variant="outline" className="flex-1" onClick={onBack} disabled={loading}>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" onClick={onBack} disabled={loading}>
               Cancel
             </Button>
             <Button
-              className="flex-1"
               onClick={(): void => {
                 void handleSubmit()
               }}

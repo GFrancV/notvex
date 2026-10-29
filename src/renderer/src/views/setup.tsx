@@ -208,7 +208,7 @@ export function Setup(): ReactNode {
             <FieldError>{error}</FieldError>
 
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setStep('location')}>
+              <Button variant="ghost" className="flex-1" onClick={() => setStep('location')}>
                 Back
               </Button>
               <Button

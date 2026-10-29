@@ -148,11 +148,10 @@ export function KeyFilePanel({
           <FieldError>{error}</FieldError>
 
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={onBack} disabled={loading}>
+            <Button variant="ghost" onClick={onBack} disabled={loading}>
               Cancel
             </Button>
             <Button
-              size="sm"
               variant={adding ? 'default' : 'destructive'}
               disabled={loading}
               onClick={() => void handleSubmit()}

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { ExternalLinkIcon, RefreshCwIcon } from 'lucide-react'
+import { ExternalLinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
@@ -64,7 +64,7 @@ export function AboutPanel(): ReactNode {
             disabled={checking}
             onClick={() => void handleCheckForUpdates()}
           >
-            {checking ? <Spinner aria-hidden /> : <RefreshCwIcon />}
+            {checking && <Spinner aria-hidden />}
             {checking ? 'Checking…' : 'Check for updates'}
           </Button>
         </SettingRow>
