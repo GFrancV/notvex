@@ -53,6 +53,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from './ui/empty'
 import { Skeleton } from './ui/skeleton'
 import { Spinner } from './ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -357,15 +358,19 @@ export function NoteEditor(): ReactNode {
 
   if (!activeNoteId) {
     return (
-      <div className="text-muted-foreground flex flex-1 items-center justify-center select-none">
-        <div className="text-center">
-          <FileTextIcon className="mx-auto mb-3 h-12 w-12 opacity-20" />
-          <p className="text-sm">Select a note or create a new one</p>
-          <p className="mt-1 text-xs opacity-60">
+      <Empty className="select-none">
+        <EmptyHeader>
+          <EmptyMedia className="text-muted-foreground/30">
+            <FileTextIcon className="size-12" />
+          </EmptyMedia>
+          <EmptyTitle className="text-muted-foreground text-sm font-normal">
+            Select a note or create a new one
+          </EmptyTitle>
+          <EmptyDescription className="text-xs">
             <Shortcut keys="Mod-n" /> to create
-          </p>
-        </div>
-      </div>
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     )
   }
 

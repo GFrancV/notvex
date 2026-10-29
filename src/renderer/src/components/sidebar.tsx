@@ -27,6 +27,7 @@ import { TagDeleteModal } from './tags/TagDeleteModal'
 import { TagItem } from './tags/TagItem'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from './ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import {
   Sidebar as ShadcnSidebar,
@@ -232,10 +233,14 @@ export function Sidebar(): React.ReactNode {
           </Tooltip>
           <SidebarMenu>
             {tags.length === 0 ? (
-              <div className="px-2 py-1">
-                <p className="text-muted-foreground text-xs">No tags yet</p>
-                <p className="text-muted-foreground text-xs">Click + to create one</p>
-              </div>
+              <Empty className="gap-0 p-2 md:p-2">
+                <EmptyHeader className="gap-0">
+                  <EmptyTitle className="text-muted-foreground text-xs font-normal">
+                    No tags yet
+                  </EmptyTitle>
+                  <EmptyDescription className="text-xs">Click + to create one</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
               tags.map((tag) => (
                 <TagItem
