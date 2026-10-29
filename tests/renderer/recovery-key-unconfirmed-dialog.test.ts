@@ -77,7 +77,7 @@ describe('RecoveryKeyUnconfirmedDialog', () => {
     expect(screen.getByText('word23')).toBeTruthy()
     expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
     await click('Done')
 
     expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()

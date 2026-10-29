@@ -105,7 +105,7 @@ describe('KeyFilePanel: locking while the recovery key is at stake', () => {
     expect(back().hasAttribute('disabled')).toBe(true)
 
     expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()
@@ -180,7 +180,7 @@ describe('KeyFilePanel: removing the key file', () => {
     expect(back().hasAttribute('disabled')).toBe(true)
 
     expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()

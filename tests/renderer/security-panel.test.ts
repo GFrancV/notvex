@@ -46,7 +46,7 @@ async function confirmWithPassword(submit: string): Promise<void> {
     target: { value: 'my password 123' }
   })
   await click(submit)
-  fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+  fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
   await click('Done')
 }
 

@@ -4,10 +4,9 @@ import { AlertTriangleIcon } from 'lucide-react'
 
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
+import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { notvex } from '@/lib/ipc'
 import { SubpageHeader } from './SettingRow'
@@ -39,7 +38,6 @@ export function KeyFilePanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
 
   const canSubmit = !loading && password !== '' && keyFile !== null
   const submitLabel = adding
@@ -157,30 +155,12 @@ export function KeyFilePanel({
       ) : (
         <div className="space-y-4">
           <h3 className="font-semibold">Save your new recovery key</h3>
-          <Alert variant="warning">
-            <AlertTriangleIcon />
-            <AlertDescription>
-              <p>
-                Key file {adding ? 'activated' : 'removed'}. Your recovery key has changed and the
-                previous one no longer works. Write it down by hand or copy it on a device you
-                trust, and keep it somewhere safe. It won&apos;t be shown again.
-              </p>
-            </AlertDescription>
-          </Alert>
-          <RecoveryWordsGrid mnemonic={mnemonic} />
-          <Field orientation="horizontal">
-            <Checkbox
-              id="kf-confirm"
-              checked={mnemonicConfirmed}
-              onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
-            />
-            <FieldLabel htmlFor="kf-confirm">
-              I&apos;ve saved my new recovery key somewhere safe.
-            </FieldLabel>
-          </Field>
-          <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
-            Done
-          </Button>
+          <RecoveryKeyStep
+            mnemonic={mnemonic}
+            context={`Key file ${adding ? 'activated' : 'removed'}. ${KEY_REPLACED}`}
+            confirmLabel="Done"
+            onConfirm={finish}
+          />
         </div>
       )}
     </div>

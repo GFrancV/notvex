@@ -1,14 +1,10 @@
 import { type ReactNode, useEffect, useState } from 'react'
 
-import { AlertTriangleIcon } from 'lucide-react'
-
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { notvex } from '@/lib/ipc'
 import { SubpageHeader } from './SettingRow'
@@ -30,7 +26,6 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
   const [hasKeyFile, setHasKeyFile] = useState(false)
   const [keyFileContents, setKeyFileContents] = useState<Uint8Array | null>(null)
 
@@ -166,31 +161,12 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
       {step === 'mnemonic' && (
         <div className="mt-2 space-y-4">
           <h3 className="font-semibold">Save your new recovery key</h3>
-          <Alert variant="warning">
-            <AlertTriangleIcon />
-            <AlertDescription>
-              Your recovery key has changed and the previous one no longer works. Write it down by
-              hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t be
-              shown again.
-            </AlertDescription>
-          </Alert>
-
-          <RecoveryWordsGrid mnemonic={mnemonic} />
-
-          <Field orientation="horizontal">
-            <Checkbox
-              id="cpd-confirm-recovery"
-              checked={mnemonicConfirmed}
-              onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
-            />
-            <FieldLabel htmlFor="cpd-confirm-recovery">
-              I&apos;ve saved my new recovery key somewhere safe.
-            </FieldLabel>
-          </Field>
-
-          <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
-            Done
-          </Button>
+          <RecoveryKeyStep
+            mnemonic={mnemonic}
+            context={KEY_REPLACED}
+            confirmLabel="Done"
+            onConfirm={finish}
+          />
         </div>
       )}
     </div>

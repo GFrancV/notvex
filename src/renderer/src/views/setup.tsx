@@ -1,15 +1,13 @@
 import { type ReactNode, useState } from 'react'
 
-import { AlertTriangleIcon, FolderOpenIcon } from 'lucide-react'
+import { FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -39,7 +37,6 @@ export function Setup(): ReactNode {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -236,33 +233,13 @@ export function Setup(): ReactNode {
         {/* Step: Recovery key */}
         {step === 'recovery' && (
           <div className="space-y-6">
-            <Alert variant="warning">
-              <AlertTriangleIcon />
-              <AlertTitle>Save your recovery key</AlertTitle>
-              <AlertDescription>
-                If you lose your password, this is the only way to recover your notes. Write it down
-                by hand or copy it on a device you trust, and keep it somewhere safe. It won&apos;t
-                be shown again.
-              </AlertDescription>
-            </Alert>
-
-            <RecoveryWordsGrid mnemonic={mnemonic} />
-
-            <Field orientation="horizontal">
-              <Checkbox
-                id="setup-confirm-recovery"
-                checked={confirmed}
-                onCheckedChange={(c) => setConfirmed(c === true)}
-              />
-              <FieldLabel htmlFor="setup-confirm-recovery">
-                I&apos;ve saved my recovery key somewhere safe. I understand that if I lose both my
-                password and this key, my notes are irrecoverable.
-              </FieldLabel>
-            </Field>
-
-            <Button className="w-full" disabled={!confirmed} onClick={() => void handleFinish()}>
-              Start using Notvex
-            </Button>
+            <h3 className="font-semibold">Save your recovery key</h3>
+            <RecoveryKeyStep
+              mnemonic={mnemonic}
+              context="If you lose your password, this is the only way to recover your notes."
+              confirmLabel="Start using Notvex"
+              onConfirm={() => void handleFinish()}
+            />
           </div>
         )}
 

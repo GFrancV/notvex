@@ -84,7 +84,7 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(true)
     expect(ipc.confirmRecoverySaved).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()
@@ -99,7 +99,7 @@ describe('ChangePasswordPanel: locking while the recovery key is at stake', () =
     await submitValidForm()
 
     await screen.findByRole('heading', { name: 'Save your new recovery key' })
-    fireEvent.click(screen.getByLabelText(/i've saved my new recovery key/i))
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
     expect(onLockChange).toHaveBeenLastCalledWith(false)

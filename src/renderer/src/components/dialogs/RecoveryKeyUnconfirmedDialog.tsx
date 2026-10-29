@@ -1,13 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { AlertTriangleIcon } from 'lucide-react'
-
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
-import { RecoveryWordsGrid } from '@/components/recovery-words-grid'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -30,7 +26,6 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mnemonic, setMnemonic] = useState('')
-  const [mnemonicConfirmed, setMnemonicConfirmed] = useState(false)
   // Shared with Settings: Ctrl+L also waits on it (see settingsLocked).
   const locked = useUiStore((s) => s.settingsLocked)
   const setLocked = useUiStore((s) => s.setSettingsLocked)
@@ -127,30 +122,12 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
           </div>
         ) : (
           <div className="space-y-4">
-            <Alert variant="warning">
-              <AlertTriangleIcon />
-              <AlertDescription>
-                Write it down by hand or copy it on a device you trust, and keep it somewhere safe.
-                It won&apos;t be shown again.
-              </AlertDescription>
-            </Alert>
-
-            <RecoveryWordsGrid mnemonic={mnemonic} />
-
-            <Field orientation="horizontal">
-              <Checkbox
-                id="regenerate-confirm-recovery"
-                checked={mnemonicConfirmed}
-                onCheckedChange={(c) => setMnemonicConfirmed(c === true)}
-              />
-              <FieldLabel htmlFor="regenerate-confirm-recovery">
-                I&apos;ve saved my new recovery key somewhere safe.
-              </FieldLabel>
-            </Field>
-
-            <Button className="w-full" disabled={!mnemonicConfirmed} onClick={finish}>
-              Done
-            </Button>
+            <RecoveryKeyStep
+              mnemonic={mnemonic}
+              context={KEY_REPLACED}
+              confirmLabel="Done"
+              onConfirm={finish}
+            />
           </div>
         )}
       </DialogContent>
