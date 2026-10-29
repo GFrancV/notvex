@@ -142,7 +142,7 @@ describe('vault:select-key-file', () => {
 
     expect(await select()).toEqual({
       success: false,
-      error: 'Could not read the selected key file'
+      error: "Couldn't read the selected key file"
     })
     const fd = vi.mocked(openSync).mock.results[0]?.value
     expect(vi.mocked(closeSync).mock.calls).toEqual([[fd]])
@@ -159,7 +159,7 @@ describe('vault:select-key-file', () => {
 
     expect(await select()).toEqual({
       success: false,
-      error: 'Could not read the selected key file'
+      error: "Couldn't read the selected key file"
     })
   })
 
@@ -168,7 +168,7 @@ describe('vault:select-key-file', () => {
 
     const result = await select()
 
-    expect(result).toEqual({ success: false, error: 'Could not read the selected key file' })
+    expect(result).toEqual({ success: false, error: "Couldn't read the selected key file" })
   })
 
   it('returns null when the dialog is cancelled', async () => {
@@ -187,6 +187,6 @@ describe('vault:generate-key-file', () => {
 
     const result = await invoke('vault:generate-key-file')
 
-    expect(result).toEqual({ success: false, error: 'Could not save the key file' })
+    expect(result).toEqual({ success: false, error: "Couldn't save the key file" })
   })
 })

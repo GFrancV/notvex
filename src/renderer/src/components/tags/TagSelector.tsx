@@ -76,7 +76,7 @@ function AddTagList({ noteId, onDone }: { noteId: string; onDone: () => void }):
               value={tag.name}
               disabled={loading}
               onSelect={() =>
-                void assignAndClose(() => addTagToNote(noteId, tag.id), 'Failed to assign tag')
+                void assignAndClose(() => addTagToNote(noteId, tag.id), "Couldn't add the tag")
               }
             >
               <TagDot tag={tag} />
@@ -90,7 +90,7 @@ function AddTagList({ noteId, onDone }: { noteId: string; onDone: () => void }):
               onSelect={() =>
                 void assignAndClose(
                   () => createTagAndAssign(noteId, { name: trimmed, color: PRESET_COLORS[0] }),
-                  'Failed to create tag'
+                  "Couldn't create the tag"
                 )
               }
             >

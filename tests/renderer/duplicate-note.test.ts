@@ -215,7 +215,7 @@ describe('NoteEditor — Duplicate menu item', () => {
     // Waiting for the title means the note, and with it isTrashed, has loaded.
     await screen.findByDisplayValue('A')
 
-    expect(screen.getByRole('menuitem', { name: 'Move to trash' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: 'Duplicate' })).toBeNull()
   })
 })

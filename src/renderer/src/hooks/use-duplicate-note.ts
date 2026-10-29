@@ -20,7 +20,7 @@ export function useDuplicateNote(): (id: string) => Promise<void> {
         setActiveNoteId(copy.id)
         requestFocusTitle()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Failed to duplicate note')
+        toast.error(e instanceof Error ? e.message : "Couldn't duplicate the note")
       }
     },
     [duplicateNote, setActiveNoteId, requestFocusTitle]

@@ -7,11 +7,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Tag } from '@shared/types'
 
 vi.mock('@/lib/ipc', () => ({ notvex: {} }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const { TagCreateModal } = await import('@/components/tags/TagCreateModal')
 const { PRESET_COLORS } = await import('@/lib/tag-colors')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
+const { toast } = await import('sonner')
 
 // Longer than TAG_NAME_MAX, as tags stored before main enforced it can be.
 const legacy: Tag = { id: 't-old', name: 'a'.repeat(30), color: PRESET_COLORS[0], createdAt: 0 }
@@ -46,6 +48,8 @@ describe('TagCreateModal in edit mode', () => {
     await waitFor(() =>
       expect(updateTag).toHaveBeenCalledWith('t-old', { color: PRESET_COLORS[1] })
     )
+    // The sidebar shows the change; a toast would only repeat it.
+    expect(toast.success).not.toHaveBeenCalled()
   })
 
   it('sends the trimmed name when it changed', async () => {

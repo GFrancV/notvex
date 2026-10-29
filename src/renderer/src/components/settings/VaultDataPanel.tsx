@@ -25,11 +25,11 @@ const handleSaveCopy = async (): Promise<void> => {
   const toastId = toast.loading('Saving a copy…')
   const result = await notvex.vault.saveCopyAs()
   if (!result.success) {
-    toast.error('Failed to save copy', { id: toastId })
+    toast.error("Couldn't save the copy", { id: toastId })
     return
   }
   if (result.data) {
-    toast.success('Copy saved successfully', { id: toastId })
+    toast.success('Copy saved', { id: toastId })
   } else {
     toast.dismiss(toastId) // user canceled the save dialog
   }

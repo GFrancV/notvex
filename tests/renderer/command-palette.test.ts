@@ -184,6 +184,14 @@ describe('useCreateNote', () => {
     await act(() => result.current())
     expect(createNote).toHaveBeenCalledWith(undefined)
   })
+
+  it('leaves the trash, where a new note has no place', async () => {
+    useUiStore.setState({ showTrash: true })
+    const { result } = renderHook(() => useCreateNote())
+    await act(() => result.current())
+    expect(useUiStore.getState().showTrash).toBe(false)
+    expect(useVaultStore.getState().activeNoteId).toBe('n-new')
+  })
 })
 
 describe('command palette create note from query', () => {
@@ -242,7 +250,7 @@ describe('command palette create note from query', () => {
     openPalette([])
     type(query)
     await act(async () => fireEvent.click(screen.getByRole('option', { name })))
-    expect(toast.error).toHaveBeenCalledWith('Failed to create note')
+    expect(toast.error).toHaveBeenCalledWith("Couldn't create the note")
   })
 })
 
@@ -272,6 +280,26 @@ describe('command palette duplicate note', () => {
     fireEvent.click(duplicateOption()!)
     expect(duplicate).toHaveBeenCalledWith('n-1')
     expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+  })
+})
+
+describe('command palette note-editing commands', () => {
+  const editOptions = (): HTMLElement[] => [
+    ...screen.queryAllByRole('option', { name: /^Tag note with/ }),
+    ...screen.queryAllByRole('option', { name: /^Remove tag from note/ }),
+    ...screen.queryAllByRole('option', { name: /^Toggle reading view/ })
+  ]
+
+  it('are offered for the open note', () => {
+    useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
+    openPalette([note('n-1', 'alpha')])
+    expect(editOptions()).toHaveLength(3)
+  })
+
+  it('are hidden when the open note is in the trash, which is read-only', () => {
+    useVaultStore.setState({ activeNoteId: 'n-1', noteTagsMap: { 'n-1': ['t-1'] } })
+    openPalette([note('n-1', 'alpha', true)])
+    expect(editOptions()).toHaveLength(0)
   })
 })
 

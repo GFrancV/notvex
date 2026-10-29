@@ -86,7 +86,7 @@ describe('ExportWarningDialog', () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
     expect(onConfirm).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledWith(
-      'Your latest edits could not be saved, so nothing was exported'
+      "Your latest edits couldn't be saved, so nothing was exported"
     )
   })
 })

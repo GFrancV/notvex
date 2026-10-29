@@ -3,8 +3,10 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { TrashIcon } from 'lucide-react'
 
 import { useCreateNote } from '@/hooks/use-create-note'
+import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { useExportNote } from '@/hooks/use-export-note'
+import { useRestoreNote } from '@/hooks/use-restore-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
 import { notvex } from '@/lib/ipc'
@@ -22,8 +24,11 @@ import { TagFilter } from './tags/TagFilter'
 import { Button } from './ui/button'
 import { ScrollArea } from './ui/scroll-area'
 
+const LOADING_DELAY = 300
+
 export function NoteList(): ReactNode {
-  const { notes, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } = useVaultStore()
+  const { notes, notesTrashed, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } =
+    useVaultStore()
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
@@ -34,6 +39,20 @@ export function NoteList(): ReactNode {
   useEffect(() => {
     void loadNotes({ trashed: showTrash })
   }, [showTrash, showPinned, loadNotes])
+
+  // Until the new view's notes arrive, the loaded ones belong to the other view, and their rows
+  // would offer this view's actions (a live note with Delete permanently). Show none instead.
+  const loading = notesTrashed !== showTrash
+  const [slowLoad, setSlowLoad] = useState(false)
+  useEffect(() => {
+    if (!loading) return
+    // A fast load would only flash a loader, so it waits before saying anything.
+    const timer = setTimeout(() => setSlowLoad(true), LOADING_DELAY)
+    return (): void => {
+      clearTimeout(timer)
+      setSlowLoad(false)
+    }
+  }, [loading])
 
   const query = searchQuery.trim().toLowerCase()
 
@@ -74,22 +93,15 @@ export function NoteList(): ReactNode {
     [trashNote]
   )
 
+  const restoreNote = useRestoreNote()
   const handleRestore = useCallback(
     async (note: NoteListItem): Promise<void> => {
-      if (!(await ipcSucceeded(notvex.notes.restore(note.id), 'Failed to restore note'))) return
-      void loadNotes({ trashed: true })
+      await restoreNote(note.id)
     },
-    [loadNotes]
+    [restoreNote]
   )
 
-  const handleDelete = useCallback(
-    async (note: NoteListItem): Promise<void> => {
-      if (!(await ipcSucceeded(notvex.notes.delete(note.id), 'Failed to delete note'))) return
-      if (activeNoteId === note.id) setActiveNoteId(null)
-      void loadNotes({ trashed: true })
-    },
-    [activeNoteId, loadNotes, setActiveNoteId]
-  )
+  const deleteNote = useDeleteNote()
 
   const [pendingDelete, setPendingDelete] = useState<NoteListItem | null>(null)
   const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false)
@@ -98,7 +110,7 @@ export function NoteList(): ReactNode {
   }, [])
 
   const handleEmptyTrash = async (): Promise<void> => {
-    if (!(await ipcSucceeded(notvex.notes.emptyTrash(), 'Failed to empty trash'))) return
+    if (!(await ipcSucceeded(notvex.notes.emptyTrash(), "Couldn't empty the trash"))) return
     setActiveNoteId(null)
     void loadNotes({ trashed: true })
   }
@@ -134,7 +146,7 @@ export function NoteList(): ReactNode {
       <TagFilter count={filteredNotes.length} />
 
       {/* Empty trash button */}
-      {showTrash && notes.length > 0 && (
+      {showTrash && !loading && notes.length > 0 && (
         <div className="px-4 py-3">
           <Button
             variant="destructive"
@@ -151,7 +163,9 @@ export function NoteList(): ReactNode {
 
       {/* Padded inside the viewport so it doesn't clip the selection pill's overhang. */}
       <ScrollArea className="min-h-0 flex-1 [&>[data-slot=scroll-area-viewport]]:px-2.5">
-        {displayedNotes.length === 0 ? (
+        {loading ? (
+          slowLoad && <p className="text-muted-foreground p-8 text-center text-sm">Loading…</p>
+        ) : displayedNotes.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center justify-center p-8">
             <p className="text-sm">{emptyMessage()}</p>
             {!showTrash && !query && activeTags.length === 0 && (
@@ -193,7 +207,7 @@ export function NoteList(): ReactNode {
         description="This note will be deleted for good. It can't be undone."
         confirmLabel="Delete permanently"
         onConfirm={async () => {
-          if (pendingDelete) await handleDelete(pendingDelete)
+          if (pendingDelete) await deleteNote(pendingDelete.id)
         }}
       />
       <ConfirmDeleteDialog

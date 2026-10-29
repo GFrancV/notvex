@@ -271,7 +271,7 @@ export function Unlock(): ReactNode {
         {vaultExists === false && (
           <div className="space-y-4 rounded-lg border p-4">
             <p className="text-muted-foreground text-sm">
-              The vault file could not be found at the saved location.
+              The vault file couldn&apos;t be found at the saved location.
             </p>
 
             <div className="space-y-4">

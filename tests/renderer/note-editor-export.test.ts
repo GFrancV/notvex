@@ -107,12 +107,12 @@ describe('NoteEditor: Export note…', () => {
   })
 
   it('shows the error when the export fails', async () => {
-    ipc.export.mockResolvedValue({ success: false, error: 'Could not write the exported file' })
+    ipc.export.mockResolvedValue({ success: false, error: "Couldn't write the exported file" })
     await openWarning()
 
     await press('Export')
 
-    expect(toast.error).toHaveBeenCalledWith('Could not write the exported file')
+    expect(toast.error).toHaveBeenCalledWith("Couldn't write the exported file")
   })
 
   it('is not offered for a trashed note', async () => {
@@ -122,7 +122,7 @@ describe('NoteEditor: Export note…', () => {
     await screen.findByDisplayValue('Plan')
     fireEvent.keyDown(screen.getByRole('button', { name: 'Note actions' }), { key: 'Enter' })
 
-    await screen.findByRole('menuitem', { name: 'Move to trash' })
+    await screen.findByRole('menuitem', { name: 'Restore' })
     expect(screen.queryByRole('menuitem', { name: 'Export note…' })).toBeNull()
   })
 })

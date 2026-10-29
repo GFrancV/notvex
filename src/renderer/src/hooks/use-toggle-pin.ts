@@ -14,7 +14,7 @@ export function useTogglePin(): (note: { id: string; isPinned: boolean }) => Pro
       const pinned = !note.isPinned
       const saved = await ipcSucceeded(
         notvex.notes.update(note.id, { isPinned: pinned }),
-        'Failed to update note'
+        "Couldn't update the note"
       )
       if (saved) {
         // The editor reads the pin from this entry; don't wait for the reload to show it.

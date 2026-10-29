@@ -47,7 +47,12 @@ function note(overrides: Partial<NoteListItem> = {}): NoteListItem {
 function renderList(item: NoteListItem, inTrash: boolean): void {
   ipc.notes.list.mockImplementation(() => ok([item]))
   useUiStore.setState({ activeTags: [], searchQuery: '', showTrash: inTrash, showPinned: false })
-  useVaultStore.setState({ notes: [item], noteTagsMap: {}, activeNoteId: null })
+  useVaultStore.setState({
+    notes: [item],
+    notesTrashed: inTrash,
+    noteTagsMap: {},
+    activeNoteId: null
+  })
   render(createElement(NoteList), { wrapper: TooltipProvider })
 }
 

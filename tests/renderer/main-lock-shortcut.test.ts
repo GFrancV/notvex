@@ -71,3 +71,40 @@ describe('Main: Ctrl+L', () => {
     expect(useUiStore.getState().settingsLocked).toBe(false)
   })
 })
+
+describe('Main: Ctrl+Shift+E', () => {
+  const press = (): void => {
+    fireEvent.keyDown(window, { key: 'E', ctrlKey: true, shiftKey: true })
+  }
+
+  it('toggles the reading view', () => {
+    useUiStore.setState({ editorMode: 'editing' })
+
+    press()
+
+    expect(useUiStore.getState().editorMode).toBe('reading')
+  })
+
+  it('leaves the mode alone for a trashed note, which only has the reading view', () => {
+    useUiStore.setState({ editorMode: 'editing' })
+    useVaultStore.setState({
+      activeNoteId: 'a',
+      notes: [
+        {
+          id: 'a',
+          title: 'A',
+          isPinned: false,
+          isTrashed: true,
+          createdAt: 0,
+          updatedAt: 0,
+          trashedAt: 0,
+          tags: []
+        }
+      ]
+    })
+
+    press()
+
+    expect(useUiStore.getState().editorMode).toBe('editing')
+  })
+})

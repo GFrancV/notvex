@@ -8,7 +8,8 @@ import {
   render,
   renderHook,
   screen,
-  waitFor
+  waitFor,
+  within
 } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -27,7 +28,8 @@ const ipc = vi.hoisted(() => ({
 
 const toastError = vi.hoisted(() => vi.fn())
 
-vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(toast, { error: toastError }) }))
 
 // Radix menus keep module-level state that leaks between jsdom tests; render items inline.
 vi.mock('@/components/ui/dropdown-menu', async () => {
@@ -176,7 +178,7 @@ describe('useTogglePin', () => {
     })
 
     expect(ok).toBe(false)
-    expect(toastError).toHaveBeenCalledWith('Failed to update note')
+    expect(toastError).toHaveBeenCalledWith("Couldn't update the note")
   })
 })
 
@@ -312,6 +314,51 @@ describe('useTrashNote', () => {
     expect(ipc.list).not.toHaveBeenCalled()
   })
 
+  async function trashAndUndo(id: string, beforeUndo?: () => void): Promise<void> {
+    ipc.trash.mockResolvedValue({ success: true, data: null })
+    const { result } = renderHook(() => useTrashNote())
+    await act(async () => {
+      await result.current(id)
+    })
+    const [message, options] = toast.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } }
+    ]
+    expect(message).toBe('Moved to trash')
+    expect(options.action.label).toBe('Undo')
+    beforeUndo?.()
+    await act(async () => {
+      options.action.onClick()
+    })
+  }
+
+  it('offers Undo, which restores the note and reopens it', async () => {
+    ipc.restore.mockResolvedValue({ success: true, data: null })
+
+    await trashAndUndo('a')
+
+    expect(ipc.restore).toHaveBeenCalledExactlyOnceWith('a')
+    await waitFor(() => expect(useVaultStore.getState().activeNoteId).toBe('a'))
+  })
+
+  it('Undo leaves a note opened in the meantime alone', async () => {
+    ipc.restore.mockResolvedValue({ success: true, data: null })
+
+    await trashAndUndo('a', () => useVaultStore.setState({ activeNoteId: 'b' }))
+
+    await waitFor(() => expect(ipc.restore).toHaveBeenCalledWith('a'))
+    expect(useVaultStore.getState().activeNoteId).toBe('b')
+  })
+
+  it('Undo shows the error and keeps the note closed when the restore fails', async () => {
+    ipc.restore.mockRejectedValue(new Error('vault locked'))
+
+    await trashAndUndo('a')
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Couldn't restore the note"))
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
+  })
+
   it('treats a rejected invoke as a failure', async () => {
     ipc.trash.mockRejectedValue(new Error('channel closed'))
     const { result } = renderHook(() => useTrashNote())
@@ -320,7 +367,7 @@ describe('useTrashNote', () => {
       await result.current('a')
     })
 
-    expect(toastError).toHaveBeenCalledWith('Failed to move note to trash')
+    expect(toastError).toHaveBeenCalledWith("Couldn't move the note to the trash")
     expect(useVaultStore.getState().activeNoteId).toBe('a')
   })
 })
@@ -338,6 +385,71 @@ describe('NoteEditor — trash', () => {
 
     expect(toastError).toHaveBeenCalledWith('DB locked')
     expect(useVaultStore.getState().activeNoteId).toBe('a')
+  })
+})
+
+describe('NoteEditor — trashed note', () => {
+  async function openTrashed(): Promise<void> {
+    useUiStore.setState({ showTrash: true, editorMode: 'editing' })
+    useVaultStore.setState({
+      notes: [listItem('a', { isTrashed: true })],
+      tags: [{ id: 't-work', name: 'work', color: '#fff', createdAt: 0 }],
+      noteTagsMap: { a: ['t-work'] }
+    })
+    ipc.get.mockResolvedValue({ success: true, data: { ...note('a'), isTrashed: true } })
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    await screen.findByDisplayValue('A')
+  }
+
+  it('is read-only, only in reading view, and says how to edit it', async () => {
+    await openTrashed()
+
+    expect(screen.getByLabelText('Note title').hasAttribute('readonly')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Reading view' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    expect(screen.getByText('In the trash. Restore it to edit.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Pin' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add tag' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove tag work' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull()
+  })
+
+  it('offers the same actions as the list: Restore and Delete permanently', async () => {
+    await openTrashed()
+
+    const actions = screen.getAllByRole('menuitem').map((m) => m.textContent?.trim())
+    expect(actions).toEqual(['Restore', 'Delete permanently'])
+  })
+
+  it('becomes editable in place once restored, back in All notes', async () => {
+    ipc.restore.mockResolvedValue({ success: true, data: null })
+    await openTrashed()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Restore' }))
+    })
+
+    expect(ipc.restore).toHaveBeenCalledExactlyOnceWith('a')
+    expect(screen.getByLabelText('Note title').hasAttribute('readonly')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Pin' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reading view' })).toBeTruthy()
+    expect(useVaultStore.getState().activeNoteId).toBe('a')
+    expect(useUiStore.getState().showTrash).toBe(false)
+  })
+
+  it('confirms before deleting it for good, then closes it', async () => {
+    ipc.delete.mockResolvedValue({ success: true, data: null })
+    await openTrashed()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently' }))
+    expect(ipc.delete).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog', { name: 'Delete note permanently?' })
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete permanently' }))
+    })
+
+    expect(ipc.delete).toHaveBeenCalledExactlyOnceWith('a')
+    expect(useVaultStore.getState().activeNoteId).toBeNull()
   })
 })
 
@@ -422,7 +534,7 @@ describe('NoteList — trash view actions', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Empty trash' }))
     })
 
-    expect(toastError).toHaveBeenCalledWith('Failed to empty trash')
+    expect(toastError).toHaveBeenCalledWith("Couldn't empty the trash")
     expect(useVaultStore.getState().activeNoteId).toBe('a')
   })
 

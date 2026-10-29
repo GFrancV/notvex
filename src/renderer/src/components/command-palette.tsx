@@ -106,13 +106,15 @@ function PaletteContent(): ReactNode {
     try {
       await handleNewNote(title)
     } catch {
-      toast.error('Failed to create note')
+      toast.error("Couldn't create the note")
     }
   }
 
-  const noteHasTags = activeNoteId ? (noteTagsMap[activeNoteId] ?? []).length > 0 : false
   // notes includes trashed ones, and a trashed note can be open from the Trash view.
   const activeNote = notes.find((n) => n.id === activeNoteId)
+  // A trashed note is read-only: reading view only, and its tags can't change.
+  const canEdit = !activeNote?.isTrashed
+  const noteHasTags = activeNoteId ? (noteTagsMap[activeNoteId] ?? []).length > 0 : false
   const activeNotes = notes.filter((n) => !n.isTrashed)
   const shownNotes = query ? activeNotes : activeNotes.slice(0, RECENT_NOTES)
   const newTitle = query.trim()
@@ -137,16 +139,18 @@ function PaletteContent(): ReactNode {
               <Shortcut keys="Mod-n" />
             </CommandShortcut>
           </CommandItem>
-          <CommandItem
-            keywords={['preview', 'read mode', 'edit mode', 'markdown']}
-            onSelect={() => run(toggleEditorMode)}
-          >
-            <EyeIcon />
-            <span>Toggle reading view</span>
-            <CommandShortcut>
-              <Shortcut keys="Mod-Shift-e" />
-            </CommandShortcut>
-          </CommandItem>
+          {canEdit && (
+            <CommandItem
+              keywords={['preview', 'read mode', 'edit mode', 'markdown']}
+              onSelect={() => run(toggleEditorMode)}
+            >
+              <EyeIcon />
+              <span>Toggle reading view</span>
+              <CommandShortcut>
+                <Shortcut keys="Mod-Shift-e" />
+              </CommandShortcut>
+            </CommandItem>
+          )}
           <CommandItem
             keywords={['deleted notes', 'bin', 'recycle', 'restore']}
             onSelect={() => run(() => setShowTrash(true))}
@@ -171,7 +175,7 @@ function PaletteContent(): ReactNode {
               <Shortcut keys="Mod-r" />
             </CommandShortcut>
           </CommandItem>
-          {activeNoteId && (
+          {activeNoteId && canEdit && (
             <CommandItem
               keywords={['add tag', 'assign tag', 'label']}
               onSelect={() => run(() => setTagSelectorNoteId(activeNoteId))}
@@ -180,7 +184,7 @@ function PaletteContent(): ReactNode {
               <span>Tag note with…</span>
             </CommandItem>
           )}
-          {activeNoteId && noteHasTags && (
+          {activeNoteId && canEdit && noteHasTags && (
             <CommandItem
               keywords={['untag', 'delete tag', 'unlabel']}
               onSelect={() => run(() => setRemoveTagNoteId(activeNoteId))}

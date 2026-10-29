@@ -233,7 +233,7 @@ describe('notes:export', () => {
 
     const result = await invoke('notes:export', 'n1')
 
-    expect(result).toEqual({ success: false, error: 'Could not write the exported file' })
+    expect(result).toEqual({ success: false, error: "Couldn't write the exported file" })
     expect(logError).toHaveBeenCalled()
     expect(memzero).toHaveBeenCalled()
   })
@@ -348,7 +348,7 @@ describe('notes:export-all', () => {
 
     expect(await invoke('notes:export-all')).toEqual({
       success: false,
-      error: 'Export stopped after 1 of 2 notes: a file could not be written'
+      error: "Export stopped after 1 of 2 notes: a file couldn't be written"
     })
     expect(logError).toHaveBeenCalled()
   })
@@ -521,7 +521,7 @@ describe('notes:import', () => {
 
     await invoke('notes:import')
 
-    expect(reads).toEqual([{ skip: 'could not be read' }, { note: expect.anything() }])
+    expect(reads).toEqual([{ skip: "couldn't be read" }, { note: expect.anything() }])
     expect(logError).toHaveBeenCalled()
   })
 
