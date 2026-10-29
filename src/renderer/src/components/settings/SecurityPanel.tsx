@@ -221,9 +221,9 @@ export function SecurityPanel({
               </p>
               <span className="flex items-center gap-1.5">
                 {hasKeyFile ? (
-                  <ShieldCheckIcon className="text-primary h-3.5 w-3.5" />
+                  <ShieldCheckIcon className="text-primary size-3.5" />
                 ) : (
-                  <ShieldOffIcon className="h-3.5 w-3.5" />
+                  <ShieldOffIcon className="size-3.5" />
                 )}
                 {hasKeyFile ? 'Configured' : 'Not configured'}
               </span>

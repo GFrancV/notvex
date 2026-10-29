@@ -35,7 +35,7 @@ export function TagChip({ tag, onRemove }: TagChipProps): ReactNode {
               className="inline-flex h-3 w-0 shrink-0 items-center justify-center overflow-hidden transition-all duration-300 ease-in-out group-hover:w-3"
               aria-label={`Remove tag ${tag.name}`}
             >
-              <XIcon className="h-3 w-3 shrink-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+              <XIcon className="size-3 shrink-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
             </button>
           </TooltipTrigger>
           <TooltipContent>Remove tag {tag.name}</TooltipContent>

@@ -6,7 +6,7 @@ import {
   PlusIcon,
   SearchIcon,
   SettingsIcon,
-  TrashIcon,
+  Trash2Icon,
   XIcon
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -164,7 +164,7 @@ export function Sidebar(): React.ReactNode {
                   aria-label="New note"
                   className="text-muted-foreground shrink-0"
                 >
-                  <PlusIcon className="size-4" />
+                  <PlusIcon />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -204,7 +204,7 @@ export function Sidebar(): React.ReactNode {
 
             <SidebarMenuItem>
               <SidebarMenuButton isActive={showTrash} onClick={() => setShowTrash(true)}>
-                <TrashIcon />
+                <Trash2Icon />
                 Trash
               </SidebarMenuButton>
               {trashCount > 0 && <SidebarMenuBadge>{trashCount}</SidebarMenuBadge>}

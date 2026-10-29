@@ -7,7 +7,7 @@ import { EditorView } from '@codemirror/view'
 import { andromeda } from '@uiw/codemirror-theme-andromeda'
 import CodeMirror from '@uiw/react-codemirror'
 import {
-  CopyIcon,
+  CopyPlusIcon,
   DownloadIcon,
   EllipsisIcon,
   EyeIcon,
@@ -16,8 +16,7 @@ import {
   PinIcon,
   PlusIcon,
   RotateCcwIcon,
-  Trash2Icon,
-  TrashIcon
+  Trash2Icon
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -446,7 +445,7 @@ export function NoteEditor(): ReactNode {
                           size="xs"
                           className="text-muted-foreground border border-dashed"
                         >
-                          <PlusIcon className="size-3" /> Add tag
+                          <PlusIcon /> Add tag
                         </Button>
                       </TagSelector>
                     </div>
@@ -488,11 +487,7 @@ export function NoteEditor(): ReactNode {
                         editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'
                       }
                     >
-                      {editorMode === 'editing' ? (
-                        <EyeIcon className="h-4 w-4" />
-                      ) : (
-                        <PencilIcon className="h-4 w-4" />
-                      )}
+                      {editorMode === 'editing' ? <EyeIcon /> : <PencilIcon />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
@@ -509,7 +504,7 @@ export function NoteEditor(): ReactNode {
                   aria-label="Note actions"
                   className="text-muted-foreground"
                 >
-                  <EllipsisIcon className="size-4" />
+                  <EllipsisIcon />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
@@ -517,11 +512,11 @@ export function NoteEditor(): ReactNode {
                   <>
                     <DropdownMenuGroup>
                       <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
-                        <CopyIcon className="size-4" />
+                        <CopyPlusIcon />
                         Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setExportOpen(true)}>
-                        <DownloadIcon className="size-4" />
+                        <DownloadIcon />
                         Export note…
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
@@ -532,7 +527,7 @@ export function NoteEditor(): ReactNode {
                   {inTrash ? (
                     <>
                       <DropdownMenuItem onClick={() => void handleRestore()}>
-                        <RotateCcwIcon className="size-4" />
+                        <RotateCcwIcon />
                         Restore
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -540,13 +535,13 @@ export function NoteEditor(): ReactNode {
                         variant="destructive"
                         onClick={() => setConfirmDelete(true)}
                       >
-                        <TrashIcon className="size-4" />
+                        <Trash2Icon />
                         Delete permanently
                       </DropdownMenuItem>
                     </>
                   ) : (
                     <DropdownMenuItem variant="destructive" onClick={handleTrash}>
-                      <Trash2Icon className="size-4" />
+                      <Trash2Icon />
                       Move to trash
                     </DropdownMenuItem>
                   )}

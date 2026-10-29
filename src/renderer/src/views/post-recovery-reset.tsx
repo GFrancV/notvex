@@ -67,7 +67,7 @@ export function PostRecoveryReset(): ReactNode {
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
               <div className="border-primary/20 bg-primary/15 shadow-glow-primary flex h-14 w-14 items-center justify-center rounded-xl border">
-                <LockIcon className="text-primary h-7 w-7" />
+                <LockIcon className="text-primary size-7" />
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold tracking-tight">Secure your vault</h1>
@@ -128,7 +128,7 @@ export function PostRecoveryReset(): ReactNode {
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
               <div className="border-primary/20 bg-primary/15 shadow-glow-primary flex h-14 w-14 items-center justify-center rounded-xl border">
-                <KeyRoundIcon className="text-primary h-7 w-7" />
+                <KeyRoundIcon className="text-primary size-7" />
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold tracking-tight">Save your new recovery key</h1>

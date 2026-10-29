@@ -142,7 +142,7 @@ export function Setup(): ReactNode {
                       void handleChooseFile()
                     }}
                   >
-                    <FolderOpenIcon className="h-4 w-4" />
+                    <FolderOpenIcon />
                   </Button>
                 </div>
                 <FieldDescription className="text-muted-foreground text-xs">

@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 
 import {
-  CopyIcon,
+  CopyPlusIcon,
   DownloadIcon,
   PinIcon,
   PinOffIcon,
   RotateCcwIcon,
-  Trash2Icon,
-  TrashIcon
+  Trash2Icon
 } from 'lucide-react'
 import { cn } from 'cn'
 
@@ -112,37 +111,37 @@ export function NoteListRow({
             <ContextMenuItem onClick={() => void onPin(note)}>
               {note.isPinned ? (
                 <>
-                  <PinOffIcon className="size-4" />
+                  <PinOffIcon />
                   Unpin
                 </>
               ) : (
                 <>
-                  <PinIcon className="size-4" />
+                  <PinIcon />
                   Pin
                 </>
               )}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => void onDuplicate(note.id)}>
-              <CopyIcon className="size-4" />
+              <CopyPlusIcon />
               Duplicate
             </ContextMenuItem>
             <ContextMenuItem onClick={() => onExport(note)}>
-              <DownloadIcon className="size-4" />
+              <DownloadIcon />
               Export note…
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" onClick={() => void onTrash(note)}>
-              <Trash2Icon className="size-4" /> Move to trash
+              <Trash2Icon /> Move to trash
             </ContextMenuItem>
           </>
         ) : (
           <>
             <ContextMenuItem onClick={() => void onRestore(note)}>
-              <RotateCcwIcon className="size-4" /> Restore
+              <RotateCcwIcon /> Restore
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" onClick={() => void onDelete(note)}>
-              <TrashIcon className="size-4" /> Delete permanently
+              <Trash2Icon /> Delete permanently
             </ContextMenuItem>
           </>
         )}

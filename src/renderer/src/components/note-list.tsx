@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 
-import { TrashIcon } from 'lucide-react'
+import { Trash2Icon } from 'lucide-react'
 
 import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
@@ -156,7 +156,7 @@ export function NoteList(): ReactNode {
               setConfirmEmptyTrash(true)
             }}
           >
-            <TrashIcon className="size-3" /> Empty trash ({notes.length})
+            <Trash2Icon className="size-3" /> Empty trash ({notes.length})
           </Button>
         </div>
       )}

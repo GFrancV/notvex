@@ -38,12 +38,12 @@ export function RecoveryWordsGrid({ mnemonic }: RecoveryWordsGridProps): JSX.Ele
         >
           {isCopied ? (
             <>
-              <CheckIcon className="text-success h-4 w-4" />
+              <CheckIcon className="text-success" />
               Copied!
             </>
           ) : (
             <>
-              <CopyIcon className="h-4 w-4" />
+              <CopyIcon />
               Copy to clipboard
             </>
           )}

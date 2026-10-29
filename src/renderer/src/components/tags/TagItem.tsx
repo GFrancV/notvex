@@ -67,11 +67,11 @@ export function TagItem({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-32">
           <DropdownMenuItem onClick={onEdit}>
-            <PenIcon className="size-4" />
+            <PenIcon />
             Edit tag
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={onDelete}>
-            <Trash2Icon className="size-4" />
+            <Trash2Icon />
             Delete tag
           </DropdownMenuItem>
         </DropdownMenuContent>

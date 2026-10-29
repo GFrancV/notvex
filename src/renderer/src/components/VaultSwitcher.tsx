@@ -115,16 +115,16 @@ export function VaultSwitcher(): ReactNode {
         })}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleOpenOther}>
-          <FolderOpenIcon className="size-4" />
+          <FolderOpenIcon />
           Open vault…
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleCreateNew}>
-          <PlusIcon className="size-4" />
+          <PlusIcon />
           Create new vault…
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => void lock()}>
-          <LockIcon className="size-4" />
+          <LockIcon />
           Lock vault
         </DropdownMenuItem>
       </DropdownMenuContent>
