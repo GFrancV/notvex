@@ -13,6 +13,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { Spinner } from '@/components/ui/spinner'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
 import { useUiStore } from '@/store/ui.store'
@@ -125,6 +126,7 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
                   void handleGenerate()
                 }}
               >
+                {loading && <Spinner aria-hidden />}
                 {loading ? 'Re-encrypting vault…' : 'Generate new recovery key'}
               </Button>
             </DialogFooter>

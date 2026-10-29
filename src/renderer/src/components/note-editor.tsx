@@ -12,7 +12,6 @@ import {
   EllipsisIcon,
   EyeIcon,
   FileTextIcon,
-  Loader2Icon,
   PencilIcon,
   PinIcon,
   PlusIcon,
@@ -55,6 +54,7 @@ import {
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
 import { Skeleton } from './ui/skeleton'
+import { Spinner } from './ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 const notvexEditorTheme = EditorView.theme({
@@ -577,7 +577,7 @@ export function NoteEditor(): ReactNode {
         {isLoading && (
           <div className="bg-background absolute inset-0 z-50 flex items-center justify-center">
             <div className="text-muted-foreground flex items-center gap-2 text-sm">
-              <Loader2Icon className="size-4 animate-spin" />
+              <Spinner aria-hidden />
               Decrypting note…
             </div>
           </div>

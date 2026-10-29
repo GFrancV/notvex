@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Spinner } from '@/components/ui/spinner'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
@@ -217,6 +218,7 @@ export function Setup(): ReactNode {
                 }}
                 disabled={loading}
               >
+                {loading && <Spinner aria-hidden />}
                 {loading ? 'Creating vault…' : 'Create vault'}
               </Button>
             </div>

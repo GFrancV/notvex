@@ -171,3 +171,14 @@ describe('ChangePasswordPanel: validation', () => {
     expect(errors()).toEqual(["Passwords don't match"])
   })
 })
+
+describe('ChangePasswordPanel: while re-encrypting', () => {
+  it('shows a spinner and the verb, and stays disabled until main answers', async () => {
+    ipc.changePassword.mockReturnValue(new Promise(() => {}))
+    await submitValidForm()
+
+    const busy = screen.getByRole('button', { name: 'Re-encrypting vault…' }) as HTMLButtonElement
+    expect(busy.disabled).toBe(true)
+    expect(busy.querySelector('.animate-spin')).not.toBeNull()
+  })
+})

@@ -6,6 +6,7 @@ import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { Spinner } from '@/components/ui/spinner'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
 import { confirmError, newPasswordError } from '@/lib/password-rules'
@@ -156,6 +157,7 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
               }}
               disabled={loading}
             >
+              {loading && <Spinner aria-hidden />}
               {loading ? 'Re-encrypting vault…' : 'Change password'}
             </Button>
           </div>

@@ -9,6 +9,7 @@ import { ReloadWindowDialog } from '@/components/dialogs/ReloadWindowDialog'
 import { UpdateAvailableDialog } from '@/components/dialogs/UpdateAvailableDialog'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Spinner } from '@/components/ui/spinner'
 import { useClipboardGuard } from '@/hooks/use-clipboard-guard'
 import { notvex } from '@/lib/ipc'
 import { TOOLTIP_DELAY } from '@/lib/utils'
@@ -89,7 +90,7 @@ export default function App(): ReactNode {
   if (status === 'checking') {
     return (
       <div className="bg-background flex h-screen items-center justify-center">
-        <div className="border-border border-t-primary h-6 w-6 animate-spin rounded-full border-2" />
+        <Spinner className="text-primary size-6" />
       </div>
     )
   }

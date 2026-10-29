@@ -8,6 +8,7 @@ import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { Spinner } from '@/components/ui/spinner'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
 import { SubpageHeader } from './SettingRow'
@@ -156,6 +157,7 @@ export function KeyFilePanel({
               disabled={loading}
               onClick={() => void handleSubmit()}
             >
+              {loading && <Spinner aria-hidden />}
               {loading ? submitLabel.busy : submitLabel.idle}
             </Button>
           </div>

@@ -63,6 +63,20 @@ describe('Setup password step', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
+  it('shows a spinner and the verb while the vault is created', async () => {
+    create.mockReturnValue(new Promise(() => {}))
+    fireEvent.change(password(), { target: { value: 'long enough password' } })
+    fireEvent.change(confirm(), { target: { value: 'long enough password' } })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
+    })
+
+    const busy = screen.getByRole('button', { name: 'Creating vault…' }) as HTMLButtonElement
+    expect(busy.disabled).toBe(true)
+    expect(busy.querySelector('.animate-spin')).not.toBeNull()
+  })
+
   it('shows what main refused at the foot of the form', async () => {
     fireEvent.change(password(), { target: { value: 'long enough password' } })
     fireEvent.change(confirm(), { target: { value: 'long enough password' } })

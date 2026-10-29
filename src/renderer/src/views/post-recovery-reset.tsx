@@ -8,6 +8,7 @@ import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Spinner } from '@/components/ui/spinner'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
 import { confirmError, newPasswordError } from '@/lib/password-rules'
@@ -119,6 +120,7 @@ export function PostRecoveryReset(): ReactNode {
                 void handleSetPassword()
               }}
             >
+              {loading && <Spinner aria-hidden />}
               {loading ? 'Updating password…' : 'Set new password'}
             </Button>
           </div>
