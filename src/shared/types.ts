@@ -31,6 +31,9 @@ export interface Tag {
 // Roughly what fits in the sidebar row before truncating.
 export const TAG_NAME_MAX = 24
 
+// For a password being set (create, change, reset). Unlock never checks it, so older vaults open.
+export const PASSWORD_MIN_LENGTH = 12
+
 // Files are reported by basename only: full paths never go back to the renderer.
 export interface ImportResult {
   imported: number
