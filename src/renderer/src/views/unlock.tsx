@@ -8,7 +8,13 @@ import { PasswordInput } from '@/components/PasswordInput'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldSeparator
+} from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIsDev } from '@/hooks/use-is-dev'
@@ -274,7 +280,7 @@ export function Unlock(): ReactNode {
               The vault file couldn&apos;t be found at the saved location.
             </p>
 
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               <Button
                 className="w-full"
                 onClick={(): void => {
@@ -284,14 +290,7 @@ export function Unlock(): ReactNode {
                 Create new vault
               </Button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="border-border w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="bg-background text-muted-foreground px-2">or</span>
-                </div>
-              </div>
+              <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
 
               <Button variant="outline" className="w-full" onClick={handleOpenOther}>
                 Open existing vault
@@ -345,14 +344,14 @@ export function Unlock(): ReactNode {
                   </CollapsibleContent>
                 </Collapsible>
 
-                {error && !isThrottled && <p className="text-destructive text-sm">{error}</p>}
+                {!isThrottled && <FieldError>{error}</FieldError>}
 
                 {isThrottled && (
                   <div className="space-y-1">
-                    <p className="text-destructive text-sm">
+                    <FieldError>
                       Too many failed attempts. Please wait {countdown} second
                       {countdown !== 1 ? 's' : ''} before trying again.
-                    </p>
+                    </FieldError>
                     <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
                       <div
                         className="bg-destructive h-full w-(--throttle-w,0%) rounded-full transition-all duration-1000"
@@ -462,7 +461,7 @@ export function Unlock(): ReactNode {
                   </CollapsibleContent>
                 </Collapsible>
 
-                {error && <p className="text-destructive text-sm">{error}</p>}
+                <FieldError>{error}</FieldError>
 
                 <Button
                   className="w-full"

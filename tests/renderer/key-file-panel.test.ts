@@ -73,15 +73,30 @@ describe('KeyFilePanel: adding a key file', () => {
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
   })
 
-  it('cannot be activated once the file is cleared', () => {
+  it('says the file is missing once it is cleared, and activates nothing', async () => {
     renderAdd()
     fireEvent.change(screen.getByLabelText('Current password'), {
       target: { value: 'my password 123' }
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear key file' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    })
 
-    expect(screen.getByRole('button', { name: 'Activate' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('Choose your key file')).toBeTruthy()
+    expect(ipc.configureKeyFile).not.toHaveBeenCalled()
+  })
+
+  it('asks for the current password on submit', async () => {
+    renderAdd()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    })
+
+    expect(screen.getByText('Enter your current password')).toBeTruthy()
+    expect(ipc.configureKeyFile).not.toHaveBeenCalled()
   })
 
   it('activates the chosen file with the password', async () => {
@@ -163,12 +178,10 @@ describe('KeyFilePanel: removing the key file', () => {
     fireEvent.change(screen.getByLabelText('Current password'), {
       target: { value: 'my password 123' }
     })
-    expect(remove().hasAttribute('disabled')).toBe(true)
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
     })
-    expect(remove().hasAttribute('disabled')).toBe(false)
 
     await act(async () => {
       fireEvent.click(remove())
@@ -199,6 +212,10 @@ describe('KeyFilePanel: removing the key file', () => {
     })
 
     expect(toast.error).toHaveBeenCalledWith('The selected key file is empty')
-    expect(screen.getByRole('button', { name: 'Remove' }).hasAttribute('disabled')).toBe(true)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    })
+    expect(screen.getByText('Choose your key file')).toBeTruthy()
+    expect(ipc.removeKeyFile).not.toHaveBeenCalled()
   })
 })

@@ -128,10 +128,11 @@ describe('RecoveryKeyUnconfirmedDialog', () => {
     await renderDialog()
 
     expect(screen.getByText('Key file')).toBeTruthy()
-    expect(
-      (screen.getByRole('button', { name: 'Generate new recovery key' }) as HTMLButtonElement)
-        .disabled
-    ).toBe(true)
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'my password 123' } })
+    await click('Generate new recovery key')
+
+    expect(screen.getByRole('alert').textContent).toBe('Choose your key file')
+    expect(ipc.regenerateRecoveryKey).not.toHaveBeenCalled()
   })
 
   it('"Later" closes it without changing anything', async () => {
