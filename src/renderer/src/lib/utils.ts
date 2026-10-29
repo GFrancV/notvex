@@ -19,6 +19,11 @@ export function formatFileSize(bytes: number): string {
   })
 }
 
+/** A vault's file name, for places too tight for its path; show the path in a tooltip there. */
+export function vaultName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path
+}
+
 export function truncatePath(path: string, maxLen = 54): string {
   if (path.length <= maxLen) return path
   const half = Math.floor((maxLen - 3) / 2)

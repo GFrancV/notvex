@@ -15,6 +15,7 @@ import { cn } from 'cn'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
+import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
@@ -99,8 +100,9 @@ export function Sidebar(): React.ReactNode {
         {/* App header */}
         <div
           className={cn(
-            'border-sidebar-border flex items-center justify-between border-b',
-            notvex.platform === 'darwin' ? 'h-11 pr-3 pl-19' : 'h-10 pr-3 pl-4'
+            'flex items-center justify-between pr-3',
+            TITLEBAR_ROW,
+            notvex.platform === 'darwin' ? 'pl-19' : 'pl-4'
           )}
         >
           <span className="flex items-center gap-1.5 text-lg font-bold select-none">

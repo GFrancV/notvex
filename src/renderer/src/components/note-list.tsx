@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Trash2Icon } from 'lucide-react'
+import { cn } from 'cn'
 
 import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
@@ -11,6 +12,7 @@ import { useTrashNote } from '@/hooks/use-trash-note'
 import { notvex } from '@/lib/ipc'
 import { ipcSucceeded } from '@/lib/ipc-succeeded'
 import { sortNotes } from '@/lib/sort-notes'
+import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -134,7 +136,7 @@ export function NoteList(): ReactNode {
   return (
     <div className="border-border flex w-70 shrink-0 flex-col border-r">
       {/* Header */}
-      <div className="flex items-center justify-between gap-1.5 px-4 py-3">
+      <div className={cn('flex shrink-0 items-center justify-between gap-1.5 px-4', TITLEBAR_ROW)}>
         <h2 className="text-base">{listTitle()}</h2>
         <div className="flex items-center gap-1.5">
           <span className="text-muted-foreground text-xs">{filteredNotes.length}</span>

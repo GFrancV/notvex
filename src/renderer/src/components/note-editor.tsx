@@ -19,6 +19,7 @@ import {
   Trash2Icon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from 'cn'
 
 import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
@@ -31,6 +32,7 @@ import { findExtension } from '@/lib/editor/find'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
+import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { countText, formatCount, type TextCount } from '@/lib/text-count'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -376,9 +378,9 @@ export function NoteEditor(): ReactNode {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       {/* Header */}
-      <div className="shrink-0 px-6.5 pt-5 pb-3.5">
+      <div className="shrink-0 px-6.5 pb-3.5">
         {/* Title row */}
-        <div className="flex items-center gap-2">
+        <div className={cn('flex items-center gap-2', TITLEBAR_ROW)}>
           {isLoading ? (
             <div className="flex-1">
               <Skeleton className="h-6.5 w-40 rounded" />
@@ -613,7 +615,7 @@ export function NoteEditor(): ReactNode {
       </div>
 
       {note && !isLoading && (
-        <footer className="text-muted-foreground border-border shrink-0 border-t px-4 py-1 text-end text-xs tabular-nums">
+        <footer className="text-muted-foreground border-border shrink-0 border-t px-6.5 py-1 text-end text-xs tabular-nums">
           {formatCount(counts.words, 'word', 'words')} ·{' '}
           {formatCount(counts.chars, 'character', 'characters')}
         </footer>
