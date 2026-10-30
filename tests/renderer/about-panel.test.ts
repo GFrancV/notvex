@@ -28,8 +28,8 @@ describe('AboutPanel links', () => {
     vi.clearAllMocks()
   })
 
-  it('"Open documentation" opens the repo in the system browser instead of navigating', () => {
-    const url = 'https://github.com/GFrancV/notvex'
+  it('"Open documentation" opens the docs in the system browser instead of navigating', () => {
+    const url = 'https://notvex.vercel.app/docs/getting-started'
     render(createElement(AboutPanel))
     const link = screen.getByRole('button', { name: 'Open documentation (opens in your browser)' })
 

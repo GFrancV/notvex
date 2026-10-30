@@ -69,7 +69,7 @@ describe('HelpMenu', () => {
   it('opens the documentation in the system browser', async () => {
     await openMenu()
     fireEvent.click(item(/documentation/i))
-    expect(ipc.openExternal).toHaveBeenCalledWith('https://github.com/GFrancV/notvex')
+    expect(ipc.openExternal).toHaveBeenCalledWith('https://notvex.vercel.app/docs/getting-started')
   })
 
   it('opens a prefilled bug report', async () => {
