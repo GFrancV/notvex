@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./build/icon.png" width="75"/>
+<img src="./build/icon.png" width="75" alt="Notvex logo"/>
 
 # Notvex
 
@@ -11,7 +11,9 @@ Your notes live in a single encrypted file on your own disk. No one else — not
 <a href="https://notvex.vercel.app/download" target="_blank">![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)</a>
 <a href="https://notvex.vercel.app/download" target="_blank">![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=macos&logoColor=F0F0F0)</a>
 <a href="https://notvex.vercel.app/download" target="_blank">![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)</a>
-![Release Latest](https://img.shields.io/github/v/release/GFrancV/notvex?style=for-the-badge&labelColor=0a0a0a&color=00bc7d&cacheSeconds=3600&link=https%3A%2F%2Fgithub.com%2FGFrancV%2Fnotvex%2Freleases%2Flatest)
+![Latest release](https://img.shields.io/github/v/release/GFrancV/notvex?style=for-the-badge&labelColor=0a0a0a&color=00bc7d&cacheSeconds=3600&link=https%3A%2F%2Fgithub.com%2FGFrancV%2Fnotvex%2Freleases%2Flatest)
+
+[Website](https://notvex.vercel.app) · [Download](https://notvex.vercel.app/download) · [Docs](https://notvex.vercel.app/docs/getting-started)
 
 </div>
 
@@ -19,67 +21,33 @@ Your notes live in a single encrypted file on your own disk. No one else — not
   <img width="900" alt="Notvex — main view" src="https://github.com/user-attachments/assets/77d8e04b-641f-418e-8915-6903dd1cdc9a" />
 </p>
 
-## What is Notvex
+Notvex is a desktop app for Markdown notes, with no telemetry and nothing to sign up for. The vault is one `.nvx` file that's yours: copy it, back it up, or carry it on a USB drive, and it stays as secure as on your disk.
 
-Notvex is a desktop app for taking notes **privately and encrypted**, without relying on any external service. No accounts, no cloud sync, no telemetry: every note is stored encrypted in a single file (`vault.nvx`) that you fully control. Copy it, move it, back it up, or carry it on a USB drive — it stays just as secure as it is on your disk.
+It runs on Windows, macOS, and Linux, and all of its code is open source, so you don't have to take its security on trust.
 
-Under the hood, Notvex combines a SQLCipher database (AES-256 page-level encryption) with a second layer of field-level encryption (XChaCha20-Poly1305) on each note's title and content, deriving the master key with Argon2id. The result: even if someone gets hold of the vault file, without your password (or your recovery key) the content is indistinguishable from random binary noise.
+## Features
 
-Built with Electron + React + TypeScript, for anyone who wants a fast, minimal, and verifiable markdown note-taking app — all the code is auditable, with no black box and no remote backend.
+- **A Markdown editor** with live preview as you type, a separate reading view, a formatting toolbar, and find in the note.
+- **Notes that save as you type.** Pin the important ones, sort by date or title, search by title, and restore anything from the trash.
+- **Color-coded tags** that you can combine to filter the note list.
+- **A command palette** (`Ctrl+K`, `Cmd+K` on macOS) to open a note, create one, or run any command without the mouse.
+- **As many vaults as you need**, each one a portable file with its own password.
+- **Markdown in and out.** Export notes as `.md` files with their tags in YAML front matter, which Obsidian and most Markdown tools read, and import `.md` and `.txt` files.
+- **A backup before format upgrades.** When a new version needs to update a vault's format, Notvex saves a copy of the vault first, unless you opt out.
 
-## Key features
+The [user guide](https://notvex.vercel.app/docs/getting-started) walks through each of these, and [keyboard shortcuts](https://notvex.vercel.app/docs/shortcuts) lists them all.
 
-🗒️ **Notes**
-- Create, edit, and autosave markdown notes — no manual saving required.
-- Pin important notes so they always show up first.
-- Sort the note list by date modified, date created, or title, ascending or descending — the choice is remembered.
-- Trash with restore or permanent delete, plus a one-click "empty trash".
-- Full-text search across all notes.
+## Security
 
-🏷️ **Tags**
-- Create color-coded tags and assign them to notes from the editor or the command palette.
-- Filter the note list by one or several tags at once.
-- Per-tag note counts in the sidebar.
+Notvex is built for one situation: someone gets a copy of your vault file, but not your password. The file on its own should reveal nothing, and guessing the password should be slow.
 
-📝 **Markdown editor**
-- CodeMirror 6-based editor with syntax highlighting (Andromeda theme) and a formatting toolbar (bold, italic, code, headings, lists, checklists, blockquotes).
-- Right-click context menu with the same formatting actions plus "clear formatting".
-- Live preview while you type (lists, tables, and checkboxes rendered inline as you edit).
-- Dedicated reading view (`Ctrl+Shift+E`) that renders the full markdown with GFM support, syntax-highlighted code, and copy-to-clipboard.
+- **Two layers of encryption.** SQLCipher encrypts the whole database with AES-256, and each note's title and content are encrypted again with XChaCha20-Poly1305.
+- **Argon2id** turns your password into the key, tuned to take about 1.5 seconds on your computer, so an attacker pays that cost on every guess.
+- **A 24-word recovery key** gets you back in if you forget your password, and an optional key file adds a second factor.
+- **The master key never touches the disk.** It lives only in memory, which Notvex asks the OS to keep out of swap, and is wiped when the vault locks: on sleep, on screen lock, after a period of inactivity, and, if you choose, on minimize.
+- **No telemetry.** The only network request is the update check on startup, which you can turn off.
 
-🧩 **Command palette & shortcuts**
-- Command palette (`Ctrl+K`) to jump to any note by title, create a note straight from what you typed, toggle views, show the trash, lock the vault, or reload the window without touching the mouse. Commands also match common synonyms ("create note", "logout", "bin").
-- Keyboard shortcuts for the most common actions (see table below).
-
-🧩 **Multi-vault**
-- Create or open multiple vaults and switch between them from a selector with "recent vaults".
-- Export a vault backup ("save a copy as") at any time.
-
-📤 **Markdown export & import**
-- Export the open note, or every note, as plain `.md` files with tags in YAML front matter, the format Obsidian and most Markdown tools read. A warning before every export reminds you that the files are not encrypted, and an existing file is never overwritten.
-- Import `.md`, `.markdown` and `.txt` files as notes, taking the title and tags from front matter or the first heading. Files over 5 MB or not valid UTF-8 are skipped and listed; the import is all or nothing.
-
-🛠️ **Updates**
-- Built-in update checking (electron-updater) with download progress and in-app install.
-- On startup, Notvex asks GitHub whether a new release exists, so GitHub sees your IP address, OS and app version. Turn it off in **Settings → Updates**; you can still check manually from **Settings → About**.
-
-🔒 **Security** — see the dedicated section below.
-
-## Security and privacy
-
-Notvex is built on the principle that **the vault file, by itself, should never reveal anything**, not even sensitive metadata.
-
-- **SQLCipher**: encrypts the entire SQLite database with AES-256 at the page level.
-- **Field-level encryption**: on top of SQLCipher, each note's title and content are individually encrypted with **XChaCha20-Poly1305** (random nonce per field). Tag names are kept as plain text *inside* the already SQLCipher-encrypted database — a deliberate tradeoff so tags can be queried via SQL without decrypting every note.
-- **Argon2id** derives the master key from your password, auto-calibrated on each machine to take ~1.5s (automatically picking the strongest memory/iteration tier your hardware can sustain within that time).
-- **24-word BIP39 recovery key**, generated when the vault is created (and regenerated on every password change or key-file change): it's the only way to recover access if you forget your password.
-- **Optional key file**: any file can be used as a second unlock factor, combined with your password during key derivation. It can be added or removed at any time.
-- **The master key is never written to disk**: it lives only in the main process's memory, pinned with `VirtualLock`/`mlock` to prevent the OS from paging it to swap, and is wiped (`sodium.memzero`) when the vault is locked.
-- **Configurable auto-lock** (never / 5 / 15 / 30 / 60 min), plus an immediate forced lock on system sleep, OS lock-screen, or when the window loses focus.
-- **Screen capture protection**: by default, the window is hidden from screenshots and screen sharing (`setContentProtection`), toggleable from settings if you need it.
-- **Clipboard auto-clear**: text copied from Notvex is cleared after a configurable delay and, unless you turn it off, when the vault locks or you quit. The recovery key is always cleared after 30 s and when you quit. Locking leaves it to its 30 s: it's shown only once, and you may still be pasting it. Copies are marked to stay out of clipboard history and cloud sync where the OS or clipboard manager supports it (Windows clipboard history, macOS and KDE clipboard managers).
-- **Progressive delay** after failed unlock attempts.
-- **Local error log, no telemetry**: crashes and unexpected errors are written to a small plaintext log in the app's data folder (`logs/notvex.log`, capped at about 1 MB). It holds only the error type, stack frames inside the app and a timestamp: never error messages, file paths, or note content. Nothing is sent anywhere. **Help → Report a bug…** opens a prefilled GitHub issue in your browser for you to review before submitting, and **Settings → Diagnostics → Clear logs…** deletes the log.
+What Notvex can't do is protect a vault while it's unlocked on a compromised computer: malware running as you can read the screen and the keyboard. [Security architecture](https://notvex.vercel.app/docs/architecture) explains the design in detail, and [security practices](https://notvex.vercel.app/docs/security-practices) covers the choices left to you.
 
 > [!WARNING]
 > **If you lose your master password AND your recovery key, your notes are unrecoverable.** There is no account, no server, no way to reset access. Write your recovery key down by hand or copy it on a device you trust, and keep it somewhere safe.
@@ -147,46 +115,6 @@ pnpm build:linux
 
 Installers are output to `dist/`.
 
-## Keyboard shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+K` | Command palette |
-| `Ctrl+L` | Lock vault |
-| `Ctrl+R` | Reload window (saves pending edits and locks the vault, after asking if it's unlocked) |
-| `Ctrl+N` | New note |
-| `Ctrl+Shift+F` | Focus search |
-| `Ctrl+Shift+E` | Toggle reading / edit view |
-| `Ctrl+Shift+T` | Show trash |
-| `Ctrl+Enter` (in search box) | New note |
-| `Esc` | Deselect note / close popovers |
-
-In the editor (use `Cmd` instead of `Ctrl` on macOS):
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+B` / `Ctrl+I` / `Ctrl+E` | Bold / italic / inline code |
-| `Ctrl+Shift+1` / `2` / `3` | Heading 1 / 2 / 3 |
-| `Ctrl+Shift+8` | Bullet list |
-| `Ctrl+Shift+9` | Checklist |
-| `Ctrl+Shift+.` | Quote |
-| `Ctrl+F` | Find in the note |
-| `Enter` / `Shift+Enter` (in the find bar) | Next / previous match |
-| `Esc` (with the find bar open) | Close the find bar (the next `Esc` closes the note) |
-| `Tab` or `Enter` (in the title) | Jump to the start of the note body |
-| `Ctrl+M`, then `Shift+Tab` | Leave the editor (`Tab` indents inside it; `Shift+Option+M` on macOS) |
-
-## Vault files
-
-Notvex stores everything in a **single file** chosen when the vault is created:
-
-| File | Contents |
-|---|---|
-| `vault.nvx` | Encrypted container: header (Argon2id salt, KDF tier, recovery blob, integrity HMAC) followed by the full SQLCipher database |
-| `vault.nvx.lock` | Temporary PID-based lock file while the vault is open — removed automatically on close |
-
-Opening `vault.nvx` with a hex editor or any SQLite tool without the correct key shows only encrypted bytes — there is no way to read notes or metadata without going through the unlock process.
-
 ## Contributing
 
 1. Fork the repository
@@ -203,7 +131,7 @@ Opening `vault.nvx` with a hex editor or any SQLite tool without the correct key
 5. Use [Conventional Commits](https://www.conventionalcommits.org/) in lowercase (`feat:`, `fix:`, `chore:`, etc.), max 72 characters in the subject.
 6. Open the PR against `main`. CI (`react-doctor` and the release workflow) runs automatically on every push/PR.
 
-Found a security bug? See [SECURITY.md](./SECURITY.md) for how to report it privately.
+Found a security bug? See [`SECURITY.md`](./SECURITY.md) for how to report it privately.
 
 ## License
 
