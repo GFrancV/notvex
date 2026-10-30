@@ -18,11 +18,13 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Spinner } from '@/components/ui/spinner'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { confirmError, newPasswordError } from '@/lib/password-rules'
+import { truncatePath, vaultName } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 
@@ -126,7 +128,7 @@ export function Setup(): ReactNode {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Input
-                        value={vaultPath ? vaultPath.split(/[\\/]/).pop()! : ''}
+                        value={vaultPath ? vaultName(vaultPath) : ''}
                         placeholder="Choose where to save…"
                         readOnly
                         className="flex-1"
@@ -141,7 +143,7 @@ export function Setup(): ReactNode {
                       void handleChooseFile()
                     }}
                   >
-                    <FolderOpenIcon className="h-4 w-4" />
+                    <FolderOpenIcon />
                   </Button>
                 </div>
                 <FieldDescription className="text-muted-foreground text-xs">
@@ -168,7 +170,7 @@ export function Setup(): ReactNode {
           <div className="space-y-6">
             <div className="bg-sidebar rounded-lg border p-3">
               <p className="text-muted-foreground text-xs">
-                <span className="text-muted-foreground">File:</span> {vaultPath}
+                <span className="text-muted-foreground">File:</span> {truncatePath(vaultPath)}
               </p>
             </div>
 
@@ -207,7 +209,7 @@ export function Setup(): ReactNode {
             <FieldError>{error}</FieldError>
 
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setStep('location')}>
+              <Button variant="ghost" className="flex-1" onClick={() => setStep('location')}>
                 Back
               </Button>
               <Button
@@ -217,6 +219,7 @@ export function Setup(): ReactNode {
                 }}
                 disabled={loading}
               >
+                {loading && <Spinner aria-hidden />}
                 {loading ? 'Creating vault…' : 'Create vault'}
               </Button>
             </div>

@@ -81,7 +81,7 @@ interface NoteReadingViewProps {
 export function NoteReadingView({ content }: NoteReadingViewProps): React.JSX.Element {
   return (
     <div className="h-full overflow-auto">
-      <div className="prose prose-invert prose-sm max-w-none p-6">
+      <div className="prose prose-invert prose-sm max-w-none px-6.5 py-6">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSanitize, rehypeHighlight]}

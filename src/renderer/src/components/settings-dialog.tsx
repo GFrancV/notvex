@@ -1,14 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
-import {
-  ActivityIcon,
-  DatabaseIcon,
-  FolderOpenIcon,
-  InfoIcon,
-  RefreshCwIcon,
-  ShieldIcon,
-  Trash2Icon
-} from 'lucide-react'
+import { ActivityIcon, DatabaseIcon, InfoIcon, RefreshCwIcon, ShieldIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { openLogsFolder } from '@/lib/bug-report'
@@ -140,7 +132,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
                 description="Errors are recorded only on this device, with no note content or file paths. Open the folder to attach the log to a bug report."
               >
                 <Button variant="secondary" size="sm" onClick={() => void openLogsFolder()}>
-                  <FolderOpenIcon />
                   Open logs folder
                 </Button>
               </SettingRow>
@@ -151,7 +142,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'security' }: 
                 description="Delete the local error log. A later bug report won't include the errors recorded so far."
               >
                 <Button variant="destructive" size="sm" onClick={() => setClearLogsOpen(true)}>
-                  <Trash2Icon />
                   Clear logs…
                 </Button>
               </SettingRow>

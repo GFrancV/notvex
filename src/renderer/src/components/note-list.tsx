@@ -1,8 +1,8 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 
-import { TrashIcon } from 'lucide-react'
+import { Trash2Icon } from 'lucide-react'
+import { cn } from 'cn'
 
-import { useCreateNote } from '@/hooks/use-create-note'
 import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { useExportNote } from '@/hooks/use-export-note'
@@ -12,6 +12,7 @@ import { useTrashNote } from '@/hooks/use-trash-note'
 import { notvex } from '@/lib/ipc'
 import { ipcSucceeded } from '@/lib/ipc-succeeded'
 import { sortNotes } from '@/lib/sort-notes'
+import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -20,8 +21,10 @@ import { ConfirmDeleteDialog } from './dialogs/ConfirmDeleteDialog'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { NoteListRow } from './note-list-row'
 import { NoteSortMenu } from './note-sort-menu'
+import { Shortcut } from './Shortcut'
 import { TagFilter } from './tags/TagFilter'
 import { Button } from './ui/button'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from './ui/empty'
 import { ScrollArea } from './ui/scroll-area'
 
 const LOADING_DELAY = 300
@@ -30,7 +33,6 @@ export function NoteList(): ReactNode {
   const { notes, notesTrashed, activeNoteId, setActiveNoteId, loadNotes, noteTagsMap } =
     useVaultStore()
   const { searchQuery, activeTags, showTrash, showPinned } = useUiStore()
-  const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
   const exportNote = useExportNote()
   const [exportTarget, setExportTarget] = useState<NoteListItem | null>(null)
@@ -134,7 +136,7 @@ export function NoteList(): ReactNode {
   return (
     <div className="border-border flex w-70 shrink-0 flex-col border-r">
       {/* Header */}
-      <div className="flex items-center justify-between gap-1.5 px-4 py-3">
+      <div className={cn('flex shrink-0 items-center justify-between gap-1.5 px-4', TITLEBAR_ROW)}>
         <h2 className="text-base">{listTitle()}</h2>
         <div className="flex items-center gap-1.5">
           <span className="text-muted-foreground text-xs">{filteredNotes.length}</span>
@@ -156,7 +158,7 @@ export function NoteList(): ReactNode {
               setConfirmEmptyTrash(true)
             }}
           >
-            <TrashIcon className="size-3" /> Empty trash ({notes.length})
+            <Trash2Icon className="size-3" /> Empty trash ({notes.length})
           </Button>
         </div>
       )}
@@ -166,20 +168,18 @@ export function NoteList(): ReactNode {
         {loading ? (
           slowLoad && <p className="text-muted-foreground p-8 text-center text-sm">Loading…</p>
         ) : displayedNotes.length === 0 ? (
-          <div className="text-muted-foreground flex flex-col items-center justify-center p-8">
-            <p className="text-sm">{emptyMessage()}</p>
-            {!showTrash && !query && activeTags.length === 0 && (
-              <button
-                type="button"
-                onClick={(): void => {
-                  void handleNewNote()
-                }}
-                className="text-primary hover:text-primary mt-2 text-xs"
-              >
-                Create your first note →
-              </button>
-            )}
-          </div>
+          <Empty className="md:p-8">
+            <EmptyHeader>
+              <EmptyTitle className="text-muted-foreground text-sm font-normal">
+                {emptyMessage()}
+              </EmptyTitle>
+              {!showTrash && !query && activeTags.length === 0 && (
+                <EmptyDescription className="text-xs">
+                  <Shortcut keys="Mod-n" /> to create
+                </EmptyDescription>
+              )}
+            </EmptyHeader>
+          </Empty>
         ) : (
           displayedNotes.map((note) => (
             <NoteListRow

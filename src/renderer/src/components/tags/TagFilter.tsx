@@ -53,7 +53,7 @@ export function TagFilter({ count }: { count: number }): JSX.Element | null {
             aria-label="Clear tag filter"
             className="text-muted-foreground"
           >
-            <XIcon className="size-3" />
+            <XIcon />
           </Button>
         </TooltipTrigger>
         <TooltipContent>Clear tag filter</TooltipContent>

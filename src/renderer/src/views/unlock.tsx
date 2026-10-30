@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon, Loader2Icon } from 'lucide-react'
+import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Spinner } from '@/components/ui/spinner'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { openBugReport } from '@/lib/bug-report'
@@ -236,7 +237,7 @@ export function Unlock(): ReactNode {
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
       <div className="titlebar-drag absolute top-0 right-0 left-0 h-11" />
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <AppLogo />
@@ -370,14 +371,8 @@ export function Unlock(): ReactNode {
                   onClick={handleUnlockVault}
                   disabled={loading || !password || isThrottled}
                 >
-                  {loading ? (
-                    <>
-                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                      Unlocking…
-                    </>
-                  ) : (
-                    'Unlock'
-                  )}
+                  {loading && <Spinner aria-hidden />}
+                  {loading ? 'Unlocking…' : 'Unlock'}
                 </Button>
 
                 <p className="text-center">
@@ -470,14 +465,8 @@ export function Unlock(): ReactNode {
                   }}
                   disabled={loading || wordCount !== 24}
                 >
-                  {loading ? (
-                    <>
-                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                      Recovering…
-                    </>
-                  ) : (
-                    'Recover access'
-                  )}
+                  {loading && <Spinner aria-hidden />}
+                  {loading ? 'Recovering…' : 'Recover access'}
                 </Button>
 
                 <p className="text-center">

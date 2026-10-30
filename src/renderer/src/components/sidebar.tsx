@@ -6,7 +6,7 @@ import {
   PlusIcon,
   SearchIcon,
   SettingsIcon,
-  TrashIcon,
+  Trash2Icon,
   XIcon
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -15,6 +15,7 @@ import { cn } from 'cn'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { notvex } from '@/lib/ipc'
+import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
@@ -27,6 +28,7 @@ import { TagDeleteModal } from './tags/TagDeleteModal'
 import { TagItem } from './tags/TagItem'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from './ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import {
   Sidebar as ShadcnSidebar,
@@ -98,8 +100,9 @@ export function Sidebar(): React.ReactNode {
         {/* App header */}
         <div
           className={cn(
-            'border-sidebar-border flex items-center justify-between border-b',
-            notvex.platform === 'darwin' ? 'h-11 pr-3 pl-19' : 'h-10 pr-3 pl-4'
+            'flex items-center justify-between pr-3',
+            TITLEBAR_ROW,
+            notvex.platform === 'darwin' ? 'pl-19' : 'pl-4'
           )}
         >
           <span className="flex items-center gap-1.5 text-lg font-bold select-none">
@@ -163,7 +166,7 @@ export function Sidebar(): React.ReactNode {
                   aria-label="New note"
                   className="text-muted-foreground shrink-0"
                 >
-                  <PlusIcon className="size-4" />
+                  <PlusIcon />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -203,7 +206,7 @@ export function Sidebar(): React.ReactNode {
 
             <SidebarMenuItem>
               <SidebarMenuButton isActive={showTrash} onClick={() => setShowTrash(true)}>
-                <TrashIcon />
+                <Trash2Icon />
                 Trash
               </SidebarMenuButton>
               {trashCount > 0 && <SidebarMenuBadge>{trashCount}</SidebarMenuBadge>}
@@ -232,10 +235,14 @@ export function Sidebar(): React.ReactNode {
           </Tooltip>
           <SidebarMenu>
             {tags.length === 0 ? (
-              <div className="px-2 py-1">
-                <p className="text-muted-foreground text-xs">No tags yet</p>
-                <p className="text-muted-foreground text-xs">Click + to create one</p>
-              </div>
+              <Empty className="gap-0 p-2 md:p-2">
+                <EmptyHeader className="gap-0">
+                  <EmptyTitle className="text-muted-foreground text-xs font-normal">
+                    No tags yet
+                  </EmptyTitle>
+                  <EmptyDescription className="text-xs">Click + to create one</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
               tags.map((tag) => (
                 <TagItem

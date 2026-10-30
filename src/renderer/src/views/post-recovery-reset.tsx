@@ -8,6 +8,7 @@ import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Spinner } from '@/components/ui/spinner'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { notvex } from '@/lib/ipc'
 import { confirmError, newPasswordError } from '@/lib/password-rules'
@@ -66,7 +67,7 @@ export function PostRecoveryReset(): ReactNode {
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
               <div className="border-primary/20 bg-primary/15 shadow-glow-primary flex h-14 w-14 items-center justify-center rounded-xl border">
-                <LockIcon className="text-primary h-7 w-7" />
+                <LockIcon className="text-primary size-7" />
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold tracking-tight">Secure your vault</h1>
@@ -119,6 +120,7 @@ export function PostRecoveryReset(): ReactNode {
                 void handleSetPassword()
               }}
             >
+              {loading && <Spinner aria-hidden />}
               {loading ? 'Updating password…' : 'Set new password'}
             </Button>
           </div>
@@ -126,7 +128,7 @@ export function PostRecoveryReset(): ReactNode {
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">
             <div className="flex flex-col items-center gap-3">
               <div className="border-primary/20 bg-primary/15 shadow-glow-primary flex h-14 w-14 items-center justify-center rounded-xl border">
-                <KeyRoundIcon className="text-primary h-7 w-7" />
+                <KeyRoundIcon className="text-primary size-7" />
               </div>
               <div className="text-center">
                 <h1 className="text-2xl font-bold tracking-tight">Save your new recovery key</h1>

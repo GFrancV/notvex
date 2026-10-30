@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   BugIcon,
   CopyIcon,
+  CopyPlusIcon,
   ExternalLinkIcon,
   EyeIcon,
   FileTextIcon,
@@ -198,7 +199,7 @@ function PaletteContent(): ReactNode {
               keywords={['copy note', 'clone']}
               onSelect={() => run(() => duplicateNote(activeNote.id))}
             >
-              <CopyIcon />
+              <CopyPlusIcon />
               <span>Duplicate note</span>
             </CommandItem>
           )}

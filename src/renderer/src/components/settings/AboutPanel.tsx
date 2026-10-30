@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { ExternalLinkIcon, Loader2Icon, RefreshCwIcon } from 'lucide-react'
+import { ExternalLinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { DOCS_URL, openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
@@ -63,7 +64,7 @@ export function AboutPanel(): ReactNode {
             disabled={checking}
             onClick={() => void handleCheckForUpdates()}
           >
-            {checking ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
+            {checking && <Spinner aria-hidden />}
             {checking ? 'Checking…' : 'Check for updates'}
           </Button>
         </SettingRow>

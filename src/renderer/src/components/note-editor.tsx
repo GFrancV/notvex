@@ -7,20 +7,19 @@ import { EditorView } from '@codemirror/view'
 import { andromeda } from '@uiw/codemirror-theme-andromeda'
 import CodeMirror from '@uiw/react-codemirror'
 import {
-  CopyIcon,
+  CopyPlusIcon,
   DownloadIcon,
   EllipsisIcon,
   EyeIcon,
   FileTextIcon,
-  Loader2Icon,
   PencilIcon,
   PinIcon,
   PlusIcon,
   RotateCcwIcon,
-  Trash2Icon,
-  TrashIcon
+  Trash2Icon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from 'cn'
 
 import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
@@ -33,6 +32,7 @@ import { findExtension } from '@/lib/editor/find'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
+import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { countText, formatCount, type TextCount } from '@/lib/text-count'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -54,7 +54,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from './ui/empty'
 import { Skeleton } from './ui/skeleton'
+import { Spinner } from './ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 const notvexEditorTheme = EditorView.theme({
@@ -357,24 +359,28 @@ export function NoteEditor(): ReactNode {
 
   if (!activeNoteId) {
     return (
-      <div className="text-muted-foreground flex flex-1 items-center justify-center select-none">
-        <div className="text-center">
-          <FileTextIcon className="mx-auto mb-3 h-12 w-12 opacity-20" />
-          <p className="text-sm">Select a note or create a new one</p>
-          <p className="mt-1 text-xs opacity-60">
+      <Empty className="select-none">
+        <EmptyHeader>
+          <EmptyMedia className="text-muted-foreground/30">
+            <FileTextIcon className="size-12" />
+          </EmptyMedia>
+          <EmptyTitle className="text-muted-foreground text-sm font-normal">
+            Select a note or create a new one
+          </EmptyTitle>
+          <EmptyDescription className="text-xs">
             <Shortcut keys="Mod-n" /> to create
-          </p>
-        </div>
-      </div>
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     )
   }
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       {/* Header */}
-      <div className="shrink-0 px-6.5 pt-5 pb-3.5">
+      <div className="shrink-0 px-6.5 pb-3.5">
         {/* Title row */}
-        <div className="flex items-center gap-2">
+        <div className={cn('flex items-center gap-2', TITLEBAR_ROW)}>
           {isLoading ? (
             <div className="flex-1">
               <Skeleton className="h-6.5 w-40 rounded" />
@@ -441,7 +447,7 @@ export function NoteEditor(): ReactNode {
                           size="xs"
                           className="text-muted-foreground border border-dashed"
                         >
-                          <PlusIcon className="size-3" /> Add tag
+                          <PlusIcon /> Add tag
                         </Button>
                       </TagSelector>
                     </div>
@@ -483,11 +489,7 @@ export function NoteEditor(): ReactNode {
                         editorMode === 'reading' ? 'text-primary' : 'text-muted-foreground'
                       }
                     >
-                      {editorMode === 'editing' ? (
-                        <EyeIcon className="h-4 w-4" />
-                      ) : (
-                        <PencilIcon className="h-4 w-4" />
-                      )}
+                      {editorMode === 'editing' ? <EyeIcon /> : <PencilIcon />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
@@ -504,7 +506,7 @@ export function NoteEditor(): ReactNode {
                   aria-label="Note actions"
                   className="text-muted-foreground"
                 >
-                  <EllipsisIcon className="size-4" />
+                  <EllipsisIcon />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
@@ -512,11 +514,11 @@ export function NoteEditor(): ReactNode {
                   <>
                     <DropdownMenuGroup>
                       <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
-                        <CopyIcon className="size-4" />
+                        <CopyPlusIcon />
                         Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setExportOpen(true)}>
-                        <DownloadIcon className="size-4" />
+                        <DownloadIcon />
                         Export note…
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
@@ -527,7 +529,7 @@ export function NoteEditor(): ReactNode {
                   {inTrash ? (
                     <>
                       <DropdownMenuItem onClick={() => void handleRestore()}>
-                        <RotateCcwIcon className="size-4" />
+                        <RotateCcwIcon />
                         Restore
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -535,13 +537,13 @@ export function NoteEditor(): ReactNode {
                         variant="destructive"
                         onClick={() => setConfirmDelete(true)}
                       >
-                        <TrashIcon className="size-4" />
+                        <Trash2Icon />
                         Delete permanently
                       </DropdownMenuItem>
                     </>
                   ) : (
                     <DropdownMenuItem variant="destructive" onClick={handleTrash}>
-                      <Trash2Icon className="size-4" />
+                      <Trash2Icon />
                       Move to trash
                     </DropdownMenuItem>
                   )}
@@ -577,7 +579,7 @@ export function NoteEditor(): ReactNode {
         {isLoading && (
           <div className="bg-background absolute inset-0 z-50 flex items-center justify-center">
             <div className="text-muted-foreground flex items-center gap-2 text-sm">
-              <Loader2Icon className="size-4 animate-spin" />
+              <Spinner aria-hidden />
               Decrypting note…
             </div>
           </div>
@@ -613,7 +615,7 @@ export function NoteEditor(): ReactNode {
       </div>
 
       {note && !isLoading && (
-        <footer className="text-muted-foreground border-border shrink-0 border-t px-4 py-1 text-end text-xs tabular-nums">
+        <footer className="text-muted-foreground border-border shrink-0 border-t px-6.5 py-1 text-end text-xs tabular-nums">
           {formatCount(counts.words, 'word', 'words')} ·{' '}
           {formatCount(counts.chars, 'character', 'characters')}
         </footer>
