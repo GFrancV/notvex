@@ -98,7 +98,7 @@ export function KeyFilePanel({
             <AlertDescription>
               <p>
                 {adding ? 'Adding' : 'Removing'} a key file changes your vault encryption. Your
-                current recovery codes will be <strong>invalidated</strong> and new ones generated,
+                current recovery key will be <strong>invalidated</strong> and a new one generated,
                 which you must save.{' '}
                 {adding
                   ? 'From then on you need both your password and this file to unlock; if you lose the file, access is lost for good.'
@@ -121,7 +121,7 @@ export function KeyFilePanel({
             />
             {adding && (
               <p className="text-muted-foreground text-xs">
-                Any file up to 1MB; larger files use only the first 1MB. For best security, use a
+                Any file up to 1 MB; larger files use only the first 1 MB. For best security, use a
                 generated .nvxkey file.
               </p>
             )}

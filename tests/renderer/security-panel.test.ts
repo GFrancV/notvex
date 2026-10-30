@@ -128,7 +128,7 @@ describe('SecurityPanel: the key file row', () => {
     [1_048_577, true],
     [1_048_576, false],
     [3, false]
-  ])('warns about the 1MB cap for an existing file of %i bytes: %s', async (sizeBytes, warns) => {
+  ])('warns about the 1 MB cap for an existing file of %i bytes: %s', async (sizeBytes, warns) => {
     ipc.selectKeyFile.mockResolvedValue({
       success: true,
       data: { contents: KEY, filename: 'k.bin', sizeBytes }
@@ -137,7 +137,7 @@ describe('SecurityPanel: the key file row', () => {
 
     await click('Use existing…')
 
-    expect(screen.queryByText(/only the first 1MB will be used/i) !== null).toBe(warns)
+    expect(screen.queryByText(/only the first 1 MB will be used/i) !== null).toBe(warns)
   })
 
   it('stays silent when the file dialog is cancelled', async () => {

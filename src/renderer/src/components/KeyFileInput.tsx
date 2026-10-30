@@ -86,7 +86,7 @@ export function KeyFileInput({
       {selectedFile && selectedFile.sizeBytes > 1_048_576 && (
         <div role="alert" className="text-warning flex items-center gap-1.5 text-xs">
           <TriangleAlertIcon className="size-3" />
-          File is larger than 1MB. Only the first 1MB will be used.
+          File is larger than 1 MB. Only the first 1 MB will be used.
         </div>
       )}
     </div>

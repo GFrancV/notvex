@@ -65,7 +65,7 @@ describe('KeyFilePanel: adding a key file', () => {
   it('shows the consequences and asks for the password in a single step', () => {
     renderAdd()
 
-    expect(screen.getByRole('alert').textContent).toMatch(/recovery codes will be invalidated/i)
+    expect(screen.getByRole('alert').textContent).toMatch(/recovery key will be invalidated/i)
     // Shown in the same file field as the remove step, already filled in and still replaceable.
     expect(screen.getByText('vault.nvxkey')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Clear key file' })).toBeTruthy()
