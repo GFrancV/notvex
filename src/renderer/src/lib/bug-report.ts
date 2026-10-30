@@ -4,8 +4,9 @@ import type { BugReportParts } from '@shared/types'
 
 import { notvex } from '@/lib/ipc'
 
-export const DOCS_URL = 'https://github.com/GFrancV/notvex'
-export const ISSUE_URL = `${DOCS_URL}/issues/new`
+const REPO_URL = 'https://github.com/GFrancV/notvex'
+export const DOCS_URL = 'https://notvex.vercel.app/docs/getting-started'
+export const ISSUE_URL = `${REPO_URL}/issues/new`
 const ISSUE_TITLE = '[BUG] '
 // Browsers and GitHub start refusing long URLs not far past this.
 const URL_MAX = 8 * 1024
