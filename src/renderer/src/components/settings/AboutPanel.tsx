@@ -74,7 +74,7 @@ export function AboutPanel(): ReactNode {
 
       {/* Buttons, not <a href>: a link would navigate the window, which main blocks. */}
       <SettingsSection title="Help & feedback">
-        <SettingRow label="Documentation" description="Guides and answers on GitHub.">
+        <SettingRow label="Documentation" description="Guides and answers on the Notvex website.">
           <Button
             variant="secondary"
             size="sm"
