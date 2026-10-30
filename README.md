@@ -52,7 +52,7 @@ What Notvex can't do is protect a vault while it's unlocked on a compromised com
 > [!WARNING]
 > **If you lose your master password AND your recovery key, your notes are unrecoverable.** There is no account, no server, no way to reset access. Write your recovery key down by hand or copy it on a device you trust, and keep it somewhere safe.
 
-## Tech stack & ecosystem
+## Tech stack
 
 ![Electron](https://img.shields.io/badge/Electron-191970?style=for-the-badge&logo=Electron&logoColor=white)
 ![React](https://img.shields.io/badge/React-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
@@ -70,13 +70,13 @@ What Notvex can't do is protect a vault while it's unlocked on a compromised com
 The app is organized into three separate processes, orchestrated with **electron-vite**:
 
 - **`src/main`** — Electron main process (Node.js): all vault cryptography, SQLCipher access, and the IPC handlers.
-- **`src/preload`** — `contextBridge` bridge that exposes only the `window.notvex` API to the renderer (no Node.js integration).
-- **`src/renderer`** — the React 19 + Tailwind CSS 4 + shadcn/ui interface, which never touches cryptography or SQL directly.
+- **`src/preload`** — the `contextBridge` layer that exposes only the `window.notvex` API to the renderer (no Node.js integration).
+- **`src/renderer`** — the React 19 + Tailwind CSS 4 + shadcn/ui interface.
 - **`src/shared`** — TypeScript types shared across all three processes.
 
 This isolation is intentional: the renderer can never run encryption or SQL code on its own, only through explicitly defined IPC channels.
 
-## Installation & development
+## Development
 
 ### Prerequisites
 
@@ -115,24 +115,29 @@ pnpm build:linux
 
 Installers are output to `dist/`.
 
+### Check
+
+```bash
+pnpm check:task   # typecheck, lint, format, IPC boundary check and tests
+```
+
+Run it before opening a PR. [`CONSTRAINTS.md`](./CONSTRAINTS.md) sets the bar it enforces.
+
 ## Contributing
 
-1. Fork the repository
+1. Fork the repository.
 2. Create a descriptive branch (`feat/feature-name`, `fix/bug-name`).
 3. Follow the project's conventions:
    - UI components: always reuse what already exists in `src/renderer/src/components/ui/` before building something new.
    - Never hardcode colors — use the semantic Tailwind tokens defined in `main.css`.
    - Dark mode only — no `dark:` variants or light-theme logic.
    - All renderer↔main communication goes through IPC (`ipc-handlers.ts` → `preload/index.ts` → `lib/ipc.ts`); the renderer never imports cryptography or SQL modules directly.
-4. Before opening a PR, run:
-   ```bash
-   pnpm validate   # typecheck + lint + format:check
-   ```
+4. Run `pnpm check:task` before opening a PR.
 5. Use [Conventional Commits](https://www.conventionalcommits.org/) in lowercase (`feat:`, `fix:`, `chore:`, etc.), max 72 characters in the subject.
-6. Open the PR against `main`. CI (`react-doctor` and the release workflow) runs automatically on every push/PR.
+6. Open the PR against `main`. CI (`validate.yml` and `react-doctor.yml`) runs on every pull request.
 
 Found a security bug? See [`SECURITY.md`](./SECURITY.md) for how to report it privately.
 
 ## License
 
-This project is licensed under the AGPL-3.0 license. See [`LICENSE`](./LICENSE) for the full text.
+Notvex is licensed under the AGPL-3.0. See [`LICENSE`](./LICENSE) for the full text.
