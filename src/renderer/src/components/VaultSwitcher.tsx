@@ -36,7 +36,7 @@ function isSamePath(a: string | null, b: string): boolean {
 }
 
 export function VaultSwitcher(): ReactNode {
-  const { clearSession, setPendingNewVaultPath, setPendingOpenVaultPath, lock } = useVaultStore()
+  const { clearSession, setPendingOpenVaultPath, lock } = useVaultStore()
   const currentVaultPath = useVaultStore((s) => s.currentVaultPath)
 
   const { load: loadPrefs } = usePrefsStore()
@@ -74,8 +74,7 @@ export function VaultSwitcher(): ReactNode {
   const handleCreateNew = async (): Promise<void> => {
     const res = await notvex.vault.chooseFile('new')
     if (!res.success || !res.data) return
-    await lock()
-    setPendingNewVaultPath(res.data)
+    await lock(res.data)
   }
 
   return (

@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
@@ -25,7 +28,11 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0), promoteVaultToTop: vi.fn() }))
+vi.mock('@main/prefs', () => ({
+  getPref: vi.fn(() => 0),
+  promoteVaultToTop: vi.fn(),
+  samePath: (a: string, b: string) => a === b
+}))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({ isValidNotvexFile: vi.fn(() => true) }))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
@@ -52,6 +59,9 @@ vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () =
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 const APP_URL = pathToFileURL(rendererIndexPath).href
+// existsSync() is real, so switch / open-file targets must exist on disk
+const OTHER = join(mkdtempSync(join(tmpdir(), 'notvex-recycle-')), 'other.nvx')
+writeFileSync(OTHER, '')
 
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   const fn = handlers.get(channel)
@@ -191,5 +201,40 @@ describe('renderer recycle on lock', () => {
     await ipc.closeVaultDrained(win as never)
 
     expect(kill).not.toHaveBeenCalled()
+  })
+
+  it('vault:switch queues its target and recycles', async () => {
+    await invoke('vault:switch', OTHER)
+
+    expectRecycledAfterClose()
+    expect(pending.takePendingVault()).toEqual({ path: OTHER, mode: 'open' })
+  })
+
+  it('opening a different .nvx queues it and recycles instead of messaging the old renderer', async () => {
+    const { resolveOpenFilePath } = await import('@main/file-opener')
+    const focusable = Object.assign(win, {
+      isMinimized: vi.fn(() => false),
+      restore: vi.fn(),
+      focus: vi.fn()
+    })
+
+    await resolveOpenFilePath(focusable as never, OTHER)
+
+    expectRecycledAfterClose()
+    expect(win.webContents.send).not.toHaveBeenCalledWith('vault:open-file', OTHER)
+    expect(pending.takePendingVault()).toEqual({ path: OTHER, mode: 'open' })
+  })
+
+  it('vault:close with a path queues it for Setup', async () => {
+    await invoke('vault:close', 'C:/vaults/new.nvx')
+
+    expectRecycledAfterClose()
+    expect(pending.takePendingVault()).toEqual({ path: 'C:/vaults/new.nvx', mode: 'create' })
+  })
+
+  it('vault:close ignores a create path that is not a string', async () => {
+    await invoke('vault:close', { path: 'C:/vaults/new.nvx' })
+
+    expect(pending.takePendingVault()).toEqual({ path: 'C:/vaults/work.nvx', mode: 'open' })
   })
 })

@@ -208,7 +208,7 @@ export interface NotvexAPI {
     ): Promise<IpcResult<ChangePasswordResult>>
     confirmRecoverySaved(): Promise<IpcResult<null>>
     recoveryUnconfirmed(): Promise<IpcResult<boolean>>
-    close(): Promise<IpcResult<null>>
+    close(createPath?: string): Promise<IpcResult<null>>
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
     switchTo(filePath: string): Promise<IpcResult<null>>

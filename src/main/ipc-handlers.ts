@@ -281,9 +281,9 @@ function touchActivity(): void {
 // drain when there's no renderer left to flush.
 //
 // Callers, and why each sits where it does:
-// - via lockAndRecycle(): manual lock (vault:close), Reload Window, and auto-lock, suspend /
-//   lock-screen, minimize (through lockVaultAndNotify()).
-// - vault switch, opening a different .nvx (file-opener.ts).
+// - via lockAndRecycle(): manual lock (vault:close), vault switch, opening a different .nvx
+//   (file-opener.ts), Reload Window, and auto-lock, suspend / lock-screen, minimize (through
+//   lockVaultAndNotify()).
 // - a bare win.close(): window.ts's 'close' intercept, while webContents can still be
 //   messaged (window-all-closed is too late for that).
 // - Cmd+Q / app.quit(): index.ts's before-quit, which fires before any window's 'close'; the
@@ -946,9 +946,12 @@ export function registerIpcHandlers(
     }
   })
 
-  handle('vault:close', async () => {
+  // createPath: a vault the user is about to create, so the next renderer opens Setup for it
+  handle('vault:close', async (_e, createPath?: unknown) => {
     try {
-      await lockAndRecycle(liveWin())
+      const next: PendingVault | undefined =
+        typeof createPath === 'string' ? { path: createPath, mode: 'create' } : undefined
+      await lockAndRecycle(liveWin(), { next })
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -964,7 +967,7 @@ export function registerIpcHandlers(
       if (!isValidNotvexFile(filePath)) {
         return fail('This file is not a valid Notvex vault')
       }
-      await closeVaultDrained(liveWin())
+      await lockAndRecycle(liveWin(), { next: { path: filePath, mode: 'open' } })
       try {
         promoteVaultToTop(filePath)
       } catch (e) {

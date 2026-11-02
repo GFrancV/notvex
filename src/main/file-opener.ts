@@ -2,7 +2,7 @@ import { existsSync } from 'fs'
 
 import type { BrowserWindow } from 'electron'
 
-import { closeVaultDrained } from './ipc-handlers'
+import { lockAndRecycle } from './ipc-handlers'
 import { setPendingVault } from './pending-vault'
 import { samePath } from './prefs'
 import { isValidNotvexFile } from './vault/container'
@@ -44,10 +44,12 @@ export async function resolveOpenFilePath(
     return
   }
 
-  // A different vault is open → close it first, draining any
-  // pending autosave in the window we're about to repurpose
+  // A different vault is open → close it first, draining any pending autosave. The fresh
+  // renderer reads the file from the pending slot; the old one only hears of it when it
+  // survived the close (a failed pack keeps it for its toast).
   if (isVaultOpen()) {
-    await closeVaultDrained(win)
+    const { recycled } = await lockAndRecycle(win, { next: { path: filePath, mode: 'open' } })
+    if (recycled) return
   }
 
   // promoteVaultToTop intentionally omitted: recordVaultUsed is called after

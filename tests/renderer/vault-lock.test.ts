@@ -111,6 +111,14 @@ describe('lock', () => {
     expectCleared()
   })
 
+  it('with a path, hands main the vault to create and points Setup at it', async () => {
+    close.mockResolvedValue({ success: true, data: null })
+    await useVaultStore.getState().lock('C:/vaults/new.nvx')
+    expect(close).toHaveBeenCalledExactlyOnceWith('C:/vaults/new.nvx')
+    expectCleared()
+    expect(useVaultStore.getState().pendingNewVaultPath).toBe('C:/vaults/new.nvx')
+  })
+
   it('clears even when main reports the close failed', async () => {
     close.mockResolvedValue({ success: false, error: 'boom' })
     await useVaultStore.getState().lock()
