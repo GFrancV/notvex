@@ -1,6 +1,8 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { join } from 'path'
 
+import type { PendingVault } from '@shared/types'
+
 import { appendError } from './error-log'
 import {
   cancelPendingConfirmations,
@@ -20,7 +22,7 @@ const CRASH_RELOAD_GUARD_MS = 30_000
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
 
-export function createWindow(takePendingFilePath: () => string | null): BrowserWindow {
+export function createWindow(takePendingVault: () => PendingVault | null): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -69,7 +71,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     void win.loadFile(rendererIndexPath)
   }
 
-  registerIpcHandlers(win, takePendingFilePath)
+  registerIpcHandlers(win, takePendingVault)
   initAutoUpdater(win)
 
   win.setContentProtection(!getPref('allowScreenCapture'))

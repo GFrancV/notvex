@@ -2,12 +2,14 @@ import { existsSync } from 'fs'
 
 import type { BrowserWindow } from 'electron'
 
+import type { PendingVault } from '@shared/types'
+
 import { closeVaultDrained } from './ipc-handlers'
 import { samePath } from './prefs'
 import { isValidNotvexFile } from './vault/container'
 import { getVaultPath, isVaultOpen } from './vault/vault'
 
-let pendingOpenFilePath: string | null = null
+let pendingVault: PendingVault | null = null
 
 export function extractNvxArgv(argv: string[]): string | null {
   for (let i = 1; i < argv.length; i++) {
@@ -21,7 +23,7 @@ export function extractNvxArgv(argv: string[]): string | null {
 
 export function setValidatedPending(filePath: string): void {
   if (existsSync(filePath) && isValidNotvexFile(filePath)) {
-    pendingOpenFilePath = filePath
+    pendingVault = { path: filePath, mode: 'open' }
   }
 }
 
@@ -29,9 +31,9 @@ export function setValidatedPending(filePath: string): void {
 const _initialNvxArg = extractNvxArgv(process.argv)
 if (_initialNvxArg) setValidatedPending(_initialNvxArg)
 
-export function takePendingOpenFilePath(): string | null {
-  const p = pendingOpenFilePath
-  pendingOpenFilePath = null
+export function takePendingVault(): PendingVault | null {
+  const p = pendingVault
+  pendingVault = null
   return p
 }
 
@@ -65,6 +67,6 @@ export async function resolveOpenFilePath(
     win.focus()
     win.webContents.send('vault:open-file', filePath)
   } else {
-    pendingOpenFilePath = filePath
+    pendingVault = { path: filePath, mode: 'open' }
   }
 }

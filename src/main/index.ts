@@ -7,7 +7,7 @@ import {
   extractNvxArgv,
   resolveOpenFilePath,
   setValidatedPending,
-  takePendingOpenFilePath
+  takePendingVault
 } from './file-opener'
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { logError } from './log'
@@ -67,7 +67,7 @@ let readyToQuit = false
 let startupDone = false
 
 function openMainWindow(): void {
-  const win = createWindow(takePendingOpenFilePath)
+  const win = createWindow(takePendingVault)
   // On macOS the app outlives its last window; open-file / second-instance
   // must not reuse the destroyed one.
   win.on('closed', (): void => {
@@ -151,7 +151,7 @@ app.on('open-file', (event, filePath): void => {
   }
 
   // No window yet (cold start) or anymore (macOS dock): store the path; the
-  // window's renderer picks it up via takePendingOpenFilePath on load. No new
+  // window's renderer picks it up via takePendingVault on load. No new
   // window mid-quit: it would re-arm the auto-lock timer before-quit stopped.
   setValidatedPending(filePath)
   if (startupDone && !isQuitting) openMainWindow()

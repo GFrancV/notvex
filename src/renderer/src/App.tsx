@@ -21,7 +21,13 @@ import { Setup } from '@/views/setup'
 import { Unlock } from '@/views/unlock'
 
 export default function App(): ReactNode {
-  const { setStatus, setCurrentVaultPath, setPendingOpenVaultPath, clearSession } = useVaultStore()
+  const {
+    setStatus,
+    setCurrentVaultPath,
+    setPendingOpenVaultPath,
+    setPendingNewVaultPath,
+    clearSession
+  } = useVaultStore()
   const { status, needsRecoveryReset, pendingNewVaultPath } = useVaultStore(
     useShallow((s) => ({
       status: s.status,
@@ -38,11 +44,13 @@ export default function App(): ReactNode {
     const init = async (): Promise<void> => {
       await loadPrefs()
 
-      // Consume any file path queued from process.argv / OS open-file event
+      // Consume any vault main queued: process.argv, an OS open-file event, or a lock that
+      // replaced the previous renderer
       const pendingRes = await notvex.vault.getPendingFile()
-      const pendingFilePath = pendingRes.success ? pendingRes.data : null
-      if (pendingFilePath) {
-        setPendingOpenVaultPath(pendingFilePath)
+      const pending = pendingRes.success ? pendingRes.data : null
+      if (pending) {
+        if (pending.mode === 'create') setPendingNewVaultPath(pending.path)
+        else setPendingOpenVaultPath(pending.path)
         setStatus('locked')
         return
       }
@@ -66,7 +74,7 @@ export default function App(): ReactNode {
     }
 
     void init()
-  }, [setStatus, setCurrentVaultPath, loadPrefs, setPendingOpenVaultPath])
+  }, [setStatus, setCurrentVaultPath, loadPrefs, setPendingOpenVaultPath, setPendingNewVaultPath])
 
   // Subscribe to vault:open-file push events (second-instance / open-file while running).
   // Main has already closed any open vault by the time this arrives.

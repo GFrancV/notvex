@@ -78,7 +78,7 @@ vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),
   setValidatedPending: vi.fn(),
-  takePendingOpenFilePath: vi.fn(() => null)
+  takePendingVault: vi.fn(() => null)
 }))
 
 // A BrowserWindow double that, like the real one, throws once destroyed.
@@ -292,7 +292,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
     expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
     expect(createWindow).toHaveBeenCalledTimes(2)
-    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingOpenFilePath)
+    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingVault)
   })
 
   it('open-file during startup only stores the path, and startup opens exactly one window', async () => {
@@ -312,7 +312,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
 
     finishSodium()
     await vi.waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1))
-    expect(createWindow).toHaveBeenCalledWith(fileOpener.takePendingOpenFilePath)
+    expect(createWindow).toHaveBeenCalledWith(fileOpener.takePendingVault)
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
   })
 
@@ -347,7 +347,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
     expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
     expect(createWindow).toHaveBeenCalledTimes(2)
-    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingOpenFilePath)
+    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingVault)
   })
 
   it('second-instance after the window closed opens a window even without a .nvx', async () => {

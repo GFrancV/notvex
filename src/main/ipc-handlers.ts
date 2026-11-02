@@ -17,6 +17,7 @@ import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
+import type { PendingVault } from '@shared/types'
 import { clearClipboardIfOurs, writeClipboard } from './clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
@@ -542,7 +543,7 @@ function mapOpenVaultError(e: unknown): IpcResult<never> {
 
 export function registerIpcHandlers(
   win: BrowserWindow,
-  takePendingFilePath: () => string | null
+  takePendingVault: () => PendingVault | null
 ): void {
   currentWin = win
   startAutoLockTimer()
@@ -553,7 +554,7 @@ export function registerIpcHandlers(
 
   handle('vault:get-pending-file', () => {
     try {
-      return ok(takePendingFilePath())
+      return ok(takePendingVault())
     } catch (e) {
       return fail(e)
     }
