@@ -80,7 +80,7 @@ This isolation is intentional: the renderer can never run encryption or SQL code
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) ≥ 22
+- [Node.js](https://nodejs.org/) 22.22.2+, 24.15+ or 26+
 - [pnpm](https://pnpm.io/)
 - Windows: Visual Studio Build Tools with the "Desktop development with C++" workload (required to compile `@journeyapps/sqlcipher`)
 

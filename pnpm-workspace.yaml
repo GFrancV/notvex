@@ -1,4 +1,6 @@
 shamefullyHoist: true
+# an unsupported Node fails here, not later as a cryptic Vitest worker crash
+engineStrict: true
 allowBuilds:
   '@journeyapps/sqlcipher': true
   electron: true
