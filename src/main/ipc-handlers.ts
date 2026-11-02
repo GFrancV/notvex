@@ -23,6 +23,7 @@ import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { appendError, clearLog, ensureLogDir, readLogTail } from './error-log'
 import { logError } from './log'
+import { setPendingVault } from './pending-vault'
 import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './markdown-io'
 import type { SchemaMigrationGate } from './db/migrations'
 import type {
@@ -280,9 +281,9 @@ function touchActivity(): void {
 // drain when there's no renderer left to flush.
 //
 // Callers, and why each sits where it does:
-// - manual lock (vault:close), vault switch, opening a different .nvx (file-opener.ts).
-// - auto-lock, suspend / lock-screen, minimize: via lockVaultAndNotify(), which also tells
-//   the window it was locked.
+// - via lockAndRecycle(): manual lock (vault:close), Reload Window, and auto-lock, suspend /
+//   lock-screen, minimize (through lockVaultAndNotify()).
+// - vault switch, opening a different .nvx (file-opener.ts).
 // - a bare win.close(): window.ts's 'close' intercept, while webContents can still be
 //   messaged (window-all-closed is too late for that).
 // - Cmd+Q / app.quit(): index.ts's before-quit, which fires before any window's 'close'; the
@@ -290,7 +291,6 @@ function touchActivity(): void {
 // - macOS window-all-closed (the app stays alive): index.ts, a safety net with win = null.
 //   It can fire mid-quitAndInstall(); harmless, closeVault() is serialized and idempotent.
 // - renderer reloaded or crashed: window.ts, with win = null.
-// - Reload Window (app:reload-window): before reloading, with a longer drain bound.
 // relockOrphanedVault() is the exception: the renderer that asked for the unlock is gone, so
 // there's nothing to drain and it calls closeVault() directly.
 export async function closeVaultDrained(
@@ -311,10 +311,64 @@ export async function closeVaultDrained(
   }
 }
 
+// ─── Renderer recycle ────────────────────────────────────────────────────────
+// After a lock the old renderer's heap still holds decrypted titles, note text and the typed
+// password, and a same-site reload() keeps the same process. So the lock kills it, and
+// render-process-gone, seeing the mark (takeRecycleMark()), reloads into a new process without
+// logging the kill or treating it as a crash. A reload() sent right after the kill is dropped.
+// SIGKILL, not forcefullyCrashRenderer(): that one makes the renderer crash itself, which runs
+// the OS crash-dump path. That can write the heap being discarded to disk, or hang the exit so
+// render-process-gone never fires.
+
+const recycling = new WeakSet<WebContents>()
+
+export function takeRecycleMark(webContents: WebContents): boolean {
+  return recycling.delete(webContents)
+}
+
+// next: the vault the new renderer opens on, since nothing of the old renderer's state survives.
+function recycleRenderer(win: BrowserWindow | null, next: PendingVault | null): boolean {
+  if (!win || win.isDestroyed()) return false
+  if (next) setPendingVault(next)
+  // A kill already in flight reloads into a new process; a second one would hit a dead pid
+  if (recycling.has(win.webContents)) return true
+  // pid 0 means no live renderer (and kill(0) would hit our own group); a plain reload then
+  // already starts a new process
+  const pid = win.webContents.getOSProcessId()
+  if (pid) {
+    recycling.add(win.webContents)
+    try {
+      process.kill(pid, 'SIGKILL')
+      return true
+    } catch (e) {
+      recycling.delete(win.webContents)
+      // Unless the process is already gone, the reload below keeps the old heap: leave a trace
+      const code = (e as NodeJS.ErrnoException).code ?? 'Error'
+      appendError('renderer-recycle', { name: code, stack: '' })
+    }
+  }
+  win.webContents.reload()
+  return true
+}
+
+// closeVaultDrained() for a lock the user stays in the app for. A failed pack keeps the
+// renderer, since its pack-failed toast is the only notice of the lost changes. next defaults
+// to the vault being locked.
+export async function lockAndRecycle(
+  win: BrowserWindow | null,
+  opts: { drainTimeoutMs?: number; next?: PendingVault } = {}
+): Promise<{ recycled: boolean }> {
+  const lockedPath = getVaultPath()
+  const next = opts.next ?? (lockedPath ? { path: lockedPath, mode: 'open' } : null)
+  const { packFailed } = await closeVaultDrained(win, opts.drainTimeoutMs)
+  if (packFailed) return { recycled: false }
+  return { recycled: recycleRenderer(win, next) }
+}
+
 export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {
   if (!isVaultOpen()) return
-  await closeVaultDrained(win)
-  if (win && !win.isDestroyed()) win.webContents.send('vault:auto-locked')
+  const { recycled } = await lockAndRecycle(win)
+  if (!recycled && win && !win.isDestroyed()) win.webContents.send('vault:auto-locked')
 }
 
 // A failed credential rotation closes the vault itself, outside closeVaultDrained(), so the
@@ -323,7 +377,7 @@ async function notifyIfRotationLocked(): Promise<void> {
   if (isVaultOpen()) return
   recoveryConfirmPending = false
   await clearClipboardIfOurs('lock')
-  liveWin()?.webContents.send('vault:auto-locked')
+  recycleRenderer(liveWin(), null)
 }
 
 // ─── Current window ──────────────────────────────────────────────────────────
@@ -894,7 +948,7 @@ export function registerIpcHandlers(
 
   handle('vault:close', async () => {
     try {
-      await closeVaultDrained(liveWin())
+      await lockAndRecycle(liveWin())
       return ok(null)
     } catch (e) {
       return fail(e)
@@ -1632,13 +1686,11 @@ export function registerIpcHandlers(
       if (isCreating) return fail('A vault is being created. Try again once it is ready.')
       const win = requireWin()
       cancelPendingConfirmations()
-      const { packFailed } = await closeVaultDrained(win, RELOAD_DRAIN_TIMEOUT_MS)
-      if (packFailed) {
-        // a reload would discard the pack-failed toast, the only notice of the lost changes
+      const { recycled } = await lockAndRecycle(win, { drainTimeoutMs: RELOAD_DRAIN_TIMEOUT_MS })
+      if (!recycled) {
         win.webContents.send('vault:auto-locked')
         return ok(false)
       }
-      win.webContents.reload()
       return ok(true)
     } catch (e) {
       return fail(e)

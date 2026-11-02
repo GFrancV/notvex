@@ -3,15 +3,11 @@ import { app, BrowserWindow } from 'electron'
 import { installAppMenu } from './app-menu'
 import { clearClipboardIfOurs } from './clipboard-guard'
 import { installCrashHandlers } from './crash-handlers'
-import {
-  extractNvxArgv,
-  resolveOpenFilePath,
-  setValidatedPending,
-  takePendingVault
-} from './file-opener'
+import { extractNvxArgv, resolveOpenFilePath, setValidatedPending } from './file-opener'
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { logError } from './log'
 import { installNavigationGuard } from './navigation-guard'
+import { takePendingVault } from './pending-vault'
 import { installPermissionGuard } from './permission-guard'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'

@@ -10,7 +10,8 @@ import {
   isRecoveryConfirmPending,
   lockVaultAndNotify,
   markRendererReplaced,
-  registerIpcHandlers
+  registerIpcHandlers,
+  takeRecycleMark
 } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
@@ -125,6 +126,13 @@ export function createWindow(takePendingVault: () => PendingVault | null): Brows
   // per window of time, so a renderer that crashes on load can't loop and flood the log.
   let lastCrashReloadAt = -Infinity
   win.webContents.on('render-process-gone', (_event, details) => {
+    // A lock's own kill: the vault is already closed, so reload straight into a new process
+    if (takeRecycleMark(win.webContents)) {
+      void dropRenderer().then(() => {
+        if (!win.isDestroyed()) win.webContents.reload()
+      })
+      return
+    }
     appendError('render-process-gone', { reason: details.reason, exitCode: details.exitCode })
     const closed = dropRenderer()
     if (details.reason === 'clean-exit') return
