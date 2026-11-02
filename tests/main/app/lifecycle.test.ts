@@ -66,6 +66,11 @@ vi.mock('@main/crash-handlers', () => ({
   installCrashHandlers: vi.fn()
 }))
 
+// The real one would make the test worker itself non-dumpable on Linux.
+vi.mock('@main/process-hardening', () => ({
+  hardenProcess: vi.fn(() => true)
+}))
+
 vi.mock('@main/clipboard-guard', () => ({
   clearClipboardIfOurs: vi.fn().mockResolvedValue(undefined)
 }))
@@ -437,5 +442,33 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
     await launchWith('', true)
 
     expect(exit).not.toHaveBeenCalled()
+  })
+
+  it('a packaged build hardens the process before taking the single-instance lock', async () => {
+    const { hardenProcess } = await import('@main/process-hardening')
+    await launchWith('', true)
+
+    expect(hardenProcess).toHaveBeenCalledOnce()
+    expect(vi.mocked(hardenProcess).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(app.requestSingleInstanceLock).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('a packaged build traced at start exits before taking the single-instance lock', async () => {
+    const { hardenProcess } = await import('@main/process-hardening')
+    vi.mocked(hardenProcess).mockReturnValueOnce(false)
+    await launchWith('', true)
+
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(exit.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(app.requestSingleInstanceLock).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('a dev build leaves the process attachable', async () => {
+    const { hardenProcess } = await import('@main/process-hardening')
+    await launchWith('', false)
+
+    expect(hardenProcess).not.toHaveBeenCalled()
   })
 })
