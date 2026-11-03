@@ -126,33 +126,38 @@ export function Sidebar(): React.ReactNode {
 
         {/* Search + new note */}
         <div className="flex gap-1.5 px-3 py-2.5">
-          <div ref={searchContainerRef} className="w-full">
-            <InputGroup className="w-full">
-              <InputGroupInput
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault()
-                    void handleNewNote()
-                  }
-                }}
-                placeholder="Search…"
-              />
-              <InputGroupAddon>
-                <SearchIcon />
-              </InputGroupAddon>
-              <InputGroupAddon align="inline-end">
-                {searchQuery ? (
-                  <Button variant="ghost" size="icon-xs" onClick={() => setSearchQuery('')}>
-                    <XIcon />
-                  </Button>
-                ) : (
-                  <Shortcut keys="Mod-Shift-f" />
-                )}
-              </InputGroupAddon>
-            </InputGroup>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div ref={searchContainerRef} className="w-full">
+                <InputGroup className="w-full">
+                  <InputGroupInput
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        e.preventDefault()
+                        void handleNewNote()
+                      }
+                    }}
+                    placeholder="Search…"
+                  />
+                  <InputGroupAddon>
+                    <SearchIcon />
+                  </InputGroupAddon>
+                  {searchQuery && (
+                    <InputGroupAddon align="inline-end">
+                      <Button variant="ghost" size="icon-xs" onClick={() => setSearchQuery('')}>
+                        <XIcon />
+                      </Button>
+                    </InputGroupAddon>
+                  )}
+                </InputGroup>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              Search <Shortcut keys="Mod-Shift-f" />
+            </TooltipContent>
+          </Tooltip>
 
           {!showTrash && !showPinned && (
             <Tooltip>
