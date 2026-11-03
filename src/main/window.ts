@@ -19,6 +19,7 @@ const CRASH_RELOAD_GUARD_MS = 30_000
 
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
+const isLinux = process.platform === 'linux'
 
 export function createWindow(takePendingFilePath: () => string | null): BrowserWindow {
   const win = new BrowserWindow({
@@ -28,7 +29,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     minHeight: 740,
     backgroundColor: '#0a0a0a',
     titleBarStyle: 'hidden',
-    ...(isWindows && {
+    ...((isWindows || isLinux) && {
       titleBarOverlay: {
         color: '#0a0a0a', // --card / --sidebar token equivalent
         symbolColor: '#a3a3a3', // --muted-foreground token equivalent
