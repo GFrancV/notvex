@@ -97,6 +97,14 @@ describe('Sidebar entry points', () => {
     expect((await screen.findByRole('tooltip')).textContent).toBe('New note Ctrl N')
   })
 
+  it('shows the search shortcut in its tooltip', async () => {
+    await renderSidebar()
+
+    fireEvent.focus(screen.getByPlaceholderText('Search…'))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Search Ctrl Shift F')
+  })
+
   it('opens Settings straight from the gear button', async () => {
     await renderSidebar()
 

@@ -109,7 +109,7 @@ export function SecurityPanel({
             value={String(autoLockMinutes)}
             onValueChange={(minutes) => void setPref('autoLockMinutes', Number(minutes))}
           >
-            <SelectTrigger className="w-40" size="sm">
+            <SelectTrigger className="min-w-40" size="sm">
               <SelectValue placeholder="Select a lock-out time" />
             </SelectTrigger>
             <SelectContent position="popper">
@@ -147,7 +147,7 @@ export function SecurityPanel({
             value={String(clipboardClearSeconds)}
             onValueChange={(seconds) => void setPref('clipboardClearSeconds', Number(seconds))}
           >
-            <SelectTrigger className="w-40" size="sm">
+            <SelectTrigger className="min-w-40" size="sm">
               <SelectValue placeholder="Select a duration" />
             </SelectTrigger>
             <SelectContent position="popper">

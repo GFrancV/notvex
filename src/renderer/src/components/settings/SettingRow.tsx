@@ -76,7 +76,7 @@ export function SettingRow({
 }): ReactNode {
   return (
     <div className="flex items-start justify-between gap-4">
-      <div className="flex-1 space-y-0.5">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <p className="text-sm">{label}</p>
         {description && <div className="text-muted-foreground text-xs">{description}</div>}
       </div>
