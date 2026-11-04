@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages as codeLanguages } from '@codemirror/language-data'
@@ -32,6 +33,7 @@ import { findExtension } from '@/lib/editor/find'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
+import { takeTypeahead } from '@/lib/title-typeahead'
 import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { countText, formatCount, type TextCount } from '@/lib/text-count'
 import { useUiStore } from '@/store/ui.store'
@@ -172,7 +174,6 @@ export function NoteEditor(): ReactNode {
   // Starts at the store's count: requests made before this mount (e.g. before a lock
   // unmounted the previous editor) were already handled and must not steal focus.
   const lastFocusTitleRef = useRef(useUiStore.getState().focusTitleRequest)
-  const focusTitlePendingRef = useRef(false)
   // Last title known to be on disk. Compared against instead of note.title,
   // which goes stale as soon as the first title save lands.
   const persistedTitleRef = useRef('')
@@ -225,22 +226,34 @@ export function NoteEditor(): ReactNode {
     const request = useUiStore.getState().focusTitleRequest
     const wantsTitleFocus = request > lastFocusTitleRef.current
     lastFocusTitleRef.current = request
-    focusTitlePendingRef.current = false
     setIsLoading(true)
     setNote(null)
     setTitle('')
     setContent('')
     void notvex.notes.get(activeNoteId).then((res) => {
       if (activeIdRef.current !== activeNoteId) return
-      setIsLoading(false)
-      if (res.success && res.data) {
-        setNote(res.data)
-        setTitle(res.data.title)
-        persistedTitleRef.current = res.data.title
-        setContent(res.data.content)
-        setCounts(countText(res.data.content))
-        if (wantsTitleFocus) focusTitlePendingRef.current = true
-      }
+      const loaded = res.success ? res.data : null
+      // Taken, rendered and focused with no yield in between: a key handled while the input
+      // still showed the loaded title would land after it and overwrite what was typed.
+      // A failed load takes it too, and drops it.
+      const typed = wantsTitleFocus ? takeTypeahead() : ''
+      flushSync(() => {
+        setIsLoading(false)
+        if (!loaded) return
+        setNote(loaded)
+        // What was typed replaces the title, as it would have replaced the selection.
+        setTitle(typed || loaded.title)
+        persistedTitleRef.current = loaded.title
+        setContent(loaded.content)
+        setCounts(countText(loaded.content))
+      })
+      if (!loaded) return
+      if (typed) titleSaver.schedule(activeNoteId, typed)
+      const input = titleInputRef.current
+      if (!wantsTitleFocus || !input) return
+      input.focus()
+      if (typed) input.setSelectionRange(typed.length, typed.length)
+      else input.select()
     })
 
     const onKey = (e: KeyboardEvent): void => {
@@ -267,16 +280,6 @@ export function NoteEditor(): ReactNode {
       window.removeEventListener('keydown', onKey, true)
     }
   }, [activeNoteId, setActiveNoteId, contentSaver, titleSaver])
-
-  // The title input only exists once loading ends, so focus it after that commit. A frame
-  // callback can run before React commits and find no input.
-  useEffect(() => {
-    const input = titleInputRef.current
-    if (isLoading || !focusTitlePendingRef.current || !input) return
-    focusTitlePendingRef.current = false
-    input.focus()
-    input.select()
-  }, [isLoading])
 
   const handleContentChange = useCallback(
     (value: string): void => {
