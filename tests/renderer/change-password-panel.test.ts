@@ -170,6 +170,24 @@ describe('ChangePasswordPanel: validation', () => {
 
     expect(errors()).toEqual(["Passwords don't match"])
   })
+
+  it("keeps the error's space in the layout whether or not the error shows", () => {
+    const input = screen.getByLabelText('Current password')
+    const slot = (): Element | null =>
+      input.closest('[data-slot=field]')!.querySelector('[data-slot=field-error-slot]')
+    const before = slot()
+    expect(before).not.toBeNull()
+    expect(errors()).toEqual([])
+
+    fireEvent.blur(input)
+    expect(slot()).toBe(before)
+    expect(before!.querySelector('[role=alert]')?.textContent).toBe('Enter your current password')
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+
+    fireEvent.change(input, { target: { value: 'old password 123' } })
+    expect(slot()).toBe(before)
+    expect(errors()).toEqual([])
+  })
 })
 
 describe('ChangePasswordPanel: while re-encrypting', () => {

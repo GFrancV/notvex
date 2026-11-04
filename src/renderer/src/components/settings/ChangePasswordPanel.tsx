@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react'
 
+import { FieldErrorSlot } from '@/components/FieldErrorSlot'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
@@ -97,7 +98,7 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
               placeholder="Your current password"
               aria-invalid={!!fields.error('current')}
             />
-            <FieldError>{fields.error('current')}</FieldError>
+            <FieldErrorSlot>{fields.error('current')}</FieldErrorSlot>
           </Field>
 
           {/* Key file (only shown when vault has one configured) */}
@@ -108,7 +109,7 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
                 onChange={(c) => setKeyFileContents(c)}
                 onClear={() => setKeyFileContents(null)}
               />
-              <FieldError>{fields.error('keyFile')}</FieldError>
+              <FieldErrorSlot>{fields.error('keyFile')}</FieldErrorSlot>
             </Field>
           )}
 
@@ -124,7 +125,7 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
               aria-invalid={!!fields.error('newPw')}
             />
             {newPw.length > 0 && <PasswordStrengthBar password={newPw} />}
-            <FieldError>{fields.error('newPw')}</FieldError>
+            <FieldErrorSlot>{fields.error('newPw')}</FieldErrorSlot>
           </Field>
 
           {/* Confirm new password */}
@@ -141,7 +142,7 @@ export function ChangePasswordPanel({ onBack, onLockChange }: ChangePasswordPane
               }}
               aria-invalid={!!fields.error('confirm')}
             />
-            <FieldError>{fields.error('confirm')}</FieldError>
+            <FieldErrorSlot>{fields.error('confirm')}</FieldErrorSlot>
           </Field>
 
           <FieldError>{error}</FieldError>
