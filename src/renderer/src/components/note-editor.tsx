@@ -33,7 +33,7 @@ import { findExtension } from '@/lib/editor/find'
 import { formattingKeymap } from '@/lib/editor/formatting'
 import { livePreviewPlugin, livePreviewTheme, tablePreviewField } from '@/lib/editor/live-preview'
 import { notvex } from '@/lib/ipc'
-import { takeTypeahead } from '@/lib/title-typeahead'
+import { dropTypeahead, takeTypeahead } from '@/lib/title-typeahead'
 import { TITLEBAR_ROW } from '@/lib/titlebar'
 import { countText, formatCount, type TextCount } from '@/lib/text-count'
 import { useUiStore } from '@/store/ui.store'
@@ -211,6 +211,9 @@ export function NoteEditor(): ReactNode {
   const contentSaver = usePendingSave(saveContent, AUTOSAVE_DELAY)
   const titleSaver = usePendingSave(saveTitle, AUTOSAVE_DELAY)
 
+  // A lock unmounts the editor; keys held for a note it will never show go nowhere.
+  useEffect(() => dropTypeahead, [])
+
   useEffect(() => {
     if (!activeNoteId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -218,6 +221,7 @@ export function NoteEditor(): ReactNode {
       setTitle('')
       setContent('')
       setIsLoading(false)
+      dropTypeahead()
       return
     }
     activeIdRef.current = activeNoteId
@@ -226,6 +230,8 @@ export function NoteEditor(): ReactNode {
     const request = useUiStore.getState().focusTitleRequest
     const wantsTitleFocus = request > lastFocusTitleRef.current
     lastFocusTitleRef.current = request
+    // Another note opened before the new one: what was typed for it belongs nowhere.
+    if (!wantsTitleFocus) dropTypeahead()
     setIsLoading(true)
     setNote(null)
     setTitle('')

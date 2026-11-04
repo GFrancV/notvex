@@ -39,7 +39,7 @@ vi.mock('@/lib/ipc', () => {
 
 const { NoteEditor } = await import('@/components/note-editor')
 const { useCreateNote } = await import('@/hooks/use-create-note')
-const { startTypeahead } = await import('@/lib/title-typeahead')
+const { startTypeahead, takeTypeahead } = await import('@/lib/title-typeahead')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
@@ -67,8 +67,16 @@ function type(text: string): boolean {
     .every((delivered) => !delivered)
 }
 
+/** A keydown after capture should have ended; true when it went through uncancelled. */
+const keyGoesThrough = (): boolean =>
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'x' })
+
 /** Starts a create whose IPC round trip stays open until the returned function runs. */
-function startCreate(id: string, title: string): () => Promise<void> {
+function startCreate(
+  id: string,
+  title: string,
+  created: unknown = { success: true, data: { ...note(id, title), tagIds: [] } }
+): () => Promise<void> {
   let resolve!: (v: unknown) => void
   ipc.create.mockReturnValueOnce(new Promise((r) => (resolve = r)))
   ipc.get.mockResolvedValue({ success: true, data: note(id, title) })
@@ -79,7 +87,7 @@ function startCreate(id: string, title: string): () => Promise<void> {
   })
   return async () => {
     await act(async () => {
-      resolve({ success: true, data: { ...note(id, title), tagIds: [] } })
+      resolve(created)
       await done
     })
   }
@@ -93,7 +101,12 @@ beforeEach(() => {
   useUiStore.setState({ searchQuery: '', showTrash: false, editorMode: 'editing' })
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  // Capture is module state: a test that leaves it running would swallow the next one's keys.
+  takeTypeahead()
+  vi.useRealTimers()
+})
 
 describe('keys typed before a new note opens', () => {
   it('become its title and are saved', async () => {
@@ -179,5 +192,62 @@ describe('keys typed before a new note opens', () => {
     await finish()
 
     await waitFor(() => expect(titleInput().value).toBe('@'))
+  })
+})
+
+describe('keys typed for a new note that never opens', () => {
+  it('are dropped when it fails to load, and the next note is untouched', async () => {
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    const finish = startCreate('n', 'Untitled')
+    ipc.get.mockResolvedValueOnce({ success: false, error: 'boom' })
+    type('Titulo')
+    await finish()
+    await waitFor(() => expect(ipc.get).toHaveBeenCalledWith('n'))
+    expect(keyGoesThrough()).toBe(true)
+
+    ipc.get.mockResolvedValue({ success: true, data: note('b', 'B') })
+    act(() => useVaultStore.getState().setActiveNoteId('b'))
+    await waitFor(() => expect(titleInput().value).toBe('B'))
+    expect(ipc.update).not.toHaveBeenCalled()
+  })
+
+  it('are dropped when another note opens first', async () => {
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    const finish = startCreate('n', 'Untitled')
+    type('Titulo')
+    ipc.get.mockImplementation(async (id: string) => ({
+      success: true,
+      data: id === 'b' ? note('b', 'B') : note(id, 'Untitled')
+    }))
+    act(() => useVaultStore.getState().setActiveNoteId('b'))
+    expect(keyGoesThrough()).toBe(true)
+
+    await finish()
+    await waitFor(() => expect(titleInput().value).toBe('Untitled'))
+    expect(ipc.update).not.toHaveBeenCalledWith('n', expect.anything())
+  })
+
+  it('stop being held when the create fails', async () => {
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    const finish = startCreate('n', 'Untitled', { success: false, error: "Couldn't create" })
+    type('Titulo')
+    await expect(finish()).rejects.toThrow("Couldn't create")
+    expect(keyGoesThrough()).toBe(true)
+  })
+
+  it('stop being held when the editor goes away', () => {
+    const { unmount } = render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    startCreate('n', 'Untitled')
+    unmount()
+    expect(keyGoesThrough()).toBe(true)
+  })
+
+  it('stop being held after 2 s', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    render(createElement(NoteEditor), { wrapper: TooltipProvider })
+    startCreate('n', 'Untitled')
+    expect(type('T')).toBe(true)
+    vi.advanceTimersByTime(2000)
+    expect(keyGoesThrough()).toBe(true)
   })
 })
