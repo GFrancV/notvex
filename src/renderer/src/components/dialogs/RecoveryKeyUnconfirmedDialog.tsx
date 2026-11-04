@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
+import { FieldErrorSlot } from '@/components/FieldErrorSlot'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
 import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
@@ -102,7 +103,7 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
                 }}
                 aria-invalid={!!fields.error('password')}
               />
-              <FieldError>{fields.error('password')}</FieldError>
+              <FieldErrorSlot>{fields.error('password')}</FieldErrorSlot>
             </Field>
             {hasKeyFile && (
               <Field data-invalid={!!fields.error('keyFile')}>
@@ -112,7 +113,7 @@ export function RecoveryKeyUnconfirmedDialog(): ReactNode {
                   onChange={(c) => setKeyFileContents(c)}
                   onClear={() => setKeyFileContents(null)}
                 />
-                <FieldError>{fields.error('keyFile')}</FieldError>
+                <FieldErrorSlot>{fields.error('keyFile')}</FieldErrorSlot>
               </Field>
             )}
             <FieldError>{error}</FieldError>

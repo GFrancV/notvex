@@ -3,6 +3,7 @@ import { type ReactNode, useState } from 'react'
 import { FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
+import { FieldErrorSlot } from '@/components/FieldErrorSlot'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { RecoveryKeyStep } from '@/components/RecoveryKeyStep'
@@ -186,7 +187,7 @@ export function Setup(): ReactNode {
                   aria-invalid={!!fields.error('password')}
                 />
                 {password.length > 0 && <PasswordStrengthBar password={password} />}
-                <FieldError>{fields.error('password')}</FieldError>
+                <FieldErrorSlot>{fields.error('password')}</FieldErrorSlot>
               </Field>
 
               <Field data-invalid={!!fields.error('confirm')}>
@@ -202,7 +203,7 @@ export function Setup(): ReactNode {
                   }}
                   aria-invalid={!!fields.error('confirm')}
                 />
-                <FieldError>{fields.error('confirm')}</FieldError>
+                <FieldErrorSlot>{fields.error('confirm')}</FieldErrorSlot>
               </Field>
             </FieldGroup>
 

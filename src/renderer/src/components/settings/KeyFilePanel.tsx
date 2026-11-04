@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 
 import { AlertTriangleIcon } from 'lucide-react'
 
+import { FieldErrorSlot } from '@/components/FieldErrorSlot'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
 import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
@@ -125,7 +126,7 @@ export function KeyFilePanel({
                 generated .nvxkey file.
               </p>
             )}
-            <FieldError>{fields.error('keyFile')}</FieldError>
+            <FieldErrorSlot>{fields.error('keyFile')}</FieldErrorSlot>
           </Field>
 
           <Field data-invalid={!!fields.error('password')}>
@@ -142,7 +143,7 @@ export function KeyFilePanel({
               }}
               aria-invalid={!!fields.error('password')}
             />
-            <FieldError>{fields.error('password')}</FieldError>
+            <FieldErrorSlot>{fields.error('password')}</FieldErrorSlot>
           </Field>
 
           <FieldError>{error}</FieldError>
