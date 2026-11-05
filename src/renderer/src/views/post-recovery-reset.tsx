@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { KeyRoundIcon, LockIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { FieldErrorSlot } from '@/components/FieldErrorSlot'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { KEY_REPLACED, RecoveryKeyStep } from '@/components/RecoveryKeyStep'
@@ -91,7 +92,7 @@ export function PostRecoveryReset(): ReactNode {
                   aria-invalid={!!fields.error('newPassword')}
                 />
                 {newPassword.length > 0 && <PasswordStrengthBar password={newPassword} />}
-                <FieldError>{fields.error('newPassword')}</FieldError>
+                <FieldErrorSlot>{fields.error('newPassword')}</FieldErrorSlot>
               </Field>
 
               <Field data-invalid={!!fields.error('confirm')}>
@@ -107,7 +108,7 @@ export function PostRecoveryReset(): ReactNode {
                   }}
                   aria-invalid={!!fields.error('confirm')}
                 />
-                <FieldError>{fields.error('confirm')}</FieldError>
+                <FieldErrorSlot>{fields.error('confirm')}</FieldErrorSlot>
               </Field>
             </FieldGroup>
 
