@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 
+import { dropTypeahead, startTypeahead } from '@/lib/title-typeahead'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
 
@@ -10,7 +11,14 @@ export function useCreateNote(): (title?: string) => Promise<void> {
   return useCallback(
     async (title?: string) => {
       const trimmed = (title ?? searchQuery).trim()
-      const note = await createNote(trimmed ? { title: trimmed, content: '' } : undefined)
+      // The title input only exists after the create and load round trips.
+      startTypeahead()
+      const note = await createNote(trimmed ? { title: trimmed, content: '' } : undefined).catch(
+        (e: unknown) => {
+          dropTypeahead()
+          throw e
+        }
+      )
       // A new note is live: from the trash, show it where it lives (Ctrl+N works in any view).
       if (useUiStore.getState().showTrash) setShowTrash(false)
       setActiveNoteId(note.id)
