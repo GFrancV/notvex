@@ -389,3 +389,35 @@ describe('createWindow: dev server url (issue #57)', () => {
     expect(win.loadURL).toHaveBeenCalledExactlyOnceWith('http://localhost:5173')
   })
 })
+
+// Closing twice while the vault is still locking must not let the second close through:
+// it would destroy the window mid-lock, and the first close's re-close would then throw.
+describe('createWindow: close while locking', () => {
+  let createWindow: typeof import('@main/window').createWindow
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const { isVaultOpen } = await import('@main/vault/vault')
+    vi.mocked(isVaultOpen).mockReturnValue(true)
+    ;({ createWindow } = await import('@main/window'))
+  })
+
+  afterEach(async () => {
+    const { isVaultOpen } = await import('@main/vault/vault')
+    vi.mocked(isVaultOpen).mockReturnValue(false)
+  })
+
+  it('ignores a second close while the vault is locking', async () => {
+    const { closeVaultDrained } = await import('@main/ipc-handlers')
+    vi.mocked(closeVaultDrained).mockImplementationOnce(() => new Promise(() => undefined))
+    const win = createWindow(() => null)
+    const first = { preventDefault: vi.fn() }
+    const second = { preventDefault: vi.fn() }
+
+    win.emit('close', first)
+    win.emit('close', second)
+
+    expect(second.preventDefault).toHaveBeenCalledTimes(1)
+    expect(closeVaultDrained).toHaveBeenCalledTimes(1)
+  })
+})
