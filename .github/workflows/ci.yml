@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -45,6 +47,11 @@ jobs:
       - name: Dependency boundaries
         if: ${{ !cancelled() }}
         run: pnpm depcruise
+
+      # The husky hook can be skipped, and merge commits keep every branch commit on main
+      - name: Commit messages
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: pnpm commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 
   test:
     # @journeyapps/sqlcipher's binding needs libssl1.1

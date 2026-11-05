@@ -118,7 +118,7 @@ Installers are output to `dist/`.
 ### Check
 
 ```bash
-pnpm check:task   # typecheck, lint, format, IPC boundary check and tests
+pnpm check:task   # typecheck, lint, format, IPC boundary check, commit messages and tests
 ```
 
 Run it before opening a PR. [`CONSTRAINTS.md`](./CONSTRAINTS.md) sets the bar it enforces.

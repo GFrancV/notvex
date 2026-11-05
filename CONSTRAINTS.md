@@ -14,6 +14,7 @@ continuing.
 | Types | `pnpm typecheck` | 0 errors across main/preload/renderer tsconfigs |
 | Lint | `pnpm lint` | `eslint --max-warnings 0` |
 | Format | `pnpm format:check` | Prettier clean |
+| Commit messages | `pnpm lint:commits` (CI checks each PR's range) | Conventional Commits, header ≤ 72 characters (`commitlint.config.ts`) |
 
 ## Code comments
 
@@ -105,7 +106,7 @@ the test count also fell, is the thing it is guarding against.
 | Tier | Commands | Target | Measured |
 |---|---|---|---|
 | Fast (edit loop) | `pnpm lint` (eslint `--cache`) | seconds | ~30s cold, faster warm |
-| Task-end | `pnpm check:task` (= validate + depcruise + test) | 90s | **~2m55s — over budget** |
+| Task-end | `pnpm check:task` (= validate + depcruise + lint:commits + test) | 90s | **~2m55s — over budget** |
 | Full (review/CI) | `pnpm check:full` (= check:task + coverage) | unlimited | not yet run in CI |
 
 The 90s task-end target isn't met: `pnpm typecheck` alone measures **~2m13s**
@@ -127,7 +128,7 @@ save `pnpm check:task` for before marking work done, same as
 ```bash
 pnpm depcruise       # architecture/IPC-boundary check (.dependency-cruiser.cjs)
 pnpm check:fast      # typecheck + lint — edit loop
-pnpm check:task      # validate + depcruise + test — before calling work done
+pnpm check:task      # validate + depcruise + lint:commits + test — before calling work done
 pnpm check:full      # check:task + coverage — review/CI
 pnpm test            # vitest run — every test
 pnpm test:watch      # vitest in watch mode
