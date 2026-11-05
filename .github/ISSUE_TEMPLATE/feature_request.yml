@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea for Notvex
+title: '[FEAT] '
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Notvex works fully offline, with no account. Ideas that keep it that way fit best.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Start with the problem, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to build this myself.
