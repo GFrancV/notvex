@@ -57,7 +57,8 @@
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "validate": "pnpm typecheck && pnpm lint && pnpm format:check",
     "check:fast": "pnpm typecheck && pnpm lint",
-    "check:task": "pnpm validate && pnpm depcruise && pnpm test",
+    "lint:commits": "commitlint --from origin/main --to HEAD",
+    "check:task": "pnpm validate && pnpm depcruise && pnpm lint:commits && pnpm test",
     "check:full": "pnpm check:task && pnpm test:coverage",
     "prepare": "husky"
   },

@@ -28,7 +28,7 @@ pnpm test:<area>    # One folder under tests/: main, vault, db, ipc, app, preloa
 pnpm test:coverage  # Vitest with coverage
 pnpm doctor         # react-doctor scan (doctor:staged for staged files only)
 pnpm check:fast     # typecheck + lint — edit loop
-pnpm check:task     # validate + depcruise + test — run before calling work done
+pnpm check:task     # validate + depcruise + lint:commits + test — run before calling work done
 pnpm check:full     # check:task + coverage — review/CI
 ```
 
