@@ -17,8 +17,9 @@ const ipc = vi.hoisted(() => ({
 }))
 
 const prefsIpc = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }))
+const notvex = vi.hoisted(() => ({ vault: ipc, prefs: prefsIpc, platform: 'win32' }))
 
-vi.mock('@/lib/ipc', () => ({ notvex: { vault: ipc, prefs: prefsIpc } }))
+vi.mock('@/lib/ipc', () => ({ notvex }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const { toast } = await import('sonner')
@@ -59,6 +60,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  notvex.platform = 'win32'
 })
 
 describe('SecurityPanel: the key file row', () => {
@@ -179,5 +181,35 @@ describe('SecurityPanel: clear when locked', () => {
 
     expect(prefsIpc.set).toHaveBeenCalledExactlyOnceWith('clearClipboardOnLock', false)
     expect(checkbox.getAttribute('aria-checked')).toBe('false')
+  })
+})
+
+describe('SecurityPanel: the privacy section', () => {
+  it('hides the Privacy section and "Prevent screen capture" on Linux', async () => {
+    notvex.platform = 'linux'
+    await renderPanel()
+
+    expect(screen.queryByText('Privacy')).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: 'Prevent screen capture' })).toBeNull()
+  })
+
+  it.each(['win32', 'darwin'])(
+    'shows the Privacy section and "Prevent screen capture" on %s',
+    async (platform) => {
+      notvex.platform = platform
+      await renderPanel()
+
+      expect(screen.getByText('Privacy')).toBeTruthy()
+      expect(screen.getByRole('checkbox', { name: 'Prevent screen capture' })).toBeTruthy()
+    }
+  )
+
+  it('on Linux the remaining sections have no doubled separator', async () => {
+    notvex.platform = 'linux'
+    await renderPanel()
+
+    const headings = screen.getAllByRole('heading').map((h) => h.textContent)
+    expect(headings).toEqual(['Auto-lock', 'Clipboard', 'Authentication', 'Always-on protections'])
+    expect(document.querySelectorAll('[data-slot="separator"]')).toHaveLength(headings.length - 1)
   })
 })

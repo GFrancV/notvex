@@ -177,20 +177,25 @@ export function SecurityPanel({
 
       <Separator />
 
-      <SettingsSection title="Privacy">
-        <SettingRow
-          label="Prevent screen capture"
-          description="Hides Notvex from screenshots and screen sharing. Requires restart."
-        >
-          <Checkbox
-            aria-label="Prevent screen capture"
-            checked={!allowScreenCapture}
-            onCheckedChange={(v) => void setPref('allowScreenCapture', !(v === true))}
-          />
-        </SettingRow>
-      </SettingsSection>
+      {/* Electron's content protection does nothing on Linux, so the option would only mislead. */}
+      {notvex.platform !== 'linux' && (
+        <>
+          <SettingsSection title="Privacy">
+            <SettingRow
+              label="Prevent screen capture"
+              description="Hides Notvex from screenshots and screen sharing. Requires restart."
+            >
+              <Checkbox
+                aria-label="Prevent screen capture"
+                checked={!allowScreenCapture}
+                onCheckedChange={(v) => void setPref('allowScreenCapture', !(v === true))}
+              />
+            </SettingRow>
+          </SettingsSection>
 
-      <Separator />
+          <Separator />
+        </>
+      )}
 
       <SettingsSection title="Authentication">
         <SettingRow label="Password" description="Change the password used to unlock this vault.">
