@@ -91,21 +91,35 @@ vi.mock('@main/drain-renderer', () => ({
 // window, i.e. the one the user is looking at.
 let lastSender: WebContents | null = null
 
+// Each fake renderer gets its own pid; the process.kill spy routes a kill to that window's crash
+// mock, and never reaches a real process.
+const crashByPid = new Map<number, () => void>()
+let nextPid = 1000
+
 // Like a real BrowserWindow, sending to a destroyed one throws.
 export function fakeWindow(): {
   win: BrowserWindow
   sent: string[]
   reload: ReturnType<typeof vi.fn>
+  crash: ReturnType<typeof vi.fn>
   destroy: () => void
 } {
   const sent: string[] = []
   const reload = vi.fn()
+  const crash = vi.fn()
+  const pid = nextPid++
+  crashByPid.set(pid, crash)
+  vi.spyOn(process, 'kill').mockImplementation((target) => {
+    crashByPid.get(Number(target))?.()
+    return true
+  })
   let destroyed = false
   const win = {
     isDestroyed: () => destroyed,
     webContents: {
       isDestroyed: () => destroyed,
       reload,
+      getOSProcessId: () => pid,
       send: (channel: string) => {
         if (destroyed) throw new Error('Object has been destroyed')
         sent.push(channel)
@@ -113,7 +127,7 @@ export function fakeWindow(): {
     }
   } as unknown as BrowserWindow
   lastSender = win.webContents
-  return { win, sent, reload, destroy: () => (destroyed = true) }
+  return { win, sent, reload, crash, destroy: () => (destroyed = true) }
 }
 
 // The app's own page, which every handler requires as the calling frame.

@@ -3,15 +3,11 @@ import { app, BrowserWindow } from 'electron'
 import { installAppMenu } from './app-menu'
 import { clearClipboardIfOurs } from './clipboard-guard'
 import { installCrashHandlers } from './crash-handlers'
-import {
-  extractNvxArgv,
-  resolveOpenFilePath,
-  setValidatedPending,
-  takePendingOpenFilePath
-} from './file-opener'
+import { extractNvxArgv, resolveOpenFilePath, setValidatedPending } from './file-opener'
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { logError } from './log'
 import { installNavigationGuard } from './navigation-guard'
+import { takePendingVault } from './pending-vault'
 import { installPermissionGuard } from './permission-guard'
 import { hardenProcess } from './process-hardening'
 import { cleanupOrphanedTempDbs } from './vault/container'
@@ -74,7 +70,7 @@ let readyToQuit = false
 let startupDone = false
 
 function openMainWindow(): void {
-  const win = createWindow(takePendingOpenFilePath)
+  const win = createWindow(takePendingVault)
   // On macOS the app outlives its last window; open-file / second-instance
   // must not reuse the destroyed one.
   win.on('closed', (): void => {
@@ -158,7 +154,7 @@ app.on('open-file', (event, filePath): void => {
   }
 
   // No window yet (cold start) or anymore (macOS dock): store the path; the
-  // window's renderer picks it up via takePendingOpenFilePath on load. No new
+  // window's renderer picks it up via takePendingVault on load. No new
   // window mid-quit: it would re-arm the auto-lock timer before-quit stopped.
   setValidatedPending(filePath)
   if (startupDone && !isQuitting) openMainWindow()

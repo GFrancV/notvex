@@ -67,7 +67,10 @@ let ipc: typeof import('@main/ipc-handlers')
 let prefs: typeof import('@main/prefs')
 let vault: typeof import('@main/vault/vault')
 
-const win = { isDestroyed: () => false, webContents: { send: vi.fn() } }
+const win = {
+  isDestroyed: () => false,
+  webContents: { send: vi.fn(), getOSProcessId: vi.fn(() => 0), reload: vi.fn() }
+}
 
 async function load(): Promise<void> {
   handlers.clear()
