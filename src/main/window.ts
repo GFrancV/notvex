@@ -93,9 +93,10 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
   // too late). On app quit before-quit already closed the vault (see closeVaultDrained()).
   let closing = false
   win.on('close', (event) => {
-    if (closing || !isVaultOpen()) return
-    closing = true
+    if (!closing && !isVaultOpen()) return
     event.preventDefault()
+    if (closing) return
+    closing = true
     void closeVaultDrained(win)
       .catch(() => undefined)
       .finally(() => {
