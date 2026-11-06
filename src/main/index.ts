@@ -13,6 +13,7 @@ import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'
 import { logError } from './log'
 import { installNavigationGuard } from './navigation-guard'
 import { installPermissionGuard } from './permission-guard'
+import { hardenProcess } from './process-hardening'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'
 import { createWindow } from './window'
@@ -27,6 +28,12 @@ if (!app.isPackaged) {
 
 // After setName, so a crash is logged under the right userData.
 installCrashHandlers()
+
+// Before any key exists. Dev builds skip it: the debugger has to attach.
+if (app.isPackaged && !hardenProcess()) {
+  app.quit()
+  process.exit(1)
+}
 
 // Fuses don't cover these Chromium switches: they expose renderers over CDP, launch child
 // processes through a caller-chosen command, or undo enableSandbox(). Chromium has already
