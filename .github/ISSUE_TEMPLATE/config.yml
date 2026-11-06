@@ -1,0 +1,9 @@
+# Blank issues stay enabled: Report a bug in v0.3.0 and earlier opens /issues/new with a prefilled body.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/GFrancV/notvex/security/advisories/new
+    about: Report it privately. Please don't open a public issue for vulnerabilities.
+  - name: Documentation
+    url: https://notvex.vercel.app/docs/getting-started
+    about: How to set up and use Notvex.

@@ -125,16 +125,7 @@ Run it before opening a PR. [`CONSTRAINTS.md`](./CONSTRAINTS.md) sets the bar it
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a descriptive branch (`feat/feature-name`, `fix/bug-name`).
-3. Follow the project's conventions:
-   - UI components: always reuse what already exists in `src/renderer/src/components/ui/` before building something new.
-   - Never hardcode colors — use the semantic Tailwind tokens defined in `main.css`.
-   - Dark mode only — no `dark:` variants or light-theme logic.
-   - All renderer↔main communication goes through IPC (`ipc-handlers.ts` → `preload/index.ts` → `lib/ipc.ts`); the renderer never imports cryptography or SQL modules directly.
-4. Run `pnpm check:task` before opening a PR.
-5. Use [Conventional Commits](https://www.conventionalcommits.org/) in lowercase (`feat:`, `fix:`, `chore:`, etc.), max 72 characters in the subject.
-6. Open the PR against `main`. CI (`validate.yml` and `react-doctor.yml`) runs on every pull request.
+Contributions are welcome. [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers how to report a bug, propose a feature and get a pull request merged.
 
 Found a security bug? See [`SECURITY.md`](./SECURITY.md) for how to report it privately.
 
