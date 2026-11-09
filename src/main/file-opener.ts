@@ -2,12 +2,11 @@ import { existsSync } from 'fs'
 
 import type { BrowserWindow } from 'electron'
 
-import { closeVaultDrained } from './ipc-handlers'
+import { lockAndRecycle } from './ipc-handlers'
+import { setPendingVault } from './pending-vault'
 import { samePath } from './prefs'
 import { isValidNotvexFile } from './vault/container'
 import { getVaultPath, isVaultOpen } from './vault/vault'
-
-let pendingOpenFilePath: string | null = null
 
 export function extractNvxArgv(argv: string[]): string | null {
   for (let i = 1; i < argv.length; i++) {
@@ -21,19 +20,13 @@ export function extractNvxArgv(argv: string[]): string | null {
 
 export function setValidatedPending(filePath: string): void {
   if (existsSync(filePath) && isValidNotvexFile(filePath)) {
-    pendingOpenFilePath = filePath
+    setPendingVault({ path: filePath, mode: 'open' })
   }
 }
 
 // Cold-start: validate before storing so the renderer never receives a bad path
 const _initialNvxArg = extractNvxArgv(process.argv)
 if (_initialNvxArg) setValidatedPending(_initialNvxArg)
-
-export function takePendingOpenFilePath(): string | null {
-  const p = pendingOpenFilePath
-  pendingOpenFilePath = null
-  return p
-}
 
 export async function resolveOpenFilePath(
   win: BrowserWindow | null,
@@ -51,10 +44,12 @@ export async function resolveOpenFilePath(
     return
   }
 
-  // A different vault is open → close it first, draining any
-  // pending autosave in the window we're about to repurpose
+  // A different vault is open → close it first, draining any pending autosave. The fresh
+  // renderer reads the file from the pending slot; the old one only hears of it when it
+  // survived the close (a failed pack keeps it for its toast).
   if (isVaultOpen()) {
-    await closeVaultDrained(win)
+    const { recycled } = await lockAndRecycle(win, { next: { path: filePath, mode: 'open' } })
+    if (recycled) return
   }
 
   // promoteVaultToTop intentionally omitted: recordVaultUsed is called after
@@ -65,6 +60,6 @@ export async function resolveOpenFilePath(
     win.focus()
     win.webContents.send('vault:open-file', filePath)
   } else {
-    pendingOpenFilePath = filePath
+    setPendingVault({ path: filePath, mode: 'open' })
   }
 }

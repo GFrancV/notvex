@@ -15,6 +15,7 @@ export default defineConfig({
     // under .claude/worktrees/**/tests/*.test.ts would otherwise be
     // discovered and run as a second, independent copy of the whole suite.
     exclude: [...configDefaults.exclude, '.claude/**'],
+    setupFiles: ['tests/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],

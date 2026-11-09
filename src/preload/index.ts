@@ -48,7 +48,7 @@ const api: NotvexAPI = {
       ipcRenderer.invoke('vault:regenerate-recovery-key', pw, keyFileContents),
     confirmRecoverySaved: () => ipcRenderer.invoke('vault:confirm-recovery-saved'),
     recoveryUnconfirmed: () => ipcRenderer.invoke('vault:recovery-unconfirmed'),
-    close: () => ipcRenderer.invoke('vault:close'),
+    close: (createPath) => ipcRenderer.invoke('vault:close', createPath),
     clearDecryptedContent: () => ipcRenderer.invoke('vault:clear-decrypted'),
     status: () => ipcRenderer.invoke('vault:status'),
     switchTo: (filePath) => ipcRenderer.invoke('vault:switch', filePath),

@@ -1,6 +1,8 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { join } from 'path'
 
+import type { PendingVault } from '@shared/types'
+
 import { appendError } from './error-log'
 import {
   cancelPendingConfirmations,
@@ -8,7 +10,8 @@ import {
   isRecoveryConfirmPending,
   lockVaultAndNotify,
   markRendererReplaced,
-  registerIpcHandlers
+  registerIpcHandlers,
+  takeRecycleMark
 } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
@@ -20,7 +23,7 @@ const CRASH_RELOAD_GUARD_MS = 30_000
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
 
-export function createWindow(takePendingFilePath: () => string | null): BrowserWindow {
+export function createWindow(takePendingVault: () => PendingVault | null): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -69,7 +72,7 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
     void win.loadFile(rendererIndexPath)
   }
 
-  registerIpcHandlers(win, takePendingFilePath)
+  registerIpcHandlers(win, takePendingVault)
   initAutoUpdater(win)
 
   win.setContentProtection(!getPref('allowScreenCapture'))
@@ -123,6 +126,13 @@ export function createWindow(takePendingFilePath: () => string | null): BrowserW
   // per window of time, so a renderer that crashes on load can't loop and flood the log.
   let lastCrashReloadAt = -Infinity
   win.webContents.on('render-process-gone', (_event, details) => {
+    // A lock's own kill: the vault is already closed, so reload straight into a new process
+    if (takeRecycleMark(win.webContents)) {
+      void dropRenderer().then(() => {
+        if (!win.isDestroyed()) win.webContents.reload()
+      })
+      return
+    }
     appendError('render-process-gone', { reason: details.reason, exitCode: details.exitCode })
     const closed = dropRenderer()
     if (details.reason === 'clean-exit') return

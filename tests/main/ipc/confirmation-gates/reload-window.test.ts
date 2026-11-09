@@ -24,19 +24,19 @@ describe('app:reload-window', () => {
       order.push('close')
       return { packFailed: false }
     })
-    fake.reload.mockImplementation(() => order.push('reload'))
+    fake.crash.mockImplementation(() => order.push('crash'))
   })
 
   afterEach(() => {
     ipc.stopAutoLockTimer()
   })
 
-  it('drains, closes the open vault, then reloads', async () => {
+  it('drains, closes the open vault, then reloads into a fresh renderer process', async () => {
     vi.mocked(vault.isVaultOpen).mockReturnValue(true)
 
     await expect(invoke('app:reload-window')).resolves.toEqual({ success: true, data: true })
 
-    expect(order).toEqual(['drain', 'close', 'reload'])
+    expect(order).toEqual(['drain', 'close', 'crash'])
   })
 
   // A save that misses the short lock bound fails visibly on a lock, but a reload would take
@@ -54,7 +54,7 @@ describe('app:reload-window', () => {
   it('reloads straight away when no vault is open', async () => {
     await expect(invoke('app:reload-window')).resolves.toEqual({ success: true, data: true })
 
-    expect(order).toEqual(['reload'])
+    expect(order).toEqual(['crash'])
   })
 
   it('settles a vault:open parked on the migration gate before reloading', async () => {
@@ -65,7 +65,7 @@ describe('app:reload-window', () => {
     await invoke('app:reload-window')
 
     await expect(pending).resolves.toEqual({ success: false, error: 'MIGRATION_CANCELLED' })
-    expect(fake.reload).toHaveBeenCalledOnce()
+    expect(fake.crash).toHaveBeenCalledOnce()
   })
 
   // A gate left parked would leave isUnlocking set, so the reloaded page's unlock would fail
@@ -99,7 +99,7 @@ describe('app:reload-window', () => {
           finishOpen = () => resolve({ maj: 1, min: 0 })
         })
     )
-    fake.reload.mockImplementation(() => ipc.markRendererReplaced())
+    fake.crash.mockImplementation(() => ipc.markRendererReplaced())
     const unlocking = invoke('vault:open', '/v.nvx', 'pw')
     await flush()
 
@@ -117,7 +117,7 @@ describe('app:reload-window', () => {
 
     await expect(invoke('app:reload-window')).resolves.toEqual({ success: true, data: false })
 
-    expect(fake.reload).not.toHaveBeenCalled()
+    expect(fake.crash).not.toHaveBeenCalled()
     expect(fake.sent).toEqual(['vault:pack-failed', 'vault:auto-locked'])
   })
 
@@ -142,7 +142,7 @@ describe('app:reload-window', () => {
       const res = await invoke('app:reload-window')
 
       expect(res).toMatchObject({ success: false })
-      expect(fake.reload).not.toHaveBeenCalled()
+      expect(fake.crash).not.toHaveBeenCalled()
       finishCreate()
       await creating
     })
@@ -157,7 +157,7 @@ describe('app:reload-window', () => {
       await creating
 
       await expect(invoke('app:reload-window')).resolves.toEqual({ success: true, data: true })
-      expect(fake.reload).toHaveBeenCalledOnce()
+      expect(fake.crash).toHaveBeenCalledOnce()
     })
   })
 
@@ -169,7 +169,7 @@ describe('app:reload-window', () => {
       success: false,
       error: 'disk full'
     })
-    expect(fake.reload).not.toHaveBeenCalled()
+    expect(fake.crash).not.toHaveBeenCalled()
     const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
     expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('lock')
   })
