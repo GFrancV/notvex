@@ -95,6 +95,11 @@ export interface NoteTagPair {
 }
 
 export type VaultStatus = { isOpen: true; vaultPath: string } | { isOpen: false }
+// A vault main queued for the next renderer that boots: Unlock it, or create it in Setup.
+export interface PendingVault {
+  path: string
+  mode: 'open' | 'create'
+}
 export interface RecentVault {
   path: string
   hasKeyFile: boolean
@@ -203,7 +208,7 @@ export interface NotvexAPI {
     ): Promise<IpcResult<ChangePasswordResult>>
     confirmRecoverySaved(): Promise<IpcResult<null>>
     recoveryUnconfirmed(): Promise<IpcResult<boolean>>
-    close(): Promise<IpcResult<null>>
+    close(createPath?: string): Promise<IpcResult<null>>
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
     switchTo(filePath: string): Promise<IpcResult<null>>
@@ -223,7 +228,7 @@ export interface NotvexAPI {
     saveCopyAs(): Promise<IpcResult<string | null>>
     confirmMigration(createBackup: boolean): Promise<IpcResult<null>>
     cancelMigration(): Promise<IpcResult<null>>
-    getPendingFile(): Promise<IpcResult<string | null>>
+    getPendingFile(): Promise<IpcResult<PendingVault | null>>
     openBackupsFolder(): Promise<IpcResult<null>>
     onMigrationRequired(
       callback: (data: {

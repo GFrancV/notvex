@@ -45,7 +45,8 @@ interface VaultStore {
    * vault-derived state must be cleared here.
    */
   clearSession: () => void
-  lock: () => Promise<void>
+  /** createPath: a vault about to be created, so the lock lands on Setup for it. */
+  lock: (createPath?: string) => Promise<void>
   loadNotes: (filter?: { trashed?: boolean; tagId?: string }) => Promise<void>
   loadNoteCounts: () => Promise<void>
   createNote: (input?: CreateNoteInput) => Promise<NoteListItem>
@@ -124,12 +125,13 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
     useUiStore.getState().setSettingsLocked(false)
   },
 
-  lock: async (): Promise<void> => {
+  lock: async (createPath?: string): Promise<void> => {
     // Clearing even when close fails is the fail-safe side: the worst case is a re-unlock
     try {
-      await notvex.vault.close()
+      await notvex.vault.close(createPath)
     } finally {
       get().clearSession()
+      if (createPath) get().setPendingNewVaultPath(createPath)
     }
   },
 

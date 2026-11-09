@@ -68,7 +68,10 @@ describe('every close path packs the latest edit (issue #61)', () => {
   let vaultDir: string
   let vaultPath: string
   let otherVaultPath: string
-  const win = { isDestroyed: () => false, webContents: { send: vi.fn() } }
+  const win = {
+    isDestroyed: () => false,
+    webContents: { send: vi.fn(), getOSProcessId: vi.fn(() => 0), reload: vi.fn() }
+  }
 
   beforeAll(async () => {
     ipc = await import('@main/ipc-handlers')

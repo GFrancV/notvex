@@ -45,7 +45,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     ['vault:rotate-credentials', 'rotateVaultCredentials', ['new pw']],
     ['vault:change-password', 'changePassword', ['old pw', 'new pw']]
   ] as const)(
-    '%s: tells the newest window and clears the clipboard when a failed rotation locks the vault',
+    '%s: recycles the newest window and clears the clipboard when a failed rotation locks the vault',
     async (channel, rotation, args) => {
       const first = fakeWindow()
       ipc.registerIpcHandlers(first.win, () => null)
@@ -60,7 +60,8 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
         success: false,
         error: 'rekey failed'
       })
-      expect(second.sent).toEqual(['vault:auto-locked'])
+      expect(second.crash).toHaveBeenCalledOnce()
+      expect(first.crash).not.toHaveBeenCalled()
       const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
       expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('lock')
     }
@@ -89,7 +90,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
     })
   })
 
-  it('lockVaultAndNotify drains and notifies the window it was given', async () => {
+  it('lockVaultAndNotify drains and recycles the window it was given', async () => {
     const registered = fakeWindow()
     ipc.registerIpcHandlers(registered.win, () => null)
     const given = fakeWindow()
@@ -100,7 +101,8 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
     // undefined: a lock keeps drainRenderer()'s default, short bound
     expect(drainRenderer).toHaveBeenLastCalledWith(given.win, undefined)
-    expect(given.sent).toEqual(['vault:auto-locked'])
+    expect(given.crash).toHaveBeenCalledOnce()
+    expect(registered.crash).not.toHaveBeenCalled()
   })
 
   // macOS: the window closes mid-Argon2id, window-all-closed finds nothing to

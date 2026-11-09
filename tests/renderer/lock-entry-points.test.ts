@@ -4,19 +4,20 @@ import { createElement } from 'react'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NoteListItem, Tag } from '@shared/types'
+import type { NoteListItem, PendingVault, Tag } from '@shared/types'
 
 // Main pushes these; the test fires them by hand.
 const pushed = vi.hoisted(() => ({
   autoLocked: null as null | (() => void),
-  openFile: null as null | ((path: string) => void)
+  openFile: null as null | ((path: string) => void),
+  pendingFile: null as null | PendingVault
 }))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     platform: 'win32',
     prefs: { get: async () => ({ success: false, error: 'not needed' }) },
-    vault: { getPendingFile: async () => ({ success: true, data: null }) },
+    vault: { getPendingFile: async () => ({ success: true, data: pushed.pendingFile }) },
     onAutoLocked: (cb: () => void) => {
       pushed.autoLocked = cb
       return () => {}
@@ -92,6 +93,7 @@ const expectSessionCleared = (): void => {
 beforeEach(() => {
   pushed.autoLocked = null
   pushed.openFile = null
+  pushed.pendingFile = null
 })
 
 afterEach(() => {
@@ -137,5 +139,25 @@ describe('locks pushed by main', () => {
     expect(screen.getByText('unlock view')).toBeTruthy()
     expectSessionCleared()
     expect(useVaultStore.getState().pendingOpenVaultPath).toBe('C:/vaults/other.nvx')
+  })
+})
+
+describe('boot with a vault queued by main', () => {
+  it('an open target lands on Unlock for that vault', async () => {
+    pushed.pendingFile = { path: 'C:/vaults/other.nvx', mode: 'open' }
+    render(createElement(App), { wrapper: TooltipProvider })
+
+    await waitFor(() => expect(screen.getByText('unlock view')).toBeTruthy())
+    expect(useVaultStore.getState().pendingOpenVaultPath).toBe('C:/vaults/other.nvx')
+    expect(useVaultStore.getState().pendingNewVaultPath).toBeNull()
+  })
+
+  it('a create target lands on Setup for that path', async () => {
+    pushed.pendingFile = { path: 'C:/vaults/new.nvx', mode: 'create' }
+    render(createElement(App), { wrapper: TooltipProvider })
+
+    await waitFor(() => expect(screen.getByText('setup view')).toBeTruthy())
+    expect(useVaultStore.getState().pendingNewVaultPath).toBe('C:/vaults/new.nvx')
+    expect(useVaultStore.getState().pendingOpenVaultPath).toBeNull()
   })
 })

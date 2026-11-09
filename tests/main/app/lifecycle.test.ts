@@ -66,6 +66,11 @@ vi.mock('@main/crash-handlers', () => ({
   installCrashHandlers: vi.fn()
 }))
 
+// The real one would make the test worker itself non-dumpable on Linux.
+vi.mock('@main/process-hardening', () => ({
+  hardenProcess: vi.fn(() => true)
+}))
+
 vi.mock('@main/clipboard-guard', () => ({
   clearClipboardIfOurs: vi.fn().mockResolvedValue(undefined)
 }))
@@ -77,8 +82,12 @@ vi.mock('@main/navigation-guard', () => ({
 vi.mock('@main/file-opener', () => ({
   extractNvxArgv: vi.fn((argv: string[]) => argv.find((a) => a.endsWith('.nvx')) ?? null),
   resolveOpenFilePath: vi.fn().mockResolvedValue(undefined),
-  setValidatedPending: vi.fn(),
-  takePendingOpenFilePath: vi.fn(() => null)
+  setValidatedPending: vi.fn()
+}))
+
+vi.mock('@main/pending-vault', () => ({
+  setPendingVault: vi.fn(),
+  takePendingVault: vi.fn(() => null)
 }))
 
 // A BrowserWindow double that, like the real one, throws once destroyed.
@@ -228,6 +237,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   let app: Electron.App
   let createWindow: ReturnType<typeof vi.fn>
   let fileOpener: typeof import('@main/file-opener')
+  let pendingVault: typeof import('@main/pending-vault')
   let windows: FakeWindow[]
 
   beforeEach(async () => {
@@ -243,6 +253,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
       return win as unknown as BrowserWindow
     })
     fileOpener = await import('@main/file-opener')
+    pendingVault = await import('@main/pending-vault')
     // Once, so the shutdown block above keeps its never-resolving whenReady().
     vi.mocked(app.whenReady).mockResolvedValueOnce(undefined)
   })
@@ -292,7 +303,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
     expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
     expect(createWindow).toHaveBeenCalledTimes(2)
-    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingOpenFilePath)
+    expect(createWindow).toHaveBeenLastCalledWith(pendingVault.takePendingVault)
   })
 
   it('open-file during startup only stores the path, and startup opens exactly one window', async () => {
@@ -312,7 +323,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
 
     finishSodium()
     await vi.waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1))
-    expect(createWindow).toHaveBeenCalledWith(fileOpener.takePendingOpenFilePath)
+    expect(createWindow).toHaveBeenCalledWith(pendingVault.takePendingVault)
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
   })
 
@@ -347,7 +358,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     expect(fileOpener.resolveOpenFilePath).not.toHaveBeenCalled()
     expect(fileOpener.setValidatedPending).toHaveBeenCalledWith(NVX)
     expect(createWindow).toHaveBeenCalledTimes(2)
-    expect(createWindow).toHaveBeenLastCalledWith(fileOpener.takePendingOpenFilePath)
+    expect(createWindow).toHaveBeenLastCalledWith(pendingVault.takePendingVault)
   })
 
   it('second-instance after the window closed opens a window even without a .nvx', async () => {
@@ -437,5 +448,33 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
     await launchWith('', true)
 
     expect(exit).not.toHaveBeenCalled()
+  })
+
+  it('a packaged build hardens the process before taking the single-instance lock', async () => {
+    const { hardenProcess } = await import('@main/process-hardening')
+    await launchWith('', true)
+
+    expect(hardenProcess).toHaveBeenCalledOnce()
+    expect(vi.mocked(hardenProcess).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(app.requestSingleInstanceLock).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('a packaged build traced at start exits before taking the single-instance lock', async () => {
+    const { hardenProcess } = await import('@main/process-hardening')
+    vi.mocked(hardenProcess).mockReturnValueOnce(false)
+    await launchWith('', true)
+
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(exit.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(app.requestSingleInstanceLock).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('a dev build leaves the process attachable', async () => {
+    const { hardenProcess } = await import('@main/process-hardening')
+    await launchWith('', false)
+
+    expect(hardenProcess).not.toHaveBeenCalled()
   })
 })

@@ -38,7 +38,8 @@ vi.mock('@main/ipc-handlers', () => ({
   isRecoveryConfirmPending: vi.fn(() => false),
   lockVaultAndNotify: vi.fn(async () => undefined),
   markRendererReplaced: vi.fn(),
-  registerIpcHandlers: vi.fn()
+  registerIpcHandlers: vi.fn(),
+  takeRecycleMark: vi.fn(() => false)
 }))
 
 vi.mock('@main/error-log', () => ({ appendError: vi.fn() }))
@@ -325,6 +326,41 @@ describe('createWindow: renderer crash recovery', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(win.webContents.reload).toHaveBeenCalledTimes(2)
+  })
+
+  it('reloads after a kill from a lock without logging it or using up the guard', async () => {
+    const { appendError } = await import('@main/error-log')
+    const { cancelPendingConfirmations, takeRecycleMark } = await import('@main/ipc-handlers')
+    const win = createWindow(() => null)
+
+    vi.mocked(takeRecycleMark).mockReturnValueOnce(true)
+    crash(win, 'killed')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(appendError).not.toHaveBeenCalled()
+    expect(win.webContents.reload).toHaveBeenCalledTimes(1)
+    expect(cancelPendingConfirmations).toHaveBeenCalledTimes(1)
+
+    // A real crash right after still counts as the first one in its 30 s window
+    crash(win)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(appendError).toHaveBeenCalledTimes(1)
+    expect(win.webContents.reload).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not reload a window destroyed before a kill from a lock', async () => {
+    const { takeRecycleMark } = await import('@main/ipc-handlers')
+    const { appendError } = await import('@main/error-log')
+    const win = createWindow(() => null)
+    vi.mocked(win.isDestroyed).mockReturnValue(true)
+
+    vi.mocked(takeRecycleMark).mockReturnValueOnce(true)
+    crash(win, 'killed')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(win.webContents.reload).not.toHaveBeenCalled()
+    // Proves the marked branch ran: the crash path would have logged it
+    expect(appendError).not.toHaveBeenCalled()
   })
 
   it('does not reload a window destroyed while the vault was closing', async () => {
