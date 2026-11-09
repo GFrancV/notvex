@@ -29,6 +29,7 @@ vi.mock('@/components/settings-dialog', () => ({
 
 const { Sidebar } = await import('@/components/sidebar')
 const { SidebarProvider } = await import('@/components/ui/sidebar')
+const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
 
@@ -63,6 +64,7 @@ beforeEach(() => {
   ipc.close.mockResolvedValue({ success: true, data: null })
   ipc.isDev.mockResolvedValue({ success: true, data: false })
   ipc.prefsGet.mockResolvedValue({ success: false, error: 'not needed' })
+  useUiStore.setState({ searchQuery: '' })
   useVaultStore.setState({
     status: 'unlocked',
     currentVaultPath: 'C:/vaults/work.nvx',
@@ -103,6 +105,22 @@ describe('Sidebar entry points', () => {
     fireEvent.focus(screen.getByPlaceholderText('Search…'))
 
     expect((await screen.findByRole('tooltip')).textContent).toBe('Search Ctrl Shift F')
+  })
+
+  it('names the search clear button "Clear search"', async () => {
+    useUiStore.setState({ searchQuery: 'groceries' })
+    await renderSidebar()
+
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy()
+  })
+
+  it('shows only the "Clear search" tooltip when the clear button is hovered', async () => {
+    useUiStore.setState({ searchQuery: 'groceries' })
+    await renderSidebar()
+
+    fireEvent.pointerMove(screen.getByRole('button', { name: 'Clear search' }))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Clear search')
   })
 
   it('opens Settings straight from the gear button', async () => {
