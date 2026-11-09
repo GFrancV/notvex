@@ -365,3 +365,25 @@ describe('command palette synonyms', () => {
     expect(screen.queryByRole('option', { name: command })).not.toBeNull()
   })
 })
+
+describe('command palette accessibility', () => {
+  const title = 'Command palette'
+  const description = 'Search notes, run commands or create a note from your search.'
+
+  it('announces the palette as a dialog named "Command palette" with its description', () => {
+    openPalette([])
+    expect(screen.getByRole('dialog', { name: title, description })).toBeTruthy()
+  })
+
+  it('leaves neither title nor description in the document while closed', () => {
+    render(createElement(CommandPalette))
+    expect(screen.queryByText(title)).toBeNull()
+    expect(screen.queryByText(description)).toBeNull()
+
+    act(() => useUiStore.setState({ commandPaletteOpen: true }))
+    expect(screen.queryByText(title)).not.toBeNull()
+    act(() => useUiStore.setState({ commandPaletteOpen: false }))
+    expect(screen.queryByText(title)).toBeNull()
+    expect(screen.queryByText(description)).toBeNull()
+  })
+})

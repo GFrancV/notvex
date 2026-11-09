@@ -70,6 +70,8 @@ export function CommandPalette(): JSX.Element | null {
   return (
     // Wider than the confirmation dialogs: it lists note titles next to shortcuts.
     <CommandDialog
+      title="Command palette"
+      description="Search notes, run commands or create a note from your search."
       open={commandPaletteOpen}
       onOpenChange={setCommandPaletteOpen}
       className="sm:max-w-lg"
