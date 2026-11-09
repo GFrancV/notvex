@@ -126,10 +126,10 @@ export function Sidebar(): React.ReactNode {
 
         {/* Search + new note */}
         <div className="flex gap-1.5 px-3 py-2.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div ref={searchContainerRef} className="w-full">
-                <InputGroup className="w-full">
+          <div ref={searchContainerRef} className="w-full">
+            <InputGroup className="w-full">
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <InputGroupInput
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -141,23 +141,33 @@ export function Sidebar(): React.ReactNode {
                     }}
                     placeholder="Search…"
                   />
-                  <InputGroupAddon>
-                    <SearchIcon />
-                  </InputGroupAddon>
-                  {searchQuery && (
-                    <InputGroupAddon align="inline-end">
-                      <Button variant="ghost" size="icon-xs" onClick={() => setSearchQuery('')}>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Search <Shortcut keys="Mod-Shift-f" />
+                </TooltipContent>
+              </Tooltip>
+              <InputGroupAddon>
+                <SearchIcon />
+              </InputGroupAddon>
+              {searchQuery && (
+                <InputGroupAddon align="inline-end">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => setSearchQuery('')}
+                        aria-label="Clear search"
+                      >
                         <XIcon />
                       </Button>
-                    </InputGroupAddon>
-                  )}
-                </InputGroup>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              Search <Shortcut keys="Mod-Shift-f" />
-            </TooltipContent>
-          </Tooltip>
+                    </TooltipTrigger>
+                    <TooltipContent>Clear search</TooltipContent>
+                  </Tooltip>
+                </InputGroupAddon>
+              )}
+            </InputGroup>
+          </div>
 
           {!showTrash && !showPinned && (
             <Tooltip>
