@@ -336,6 +336,11 @@
 .titlebar-no-drag {
   -webkit-app-region: no-drag;
 }
+/* A modal overlay covers the header controls, so their no-drag holes would only let a click
+   through to the overlay and close the modal: while one is open, the whole strip drags */
+body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) .titlebar-no-drag {
+  -webkit-app-region: drag;
+}
 
 /* Electron builds drag regions from the DOM and ignores z-order: an overlay painted
    over #boot-drag would start a window drag instead of taking the click.

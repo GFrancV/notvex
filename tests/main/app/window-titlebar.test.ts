@@ -109,4 +109,14 @@ describe('title bar drag strip: draggable from the first frame', () => {
     expect(css).toMatch(/\.titlebar-no-drag\s*\{[^}]*-webkit-app-region:\s*no-drag/)
     expect(css).toMatch(/data-slot='dialog-content'\][^{]*\{[^}]*-webkit-app-region:\s*no-drag/)
   })
+
+  it('lets the whole strip drag while a dialog or sheet is open', () => {
+    const css = read('src/renderer/src/assets/main.css')
+    const [, selector = '', body = ''] =
+      css.match(/([^{}]*:has\([^{}]*\)[^{}]*\.titlebar-no-drag)\s*\{([^}]*)\}/) ?? []
+
+    expect(selector).toContain("data-slot='dialog-overlay'")
+    expect(selector).toContain("data-slot='sheet-overlay'")
+    expect(body).toMatch(/-webkit-app-region:\s*drag/)
+  })
 })
