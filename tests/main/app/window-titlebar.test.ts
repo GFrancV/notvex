@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // Each platform draws its own window controls over the hidden title bar: an overlay on Windows
@@ -74,5 +77,19 @@ describe('createWindow: window controls', () => {
     expect(options.titleBarStyle).toBe('hidden')
     expect(options.trafficLightPosition).toEqual({ x: 14, y: 13 })
     expect(options.titleBarOverlay).toBeUndefined()
+  })
+})
+
+describe('title bar drag strip: draggable from the first frame', () => {
+  const read = (path: string): string => readFileSync(resolve(process.cwd(), path), 'utf8')
+
+  it('declares a 44px drag strip in index.html ahead of the React root', () => {
+    const html = read('src/renderer/index.html')
+    const rule = html.match(/#boot-drag\s*\{([^}]*)\}/)?.[1] ?? ''
+
+    expect(rule).toMatch(/-webkit-app-region:\s*drag/)
+    expect(rule).toMatch(/height:\s*44px/)
+    expect(html.indexOf('id="boot-drag"')).toBeGreaterThan(-1)
+    expect(html.indexOf('id="boot-drag"')).toBeLessThan(html.indexOf('id="root"'))
   })
 })
