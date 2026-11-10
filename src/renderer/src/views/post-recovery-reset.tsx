@@ -62,7 +62,6 @@ export function PostRecoveryReset(): ReactNode {
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
-      <div className="titlebar-drag absolute top-0 right-0 left-0 h-11" />
       <div className="w-full max-w-md">
         {step === 'password' ? (
           <div className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-200">

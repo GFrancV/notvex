@@ -105,7 +105,6 @@ export function Setup(): ReactNode {
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
-      <div className="titlebar-drag absolute top-0 right-0 left-0 h-11" />
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">

@@ -331,16 +331,14 @@
   background: var(--secondary);
 }
 
-/* Draggable titlebar region — the window uses a hidden titlebar on every platform */
-.titlebar-drag {
-  -webkit-app-region: drag;
-}
+/* The window's only drag handle is the #boot-drag strip in index.html (hidden titlebar on
+   every platform); anything clickable over it opts out with .titlebar-no-drag */
 .titlebar-no-drag {
   -webkit-app-region: no-drag;
 }
 
 /* Electron builds drag regions from the DOM and ignores z-order: an overlay painted
-   over .titlebar-drag would start a window drag instead of taking the click.
+   over #boot-drag would start a window drag instead of taking the click.
    Lists the floating slots from components/ui/; in-flow *-content slots must stay out. */
 [data-slot='dropdown-menu-content'],
 [data-slot='dropdown-menu-sub-content'],

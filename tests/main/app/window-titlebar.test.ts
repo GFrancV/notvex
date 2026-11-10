@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -91,5 +91,22 @@ describe('title bar drag strip: draggable from the first frame', () => {
     expect(rule).toMatch(/height:\s*44px/)
     expect(html.indexOf('id="boot-drag"')).toBeGreaterThan(-1)
     expect(html.indexOf('id="boot-drag"')).toBeLessThan(html.indexOf('id="root"'))
+  })
+
+  it('leaves no view or component rendering its own titlebar-drag strip', () => {
+    const src = resolve(process.cwd(), 'src/renderer/src')
+    const offenders = readdirSync(src, { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.tsx'))
+      .filter((file) => readFileSync(resolve(src, file), 'utf8').includes('titlebar-drag'))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps only the no-drag rules in main.css', () => {
+    const css = read('src/renderer/src/assets/main.css')
+
+    expect(css).not.toContain('.titlebar-drag')
+    expect(css).toMatch(/\.titlebar-no-drag\s*\{[^}]*-webkit-app-region:\s*no-drag/)
+    expect(css).toMatch(/data-slot='dialog-content'\][^{]*\{[^}]*-webkit-app-region:\s*no-drag/)
   })
 })
