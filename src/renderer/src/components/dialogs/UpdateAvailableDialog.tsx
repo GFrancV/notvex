@@ -42,8 +42,20 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 })
 
-export function UpdateAvailableDialog(): ReactNode {
-  const [state, setState] = useState<Phase | null>(null)
+// Quiet time before the dialog opens, so it never lands mid-typing
+const IDLE_MS = 1500
+
+interface UpdateAvailableDialogProps {
+  // false while a password screen is up: the dialog would take keystrokes meant for it
+  ready: boolean
+}
+
+export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): ReactNode {
+  const [stored, setState] = useState<Phase | null>(null)
+  const [idle, setIdle] = useState(false)
+  // Leaving the notes view ends the quiet period: coming back must wait again
+  if (!ready && idle) setIdle(false)
+  const state = stored?.phase === 'available' && !(ready && idle) ? null : stored
 
   const releaseNotesHtml = useMemo(() => {
     const raw = state?.phase === 'available' ? state.info.releaseNotes : null
@@ -52,7 +64,10 @@ export function UpdateAvailableDialog(): ReactNode {
 
   useEffect(() => {
     const offFns = [
-      notvex.updater.onUpdateAvailable((info) => setState({ phase: 'available', info })),
+      notvex.updater.onUpdateAvailable((info) => {
+        setIdle(false)
+        setState({ phase: 'available', info })
+      }),
       notvex.updater.onDownloadProgress((p) =>
         setState({ phase: 'downloading', percent: p.percent })
       ),
@@ -69,6 +84,25 @@ export function UpdateAvailableDialog(): ReactNode {
 
     return (): void => offFns.forEach((off) => off())
   }, [])
+
+  const waiting = stored?.phase === 'available' && ready && !idle
+  useEffect(() => {
+    if (!waiting) return
+    let timer: ReturnType<typeof setTimeout>
+    const restart = (): void => {
+      clearTimeout(timer)
+      timer = setTimeout(() => setIdle(true), IDLE_MS)
+    }
+    restart()
+    // capture: a handler that stops propagation must not hide the input
+    window.addEventListener('keydown', restart, true)
+    window.addEventListener('pointerdown', restart, true)
+    return (): void => {
+      clearTimeout(timer)
+      window.removeEventListener('keydown', restart, true)
+      window.removeEventListener('pointerdown', restart, true)
+    }
+  }, [waiting])
 
   const dismissible = state?.phase === 'available' || state?.phase === 'error'
 

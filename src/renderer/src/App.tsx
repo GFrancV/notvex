@@ -115,7 +115,9 @@ export default function App(): ReactNode {
         <Main />
       )}
       <Toaster position="bottom-right" />
-      <UpdateAvailableDialog />
+      <UpdateAvailableDialog
+        ready={status === 'unlocked' && !needsRecoveryReset && !pendingNewVaultPath}
+      />
       <MigrationRequiredDialog />
       <DevBuildWarningDialog />
       <ReloadWindowDialog />
