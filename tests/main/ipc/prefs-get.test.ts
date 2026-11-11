@@ -36,7 +36,7 @@ vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { existsSync } = await import('fs')
+const { existsSync, writeFileSync } = await import('fs')
 const { isValidNotvexFile } = await import('@main/vault/container')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
@@ -67,6 +67,19 @@ describe('prefs:get', () => {
     })
     expect(existsSync).not.toHaveBeenCalledWith(UNC)
     expect(isValidNotvexFile).not.toHaveBeenCalledWith(UNC)
-    expect(isValidNotvexFile).toHaveBeenCalledWith(local.path)
+  })
+
+  it('keeps recent vaults whose file is missing or not a vault, without rewriting prefs.json', async () => {
+    const missing = { ...local, path: '/vaults/missing.nvx' }
+    const notVault = { ...local, path: '/vaults/not-a-vault.nvx' }
+    fsState.contents = JSON.stringify({ recentVaults: [missing, notVault, local] })
+    vi.mocked(existsSync).mockImplementation((p) => p !== missing.path)
+    vi.mocked(isValidNotvexFile).mockImplementation((p) => p === local.path)
+
+    expect(await invoke('prefs:get')).toMatchObject({
+      success: true,
+      data: { recentVaults: [missing, notVault, local] }
+    })
+    expect(writeFileSync).not.toHaveBeenCalled()
   })
 })

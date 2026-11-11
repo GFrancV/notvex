@@ -1515,14 +1515,7 @@ export function registerIpcHandlers(
 
   handle('prefs:get', () => {
     try {
-      const prefs = getPrefs()
-      const validatedVaults = prefs.recentVaults.filter(
-        (v) => existsSync(v.path) && isValidNotvexFile(v.path)
-      )
-      if (validatedVaults.length !== prefs.recentVaults.length) {
-        setPref('recentVaults', validatedVaults)
-      }
-      return ok({ ...prefs, recentVaults: validatedVaults })
+      return ok(getPrefs())
     } catch (e) {
       return fail(e)
     }
