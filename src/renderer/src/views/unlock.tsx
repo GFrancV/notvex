@@ -1,10 +1,11 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
+import { AlertTriangleIcon, ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -23,6 +24,7 @@ import { usePickVault } from '@/hooks/use-pick-vault'
 import { openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
+import { type VaultFileProblem, vaultFileProblem } from '@/lib/vault-file-problem'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { UnlockThrottleStatus } from '@shared/types'
@@ -50,6 +52,8 @@ export function Unlock(): ReactNode {
   const initialPath = pendingOpenVaultPath ?? lastOpenedVaultPath
   const [vaultPath, setVaultPath] = useState<string | null>(initialPath)
   const [vaultExists, setVaultExists] = useState<boolean>(initialPath !== null)
+  const [unopenable, setUnopenable] = useState<VaultFileProblem | null>(null)
+  const [retryFailed, setRetryFailed] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(() =>
     initialPath !== null ? usePrefsStore.getState().getHasKeyFileForPath(initialPath) : false
   )
@@ -108,6 +112,12 @@ export function Unlock(): ReactNode {
       }
 
       if (!vaultPath) return
+
+      const fileRes = await notvex.vault.hasVault(vaultPath)
+      if (fileRes.success && fileRes.data !== 'usable') {
+        setUnopenable(fileRes.data)
+        return
+      }
 
       await refreshThrottleStatus()
     })()
@@ -199,6 +209,22 @@ export function Unlock(): ReactNode {
     await afterUnlock(true)
   }
 
+  const handleRetry = async (): Promise<void> => {
+    if (!vaultPath) return
+    const fileRes = await notvex.vault.hasVault(vaultPath)
+    if (fileRes.success) {
+      if (fileRes.data === 'usable') {
+        setUnopenable(null)
+        setRetryFailed(false)
+        await refreshThrottleStatus()
+        focusInput()
+        return
+      }
+      setUnopenable(fileRes.data)
+    }
+    setRetryFailed(true)
+  }
+
   const handleOpenOther = async (): Promise<void> => {
     const selectedPath = await pickExistingVault()
     if (selectedPath === null) return
@@ -233,6 +259,7 @@ export function Unlock(): ReactNode {
   const words = mnemonic.trim() === '' ? [] : mnemonic.trim().split(/\s+/)
   const wordCount = words.length
   const isThrottled = countdown > 0
+  const problem = vaultPath && unopenable ? vaultFileProblem(unopenable, vaultPath) : null
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
@@ -273,6 +300,26 @@ export function Unlock(): ReactNode {
           </div>
         )}
 
+        {problem && (
+          <Alert>
+            <AlertTriangleIcon className="text-warning" />
+            <AlertTitle>{problem.title}</AlertTitle>
+            <AlertDescription>{problem.body}</AlertDescription>
+          </Alert>
+        )}
+
+        {vaultPath && unopenable && (
+          <Button className="mt-4 w-full" autoFocus onClick={handleRetry}>
+            Try again
+          </Button>
+        )}
+
+        {vaultPath && unopenable && (
+          <p aria-live="polite" className="text-muted-foreground mt-2 text-center text-sm">
+            {retryFailed && "Still couldn't open this vault"}
+          </p>
+        )}
+
         {/* Vault file not found */}
         {vaultExists === false && (
           <div className="space-y-4 rounded-lg border p-4">
@@ -300,7 +347,7 @@ export function Unlock(): ReactNode {
         )}
 
         {/* Unlock form */}
-        {vaultExists === true && (
+        {vaultExists === true && unopenable === null && (
           <div
             key={mode}
             className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-4 duration-200"
