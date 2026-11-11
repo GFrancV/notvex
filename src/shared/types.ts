@@ -179,12 +179,14 @@ export interface BugReportParts {
 
 export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
 
+export type VaultFileStatus = 'usable' | 'missing' | 'not-vault' | 'unreadable'
+
 export type Platform = 'darwin' | 'win32' | 'linux'
 
 export interface NotvexAPI {
   platform: Platform
   vault: {
-    hasVault(filePath?: string): Promise<IpcResult<boolean>>
+    hasVault(filePath?: string): Promise<IpcResult<VaultFileStatus>>
     create(filePath: string, password: string): Promise<IpcResult<CreateVaultResult>>
     open(
       filePath: string,

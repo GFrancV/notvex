@@ -4,7 +4,7 @@ import sodium from 'libsodium-wrappers-sumo'
 import os from 'os'
 import { join } from 'path'
 
-import { CURRENT_VERSION_MAJ, CURRENT_VERSION_MIN } from '@shared/types'
+import { CURRENT_VERSION_MAJ, CURRENT_VERSION_MIN, type VaultFileStatus } from '@shared/types'
 import { computeHeaderHmac, isValidKdfTier, KdfInputV1 } from './crypto'
 
 // Layout: [4B "NVX\0"][u16le maj][u16le min][TLV: u8 id, u32le len, data]...[0x00][DB bytes]
@@ -182,9 +182,9 @@ export function shouldWarnOpeningInDevBuild(
   return !isPackaged && !header.devBuild
 }
 
-export function isValidNotvexFile(filePath: string): boolean {
+export function vaultFileStatus(filePath: string): VaultFileStatus {
+  if (!existsSync(filePath)) return 'missing'
   try {
-    if (!existsSync(filePath)) return false
     const buf = Buffer.alloc(4)
     const fd = openSync(filePath, 'r')
     try {
@@ -192,10 +192,14 @@ export function isValidNotvexFile(filePath: string): boolean {
     } finally {
       closeSync(fd)
     }
-    return buf.equals(MAGIC_NVX)
+    return buf.equals(MAGIC_NVX) ? 'usable' : 'not-vault'
   } catch {
-    return false
+    return 'unreadable'
   }
+}
+
+export function isValidNotvexFile(filePath: string): boolean {
+  return vaultFileStatus(filePath) === 'usable'
 }
 
 export function makeTempDbPath(): string {

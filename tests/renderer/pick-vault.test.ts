@@ -25,7 +25,7 @@ describe('usePickVault', () => {
       { success: false, error: 'Vaults on network shares are not supported' },
       'Vaults on network shares are not supported'
     ],
-    ['not a vault', { success: true, data: false }, 'This file is not a valid Notvex vault']
+    ['not a vault', { success: true, data: 'not-vault' }, 'This file is not a valid Notvex vault']
   ])('rejects a file that is %s and says why', async (_label, res, message) => {
     ipc.hasVault.mockResolvedValue(res)
     const { result } = renderHook(() => usePickVault())

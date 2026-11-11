@@ -80,7 +80,12 @@ import {
   getVaultBackupDir,
   hasAnyBackups
 } from './vault/backups'
-import { isValidNotvexFile, readContainer, shouldWarnOpeningInDevBuild } from './vault/container'
+import {
+  isValidNotvexFile,
+  readContainer,
+  shouldWarnOpeningInDevBuild,
+  vaultFileStatus
+} from './vault/container'
 import { KEY_FILE_MAX_BYTES, memzero, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -617,9 +622,9 @@ export function registerIpcHandlers(
   handle('vault:has-vault', (_e, filePath?: string) => {
     try {
       const path = filePath ?? getCurrentVaultPath()
-      if (!path) return ok(false)
+      if (!path) return ok('missing')
       if (!isLocalVaultPath(path)) return fail('Vaults on network shares are not supported')
-      return ok(existsSync(path) && isValidNotvexFile(path))
+      return ok(vaultFileStatus(path))
     } catch (e) {
       return fail(e)
     }

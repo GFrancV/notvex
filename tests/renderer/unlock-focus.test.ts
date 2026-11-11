@@ -17,7 +17,7 @@ vi.mock('@/lib/ipc', () => ({
         data: { isThrottled: false, waitSeconds: 0, failedAttempts: 0 }
       }),
       chooseFile: vi.fn().mockResolvedValue({ success: true, data: OTHER_VAULT }),
-      hasVault: vi.fn().mockResolvedValue({ success: true, data: true }),
+      hasVault: vi.fn().mockResolvedValue({ success: true, data: 'usable' }),
       open: vi.fn(),
       openWithRecovery: vi.fn()
     }
