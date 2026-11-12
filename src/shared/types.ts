@@ -157,6 +157,11 @@ export interface VaultVersion {
 export interface UpdateInfo {
   version: string
   releaseNotes: string | null
+  summary: string | null
+  security: boolean
+  releaseDate: string | null
+  size: number | null
+  releaseUrl: string
 }
 
 export interface DownloadProgress {

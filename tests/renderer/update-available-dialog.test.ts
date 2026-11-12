@@ -8,6 +8,16 @@ import type { UpdateInfo } from '@shared/types'
 
 type Listener<T> = (data: T) => void
 
+const info: UpdateInfo = {
+  version: '9.9.9',
+  releaseNotes: null,
+  summary: null,
+  security: false,
+  releaseDate: null,
+  size: null,
+  releaseUrl: 'https://github.com/GFrancV/notvex/releases/tag/v9.9.9'
+}
+
 const listeners = vi.hoisted(() => ({
   available: undefined as Listener<UpdateInfo> | undefined,
   error: undefined as Listener<{ message: string }> | undefined
@@ -45,7 +55,7 @@ afterEach(() => {
 describe('UpdateAvailableDialog', () => {
   it('reports a failed update as the alert that describes the dialog', async () => {
     render(createElement(UpdateAvailableDialog, { ready: true }))
-    act(() => listeners.available?.({ version: '9.9.9', releaseNotes: null }))
+    act(() => listeners.available?.(info))
     act(() => listeners.error?.({ message: 'Network unreachable' }))
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/network unreachable/i)
@@ -55,7 +65,7 @@ describe('UpdateAvailableDialog', () => {
   it('does not open while ready is false, even after a long wait', () => {
     vi.useFakeTimers()
     render(createElement(UpdateAvailableDialog, { ready: false }))
-    act(() => listeners.available?.({ version: '9.9.9', releaseNotes: null }))
+    act(() => listeners.available?.(info))
     act(() => vi.advanceTimersByTime(60_000))
 
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -64,7 +74,7 @@ describe('UpdateAvailableDialog', () => {
   it('opens after 1500 ms without input once ready', () => {
     vi.useFakeTimers()
     render(createElement(UpdateAvailableDialog, { ready: true }))
-    act(() => listeners.available?.({ version: '9.9.9', releaseNotes: null }))
+    act(() => listeners.available?.(info))
 
     act(() => vi.advanceTimersByTime(1499))
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -79,7 +89,7 @@ describe('UpdateAvailableDialog', () => {
   ])('restarts the 1500 ms count on %s while waiting', (_name, input) => {
     vi.useFakeTimers()
     render(createElement(UpdateAvailableDialog, { ready: true }))
-    act(() => listeners.available?.({ version: '9.9.9', releaseNotes: null }))
+    act(() => listeners.available?.(info))
 
     act(() => vi.advanceTimersByTime(1000))
     act(() => void input())
@@ -93,7 +103,7 @@ describe('UpdateAvailableDialog', () => {
   it('waits 1500 ms after unlock for an update found before it', () => {
     vi.useFakeTimers()
     const { rerender } = render(createElement(UpdateAvailableDialog, { ready: false }))
-    act(() => listeners.available?.({ version: '9.9.9', releaseNotes: null }))
+    act(() => listeners.available?.(info))
     act(() => vi.advanceTimersByTime(5000))
     rerender(createElement(UpdateAvailableDialog, { ready: true }))
 
@@ -107,7 +117,7 @@ describe('UpdateAvailableDialog', () => {
   it('waits again after the view leaves and returns to ready', () => {
     vi.useFakeTimers()
     const { rerender } = render(createElement(UpdateAvailableDialog, { ready: true }))
-    act(() => listeners.available?.({ version: '9.9.9', releaseNotes: null }))
+    act(() => listeners.available?.(info))
     act(() => vi.advanceTimersByTime(1500))
     expect(screen.getByRole('dialog')).toBeTruthy()
 
