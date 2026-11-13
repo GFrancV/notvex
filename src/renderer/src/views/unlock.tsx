@@ -1,17 +1,11 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  AlertTriangleIcon,
-  ChevronDownIcon,
-  ExternalLinkIcon,
-  FolderOpenIcon,
-  ListXIcon
-} from 'lucide-react'
+import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { UnopenableVault } from '@/components/UnopenableVault'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -30,7 +24,7 @@ import { usePickVault } from '@/hooks/use-pick-vault'
 import { openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
-import { type VaultFileProblem, vaultFileProblem } from '@/lib/vault-file-problem'
+import type { VaultFileProblem } from '@/lib/vault-file-problem'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { UnlockThrottleStatus } from '@shared/types'
@@ -110,6 +104,31 @@ export function Unlock(): ReactNode {
     }
   }, [startCountdown])
 
+  // Points the screen at another vault: forgets what was typed for the previous one, then shows
+  // either its unlock form or why it can't be opened
+  const showVault = useCallback(
+    async (path: string): Promise<void> => {
+      setVaultPath(path)
+      setVaultExists(true)
+      setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(path))
+      setUnopenable(null)
+      setRetryFailed(false)
+      setError('')
+      setPassword('')
+      setMnemonic('')
+      keyFileContentsRef.current = null
+      recoveryKeyFileContentsRef.current = null
+      const fileRes = await notvex.vault.hasVault(path)
+      if (fileRes.success && fileRes.data !== 'usable') {
+        setUnopenable(fileRes.data)
+        return
+      }
+      await refreshThrottleStatus()
+      focusInput()
+    },
+    [refreshThrottleStatus, focusInput]
+  )
+
   // Init: clear pending path from store + fetch throttle status
   useEffect(() => {
     void (async (): Promise<void> => {
@@ -137,19 +156,10 @@ export function Unlock(): ReactNode {
   useEffect(() => {
     if (!pendingOpenVaultPath) return
     void (async (): Promise<void> => {
-      setVaultPath(pendingOpenVaultPath)
-      setVaultExists(true)
-      setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(pendingOpenVaultPath))
-      setError('')
-      setPassword('')
-      setMnemonic('')
-      keyFileContentsRef.current = null
-      recoveryKeyFileContentsRef.current = null
       setPendingOpenVaultPath(null)
-      await refreshThrottleStatus()
-      focusInput()
+      await showVault(pendingOpenVaultPath)
     })()
-  }, [pendingOpenVaultPath, refreshThrottleStatus, setPendingOpenVaultPath, focusInput])
+  }, [pendingOpenVaultPath, setPendingOpenVaultPath, showVault])
 
   async function afterUnlock(viaRecovery = false): Promise<void> {
     await Promise.all([refreshAll(), usePrefsStore.getState().load()])
@@ -240,38 +250,12 @@ export function Unlock(): ReactNode {
       setStatus('uninitialized')
       return
     }
-
-    setVaultPath(next)
-    setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(next))
-    setUnopenable(null)
-    setRetryFailed(false)
-    setError('')
-    setPassword('')
-    keyFileContentsRef.current = null
-    recoveryKeyFileContentsRef.current = null
-    const fileRes = await notvex.vault.hasVault(next)
-    if (fileRes.success && fileRes.data !== 'usable') {
-      setUnopenable(fileRes.data)
-      return
-    }
-    await refreshThrottleStatus()
-    focusInput()
+    await showVault(next)
   }
 
   const handleOpenOther = async (): Promise<void> => {
     const selectedPath = await pickExistingVault()
-    if (selectedPath === null) return
-
-    setVaultPath(selectedPath)
-    setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(selectedPath))
-    setVaultExists(true)
-    setUnopenable(null)
-    setRetryFailed(false)
-    setError('')
-    keyFileContentsRef.current = null
-    recoveryKeyFileContentsRef.current = null
-    await refreshThrottleStatus()
-    focusInput()
+    if (selectedPath !== null) await showVault(selectedPath)
   }
 
   const handleCreateNew = async (): Promise<void> => {
@@ -294,7 +278,6 @@ export function Unlock(): ReactNode {
   const words = mnemonic.trim() === '' ? [] : mnemonic.trim().split(/\s+/)
   const wordCount = words.length
   const isThrottled = countdown > 0
-  const problem = vaultPath && unopenable ? vaultFileProblem(unopenable, vaultPath) : null
 
   return (
     <div className="bg-background relative flex min-h-screen items-center justify-center p-8">
@@ -335,53 +318,16 @@ export function Unlock(): ReactNode {
           </div>
         )}
 
-        {problem && (
-          <Alert variant="warning">
-            <AlertTriangleIcon />
-            <AlertTitle>{problem.title}</AlertTitle>
-            <AlertDescription>{problem.body}</AlertDescription>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="col-start-2 mt-2 justify-self-start"
-              onClick={handleRemove}
-            >
-              <ListXIcon />
-              Remove from recent vaults
-            </Button>
-          </Alert>
-        )}
-
         {vaultPath && unopenable && (
-          <Button className="mt-4 w-full" autoFocus onClick={handleRetry}>
-            Try again
-          </Button>
-        )}
-
-        {vaultPath && unopenable && (
-          <p aria-live="polite" className="text-muted-foreground mt-2 text-center text-sm">
-            {retryFailed && "Still couldn't open this vault"}
-          </p>
-        )}
-
-        {vaultPath && unopenable && (
-          <div className="mt-4 flex flex-col gap-4">
-            <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
-            <Button variant="outline" className="w-full" onClick={handleOpenOther}>
-              Open existing vault
-            </Button>
-            <p className="text-center">
-              <Button
-                variant="link"
-                className="text-muted-foreground h-auto p-0 text-xs font-normal"
-                onClick={(): void => {
-                  void handleCreateNew()
-                }}
-              >
-                Create new vault
-              </Button>
-            </p>
-          </div>
+          <UnopenableVault
+            status={unopenable}
+            path={vaultPath}
+            retryFailed={retryFailed}
+            onRetry={() => void handleRetry()}
+            onRemove={() => void handleRemove()}
+            onOpenOther={() => void handleOpenOther()}
+            onCreateNew={() => void handleCreateNew()}
+          />
         )}
 
         {/* Vault file not found */}
