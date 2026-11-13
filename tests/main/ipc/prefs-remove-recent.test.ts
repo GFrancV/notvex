@@ -85,7 +85,8 @@ describe('prefs:remove-recent-vault', () => {
 
   describe('matching a path that differs only in letter case', () => {
     const platform = process.platform
-    const stored = { path: 'C:\\Vaults\\Work.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+    // Absolute on every host, since prefs reads drop paths that aren't absolute where they run
+    const stored = { path: '/Vaults/Work.nvx', hasKeyFile: false, lastOpenedAt: 1 }
 
     afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
 
@@ -97,7 +98,7 @@ describe('prefs:remove-recent-vault', () => {
       fsState.contents = JSON.stringify({ recentVaults: [stored] })
 
       // Called directly: the sender-frame check in the handler also depends on the platform
-      removeRecentVault('c:\\vaults\\work.nvx')
+      removeRecentVault('/vaults/work.nvx')
 
       expect(writtenRecents()).toEqual(expected)
     })
