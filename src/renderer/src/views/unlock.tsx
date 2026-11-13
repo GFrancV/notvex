@@ -228,11 +228,12 @@ export function Unlock(): ReactNode {
 
   const handleRetry = async (): Promise<void> => {
     if (!vaultPath) return
+    // A live region announces only when its text changes, so clear it while the retry runs
+    setRetryFailed(false)
     const fileRes = await notvex.vault.hasVault(vaultPath)
     if (fileRes.success) {
       if (fileRes.data === 'usable') {
         setUnopenable(null)
-        setRetryFailed(false)
         await refreshThrottleStatus()
         focusInput()
         return

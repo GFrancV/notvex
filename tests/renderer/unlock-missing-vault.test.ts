@@ -105,6 +105,22 @@ describe('Unlock with a vault that can not be opened', () => {
     expect(screen.queryByLabelText('Master password')).toBeNull()
   })
 
+  it('announces every failed retry, not only the first', async () => {
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await screen.findByText("Still couldn't open this vault")
+
+    let answer: (status: { success: true; data: 'missing' }) => void = () => {}
+    vi.mocked(notvex.vault.hasVault).mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    // A live region only announces when its text changes, so it must clear while the retry runs
+    await waitFor(() => expect(screen.queryByText("Still couldn't open this vault")).toBeNull())
+    answer({ success: true, data: 'missing' })
+    await screen.findByText("Still couldn't open this vault")
+  })
+
   it('says why when removing the vault from the list fails, and keeps the message', async () => {
     vi.mocked(notvex.prefs.removeRecentVault).mockResolvedValue({
       success: false,
