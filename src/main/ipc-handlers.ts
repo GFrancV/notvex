@@ -6,7 +6,6 @@ import {
   closeSync,
   constants,
   copyFileSync,
-  existsSync,
   fstatSync,
   openSync,
   readFileSync,
@@ -81,12 +80,7 @@ import {
   getVaultBackupDir,
   hasAnyBackups
 } from './vault/backups'
-import {
-  isValidNotvexFile,
-  readContainer,
-  shouldWarnOpeningInDevBuild,
-  vaultFileStatus
-} from './vault/container'
+import { readContainer, shouldWarnOpeningInDevBuild, vaultFileStatus } from './vault/container'
 import { KEY_FILE_MAX_BYTES, memzero, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -967,12 +961,8 @@ export function registerIpcHandlers(
   handle('vault:switch', async (_e, filePath: string) => {
     try {
       // Validate before closeVaultDrained() so a bad target never locks the current vault
-      if (!existsSync(filePath)) {
-        return fail('Vault not found. It may have been moved or deleted.')
-      }
-      if (!isValidNotvexFile(filePath)) {
-        return fail('This file is not a valid Notvex vault')
-      }
+      const status = vaultFileStatus(filePath)
+      if (status !== 'usable') return ok(status)
       await lockAndRecycle(liveWin(), { next: { path: filePath, mode: 'open' } })
       try {
         promoteVaultToTop(filePath)
@@ -980,7 +970,7 @@ export function registerIpcHandlers(
         // The vault is already closed: failing here would strand the renderer unlocked over it
         logError('[switch] promote failed:', e)
       }
-      return ok(null)
+      return ok(status)
     } catch (e) {
       return fail(e)
     }

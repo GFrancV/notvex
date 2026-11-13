@@ -213,7 +213,7 @@ export interface NotvexAPI {
     close(createPath?: string): Promise<IpcResult<null>>
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
-    switchTo(filePath: string): Promise<IpcResult<null>>
+    switchTo(filePath: string): Promise<IpcResult<VaultFileStatus>>
     chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
     selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
     getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
