@@ -1,6 +1,12 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import { AlertTriangleIcon, ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
+import {
+  AlertTriangleIcon,
+  ChevronDownIcon,
+  ExternalLinkIcon,
+  FolderOpenIcon,
+  ListXIcon
+} from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
@@ -225,6 +231,33 @@ export function Unlock(): ReactNode {
     setRetryFailed(true)
   }
 
+  const handleRemove = async (): Promise<void> => {
+    if (!vaultPath) return
+    await notvex.prefs.removeRecentVault(vaultPath)
+    await usePrefsStore.getState().load()
+    const next = usePrefsStore.getState().recentVaults[0]?.path ?? null
+    if (next === null) {
+      setStatus('uninitialized')
+      return
+    }
+
+    setVaultPath(next)
+    setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(next))
+    setUnopenable(null)
+    setRetryFailed(false)
+    setError('')
+    setPassword('')
+    keyFileContentsRef.current = null
+    recoveryKeyFileContentsRef.current = null
+    const fileRes = await notvex.vault.hasVault(next)
+    if (fileRes.success && fileRes.data !== 'usable') {
+      setUnopenable(fileRes.data)
+      return
+    }
+    await refreshThrottleStatus()
+    focusInput()
+  }
+
   const handleOpenOther = async (): Promise<void> => {
     const selectedPath = await pickExistingVault()
     if (selectedPath === null) return
@@ -232,6 +265,8 @@ export function Unlock(): ReactNode {
     setVaultPath(selectedPath)
     setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(selectedPath))
     setVaultExists(true)
+    setUnopenable(null)
+    setRetryFailed(false)
     setError('')
     keyFileContentsRef.current = null
     recoveryKeyFileContentsRef.current = null
@@ -301,10 +336,19 @@ export function Unlock(): ReactNode {
         )}
 
         {problem && (
-          <Alert>
-            <AlertTriangleIcon className="text-warning" />
+          <Alert variant="warning">
+            <AlertTriangleIcon />
             <AlertTitle>{problem.title}</AlertTitle>
             <AlertDescription>{problem.body}</AlertDescription>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="col-start-2 mt-2 justify-self-start"
+              onClick={handleRemove}
+            >
+              <ListXIcon />
+              Remove from recent vaults
+            </Button>
           </Alert>
         )}
 
@@ -318,6 +362,26 @@ export function Unlock(): ReactNode {
           <p aria-live="polite" className="text-muted-foreground mt-2 text-center text-sm">
             {retryFailed && "Still couldn't open this vault"}
           </p>
+        )}
+
+        {vaultPath && unopenable && (
+          <div className="mt-4 flex flex-col gap-4">
+            <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
+            <Button variant="outline" className="w-full" onClick={handleOpenOther}>
+              Open existing vault
+            </Button>
+            <p className="text-center">
+              <Button
+                variant="link"
+                className="text-muted-foreground h-auto p-0 text-xs font-normal"
+                onClick={(): void => {
+                  void handleCreateNew()
+                }}
+              >
+                Create new vault
+              </Button>
+            </p>
+          </div>
         )}
 
         {/* Vault file not found */}

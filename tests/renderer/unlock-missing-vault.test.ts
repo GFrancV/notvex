@@ -8,7 +8,9 @@ const VAULT = '/vaults/main.nvx'
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
+    platform: 'win32',
     app: { isDev: vi.fn().mockResolvedValue({ success: true, data: false }) },
+    prefs: { get: vi.fn(), removeRecentVault: vi.fn() },
     vault: {
       getUnlockThrottleStatus: vi.fn().mockResolvedValue({
         success: true,
@@ -98,6 +100,79 @@ describe('Unlock with a vault that can not be opened', () => {
     expect(status.closest('[aria-live="polite"]')).not.toBeNull()
     expect(screen.getByRole('alert').textContent).toContain("isn't a Notvex vault")
     expect(screen.queryByLabelText('Master password')).toBeNull()
+  })
+
+  it('removes the vault on request and shows the next recent vault', async () => {
+    const other = { path: '/vaults/other.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+    usePrefsStore.setState({
+      recentVaults: [{ path: VAULT, hasKeyFile: false, lastOpenedAt: 2 }, other]
+    })
+    vi.mocked(notvex.vault.hasVault).mockImplementation(async (path) => ({
+      success: true,
+      data: path === VAULT ? 'missing' : 'usable'
+    }))
+    vi.mocked(notvex.prefs.removeRecentVault).mockResolvedValue({ success: true, data: null })
+    vi.mocked(notvex.prefs.get).mockResolvedValue({
+      success: true,
+      data: { recentVaults: [other] } as never
+    })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from recent vaults' }))
+
+    await screen.findByLabelText('Master password')
+    expect(notvex.prefs.removeRecentVault).toHaveBeenCalledExactlyOnceWith(VAULT)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('button', { name: /other\.nvx/ })).toBeTruthy()
+  })
+
+  it('goes to the first-run screen when the removed vault was the only one', async () => {
+    vi.mocked(notvex.prefs.removeRecentVault).mockResolvedValue({ success: true, data: null })
+    vi.mocked(notvex.prefs.get).mockResolvedValue({
+      success: true,
+      data: { recentVaults: [] } as never
+    })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from recent vaults' }))
+
+    await waitFor(() => expect(useVaultStore.getState().status).toBe('uninitialized'))
+  })
+
+  it('opens another vault from the message and shows its form', async () => {
+    const OTHER = '/vaults/other.nvx'
+    vi.mocked(notvex.vault.hasVault).mockImplementation(async (path) => ({
+      success: true,
+      data: path === VAULT ? 'missing' : 'usable'
+    }))
+    vi.mocked(notvex.vault.chooseFile).mockResolvedValue({ success: true, data: OTHER })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open existing vault' }))
+
+    const password = await screen.findByLabelText('Master password')
+    await waitFor(() => expect(document.activeElement).toBe(password))
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('button', { name: new RegExp(OTHER) })).toBeTruthy()
+  })
+
+  it('starts creating a vault from the message', async () => {
+    vi.mocked(notvex.vault.chooseFile).mockResolvedValue({
+      success: true,
+      data: '/vaults/new.nvx'
+    })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create new vault' }))
+
+    await waitFor(() =>
+      expect(useVaultStore.getState().pendingNewVaultPath).toBe('/vaults/new.nvx')
+    )
+    expect(notvex.vault.chooseFile).toHaveBeenCalledWith('new')
   })
 
   it.each([
