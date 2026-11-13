@@ -23,8 +23,11 @@ const listeners = vi.hoisted(() => ({
   error: undefined as Listener<{ message: string }> | undefined
 }))
 
+const openExternal = vi.hoisted(() => vi.fn())
+
 vi.mock('@/lib/ipc', () => ({
   notvex: {
+    shell: { openExternal },
     // AppLogo renders via useIsDev(), which calls this on mount.
     app: { isDev: vi.fn().mockResolvedValue({ success: true, data: false }) },
     updater: {
@@ -130,5 +133,98 @@ describe('UpdateAvailableDialog', () => {
 
     act(() => vi.advanceTimersByTime(1))
     expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+})
+
+describe('UpdateAvailableDialog content', () => {
+  function openWith(overrides: Partial<UpdateInfo>): void {
+    vi.useFakeTimers()
+    render(createElement(UpdateAvailableDialog, { ready: true }))
+    act(() => listeners.available?.({ ...info, ...overrides }))
+    act(() => vi.advanceTimersByTime(1500))
+  }
+
+  it('shows the in-app summary, release date, size and a release notes link', () => {
+    openWith({
+      summary: 'Faster search.\n\n- Highlight one',
+      releaseNotes: '<p>Full release prose</p>',
+      releaseDate: '2026-11-01T12:00:00.000Z',
+      size: 104857600
+    })
+
+    expect(
+      screen.getByRole('dialog', { description: 'Released Nov 1, 2026 · 100 MB' })
+    ).toBeTruthy()
+    expect(screen.getByText('Faster search.')).toBeTruthy()
+    expect(screen.getByRole('listitem').textContent).toBe('Highlight one')
+    expect(screen.queryByText('Full release prose')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Release notes (opens in your browser)' })
+    ).toBeTruthy()
+  })
+
+  it.each([
+    [true, 1],
+    [false, 0]
+  ])('with security %s shows %i security badge', (security, count) => {
+    openWith({ security })
+
+    expect(screen.queryAllByText('Security fixes')).toHaveLength(count)
+  })
+
+  it('renders HTML in the summary as text, not as elements', () => {
+    const html =
+      '<script>window.x = 1</script><img src="x" onerror="window.x = 1"><iframe src="https://example.com"></iframe>'
+    openWith({ summary: `Before ${html} after` })
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.querySelector('script, img, iframe')).toBeNull()
+    expect(dialog.querySelector('[onerror]')).toBeNull()
+    expect(screen.getByText(`Before ${html} after`)).toBeTruthy()
+  })
+
+  it('does not render Markdown images in the summary', () => {
+    openWith({ summary: 'See ![diagram](https://example.com/x.png) here' })
+
+    expect(screen.getByRole('dialog').querySelector('img')).toBeNull()
+  })
+
+  it('renders only https links in the summary as links', () => {
+    openWith({
+      summary: '[safe](https://example.com) [plain](http://example.com) [bad](javascript:alert(1))'
+    })
+
+    expect(screen.getByRole('button', { name: 'safe (opens in your browser)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'plain' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'bad' })).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.getByText(/plain bad/).textContent).toBe('safe (opens in your browser) plain bad')
+  })
+
+  it('opens the release notes link and summary links via shell.openExternal', () => {
+    openExternal.mockClear()
+    openWith({ summary: 'See [the docs](https://example.com/docs).' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'the docs (opens in your browser)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Release notes (opens in your browser)' }))
+
+    expect(openExternal.mock.calls).toEqual([
+      ['https://example.com/docs'],
+      ['https://github.com/GFrancV/notvex/releases/tag/v9.9.9']
+    ])
+  })
+
+  it('without a summary, shows the sanitized full release notes', () => {
+    openWith({
+      summary: null,
+      releaseNotes: '<p>Full release prose</p><script>window.x = 1</script><img src="x" />'
+    })
+
+    const dialog = screen.getByRole('dialog')
+    expect(screen.getByText('Full release prose')).toBeTruthy()
+    expect(dialog.querySelector('script, img')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Release notes (opens in your browser)' })
+    ).toBeTruthy()
   })
 })

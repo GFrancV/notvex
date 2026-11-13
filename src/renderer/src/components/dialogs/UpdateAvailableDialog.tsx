@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
 
 import DOMPurify from 'dompurify'
-import { TagIcon, TriangleAlertIcon } from 'lucide-react'
+import { ExternalLinkIcon, ShieldAlertIcon, TagIcon, TriangleAlertIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -42,8 +43,39 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 })
 
+// The summary is short text: a remote image would only show as broken, since the CSP blocks it
+const SUMMARY_DISALLOWED = ['img']
+
+// The summary comes from the network: only https links stay clickable, anything else is text
+const SUMMARY_COMPONENTS: Components = {
+  a({ href, children }) {
+    if (!href?.startsWith('https://')) return <>{children}</>
+    return (
+      <Button
+        variant="link"
+        className="h-fit gap-1 p-0 underline has-[>svg]:px-0"
+        onClick={() => void notvex.shell.openExternal(href)}
+      >
+        {children} <span className="sr-only">(opens in your browser)</span>
+        <ExternalLinkIcon aria-hidden className="size-3.5" />
+      </Button>
+    )
+  }
+}
+
 // Quiet time before the dialog opens, so it never lands mid-typing
 const IDLE_MS = 1500
+
+// Fixed to en-US so the date matches the language of the rest of the UI
+const RELEASE_DATE_FORMAT = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' })
+
+function releaseMeta(info: UpdateInfo): string {
+  const date = info.releaseDate
+    ? `Released ${RELEASE_DATE_FORMAT.format(new Date(info.releaseDate))}`
+    : null
+  const size = info.size ? `${Math.round(info.size / 1024 / 1024)} MB` : null
+  return [date, size].filter(Boolean).join(' · ')
+}
 
 interface UpdateAvailableDialogProps {
   // false while a password screen is up: the dialog would take keystrokes meant for it
@@ -118,7 +150,13 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
         if (!v && dismissible) setState(null)
       }}
     >
-      <DialogContent>
+      <DialogContent
+        className={
+          state?.phase === 'available'
+            ? 'flex max-h-[min(540px,85vh)] min-h-[360px] flex-col sm:max-w-xl'
+            : undefined
+        }
+      >
         {state?.phase === 'available' && (
           <>
             <DialogHeader>
@@ -129,18 +167,50 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
                   <Badge variant="secondary" className="ml-2">
                     <TagIcon />v{state.info.version}
                   </Badge>
+                  {state.info.security && (
+                    <Badge
+                      variant="outline"
+                      className="border-destructive/40 bg-destructive/10 text-destructive ml-2"
+                    >
+                      <ShieldAlertIcon />
+                      Security fixes
+                    </Badge>
+                  )}
                 </DialogTitle>
               </div>
+              <DialogDescription>{releaseMeta(state.info)}</DialogDescription>
             </DialogHeader>
-            {releaseNotesHtml && (
-              <ScrollArea className="max-h-48">
-                <div
-                  className="text-muted-foreground [&_a]:text-primary space-y-2 text-sm [&_a]:underline [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"
-                  dangerouslySetInnerHTML={{ __html: releaseNotesHtml }}
-                />
+            {state.info.summary ? (
+              <ScrollArea className="flex min-h-0 flex-1 flex-col [&>[data-slot=scroll-area-viewport]]:min-h-0">
+                <div className="text-muted-foreground space-y-2 text-sm [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
+                  <ReactMarkdown
+                    disallowedElements={SUMMARY_DISALLOWED}
+                    components={SUMMARY_COMPONENTS}
+                  >
+                    {state.info.summary}
+                  </ReactMarkdown>
+                </div>
               </ScrollArea>
+            ) : (
+              releaseNotesHtml && (
+                <ScrollArea className="flex min-h-0 flex-1 flex-col [&>[data-slot=scroll-area-viewport]]:min-h-0">
+                  <div
+                    className="text-muted-foreground [&_a]:text-primary space-y-2 text-sm [&_a]:underline [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc"
+                    dangerouslySetInnerHTML={{ __html: releaseNotesHtml }}
+                  />
+                </ScrollArea>
+              )
             )}
             <DialogFooter>
+              <Button
+                variant="link"
+                className="mr-auto px-0 has-[>svg]:px-0"
+                aria-label="Release notes (opens in your browser)"
+                onClick={() => void notvex.shell.openExternal(state.info.releaseUrl)}
+              >
+                Release notes
+                <ExternalLinkIcon aria-hidden />
+              </Button>
               <Button variant="ghost" onClick={() => setState(null)}>
                 Remind me later
               </Button>
