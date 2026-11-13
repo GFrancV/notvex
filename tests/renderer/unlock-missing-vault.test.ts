@@ -24,7 +24,10 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+
 const { Unlock } = await import('@/views/unlock')
+const { toast } = await import('sonner')
 const { notvex } = await import('@/lib/ipc')
 const { useVaultStore } = await import('@/store/vault.store')
 const { usePrefsStore } = await import('@/store/prefs.store')
@@ -100,6 +103,25 @@ describe('Unlock with a vault that can not be opened', () => {
     expect(status.closest('[aria-live="polite"]')).not.toBeNull()
     expect(screen.getByRole('alert').textContent).toContain("isn't a Notvex vault")
     expect(screen.queryByLabelText('Master password')).toBeNull()
+  })
+
+  it('says why when removing the vault from the list fails, and keeps the message', async () => {
+    vi.mocked(notvex.prefs.removeRecentVault).mockResolvedValue({
+      success: false,
+      error: "Couldn't remove this vault from the list"
+    })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from recent vaults' }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        "Couldn't remove this vault from the list"
+      )
+    )
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(notvex.prefs.get).not.toHaveBeenCalled()
   })
 
   it('removes the vault on request and shows the next recent vault', async () => {

@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
@@ -243,7 +244,11 @@ export function Unlock(): ReactNode {
 
   const handleRemove = async (): Promise<void> => {
     if (!vaultPath) return
-    await notvex.prefs.removeRecentVault(vaultPath)
+    const removed = await notvex.prefs.removeRecentVault(vaultPath)
+    if (!removed.success) {
+      toast.error(removed.error)
+      return
+    }
     await usePrefsStore.getState().load()
     const next = usePrefsStore.getState().recentVaults[0]?.path ?? null
     if (next === null) {
