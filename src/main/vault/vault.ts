@@ -320,7 +320,7 @@ export async function createVault(
 
   requireNewPasswordLength(password)
 
-  if (existsSync(filePath) && isValidNotvexFile(filePath)) {
+  if (isValidNotvexFile(filePath)) {
     throw new Error('A vault already exists at this location.')
   }
 
