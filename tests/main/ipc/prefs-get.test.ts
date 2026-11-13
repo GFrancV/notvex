@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rendererIndexPath } from '@main/url-guard'
 
-// prefs:get checks every recent vault on disk at startup, and prefs.json is hand-editable, so a
-// network-share path in it must never reach the file system. The real prefs module is used so
-// the recents filter and the handler's fs calls are tested together.
+// prefs.json is hand-editable, so a network-share path in it must never reach the file system,
+// while recent vaults whose file can't be used are kept for the user to see. The real prefs module
+// is used so the recents filter and the handler's fs calls are tested together.
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -28,7 +28,7 @@ vi.mock('fs', () => ({
   renameSync: vi.fn()
 }))
 vi.mock('@main/vault/backups', () => ({}))
-vi.mock('@main/vault/container', () => ({ isValidNotvexFile: vi.fn(() => true) }))
+vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({}))
 vi.mock('@main/db/queries', () => ({}))
@@ -37,7 +37,6 @@ vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
 const { existsSync, writeFileSync } = await import('fs')
-const { isValidNotvexFile } = await import('@main/vault/container')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 
@@ -66,19 +65,16 @@ describe('prefs:get', () => {
       data: { recentVaults: [local] }
     })
     expect(existsSync).not.toHaveBeenCalledWith(UNC)
-    expect(isValidNotvexFile).not.toHaveBeenCalledWith(UNC)
   })
 
-  it('keeps recent vaults whose file is missing or not a vault, without rewriting prefs.json', async () => {
+  it('keeps recent vaults whose file is missing, without rewriting prefs.json', async () => {
     const missing = { ...local, path: '/vaults/missing.nvx' }
-    const notVault = { ...local, path: '/vaults/not-a-vault.nvx' }
-    fsState.contents = JSON.stringify({ recentVaults: [missing, notVault, local] })
+    fsState.contents = JSON.stringify({ recentVaults: [missing, local] })
     vi.mocked(existsSync).mockImplementation((p) => p !== missing.path)
-    vi.mocked(isValidNotvexFile).mockImplementation((p) => p === local.path)
 
     expect(await invoke('prefs:get')).toMatchObject({
       success: true,
-      data: { recentVaults: [missing, notVault, local] }
+      data: { recentVaults: [missing, local] }
     })
     expect(writeFileSync).not.toHaveBeenCalled()
   })
