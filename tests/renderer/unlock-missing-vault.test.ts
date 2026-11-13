@@ -195,3 +195,23 @@ describe('Unlock with a vault that can not be opened', () => {
     expect(alert.textContent).toContain(body)
   })
 })
+
+describe('Unlock with no saved vault', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useVaultStore.setState({ status: 'locked', pendingOpenVaultPath: null })
+    usePrefsStore.setState({ recentVaults: [] })
+  })
+
+  it('says there is no saved vault instead of blaming a saved location', () => {
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+
+    expect(
+      screen.getByText('No saved vault found. Create a new vault or open an existing one.')
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create new vault' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open existing vault' })).toBeTruthy()
+  })
+})
