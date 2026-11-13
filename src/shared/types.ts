@@ -281,6 +281,7 @@ export interface NotvexAPI {
   prefs: {
     get(): Promise<IpcResult<Prefs>>
     set<K extends keyof Prefs>(key: K, value: Prefs[K]): Promise<IpcResult<void>>
+    removeRecentVault(filePath: string): Promise<IpcResult<null>>
   }
   clipboard: {
     /** Main clears it after the auto-clear pref, or after a fixed 30 s when `secret`.

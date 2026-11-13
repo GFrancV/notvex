@@ -71,6 +71,7 @@ import {
   markRecoveryUnconfirmed,
   promoteVaultToTop,
   recordVaultUsed,
+  removeRecentVault,
   setPref
 } from './prefs'
 import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
@@ -1532,6 +1533,18 @@ export function registerIpcHandlers(
       if (!isValidPref(key, value)) return fail(`Invalid value for preference: ${key}`)
 
       setPref(key, value)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('prefs:remove-recent-vault', (_e, filePath: unknown) => {
+    try {
+      if (typeof filePath !== 'string' || filePath === '') {
+        return fail("Couldn't remove this vault from the list")
+      }
+      removeRecentVault(filePath)
       return ok(null)
     } catch (e) {
       return fail(e)

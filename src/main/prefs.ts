@@ -179,3 +179,7 @@ export function promoteVaultToTop(vaultPath: string): void {
   const rest = recentVaults.filter((v) => !samePath(v.path, vaultPath))
   setPrefs({ recentVaults: [existing, ...rest].slice(0, MAX_RECENT_VAULTS) })
 }
+
+export function removeRecentVault(vaultPath: string): void {
+  setPrefs({ recentVaults: getPref('recentVaults').filter((v) => !samePath(v.path, vaultPath)) })
+}
