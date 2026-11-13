@@ -135,7 +135,7 @@ describe('every close path packs the latest edit (issue #61)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
     try {
-      await expect(invoke('vault:switch', otherVaultPath)).resolves.toBeNull()
+      await expect(invoke('vault:switch', otherVaultPath)).resolves.toBe('usable')
 
       expect(isVaultOpen()).toBe(false)
       expect(console.error).toHaveBeenCalledExactlyOnceWith('[switch] promote failed:', 'EACCES')
@@ -147,7 +147,7 @@ describe('every close path packs the latest edit (issue #61)', () => {
   }, 60_000)
 
   it.each<[string, () => string, string]>([
-    ['a missing vault', () => join(vaultDir, 'missing.nvx'), 'Vault not found'],
+    ['a missing vault', () => join(vaultDir, 'missing.nvx'), 'missing'],
     [
       'a file that is not a vault',
       () => {
@@ -155,14 +155,14 @@ describe('every close path packs the latest edit (issue #61)', () => {
         writeFileSync(junk, 'not a vault')
         return junk
       },
-      'not a valid Notvex vault'
+      'not-vault'
     ]
   ])(
-    'vault:switch to %s fails and keeps the current one open',
-    async (_target, target, error) => {
+    'vault:switch to %s answers its case and keeps the current one open',
+    async (_target, target, status) => {
       await openVault(vaultPath, PASSWORD)
 
-      await expect(invoke('vault:switch', target())).rejects.toThrow(error)
+      await expect(invoke('vault:switch', target())).resolves.toBe(status)
       expect(isVaultOpen()).toBe(true)
     },
     60_000

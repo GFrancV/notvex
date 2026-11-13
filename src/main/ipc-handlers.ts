@@ -6,7 +6,6 @@ import {
   closeSync,
   constants,
   copyFileSync,
-  existsSync,
   fstatSync,
   openSync,
   readFileSync,
@@ -71,6 +70,7 @@ import {
   markRecoveryUnconfirmed,
   promoteVaultToTop,
   recordVaultUsed,
+  removeRecentVault,
   setPref
 } from './prefs'
 import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
@@ -80,7 +80,7 @@ import {
   getVaultBackupDir,
   hasAnyBackups
 } from './vault/backups'
-import { isValidNotvexFile, readContainer, shouldWarnOpeningInDevBuild } from './vault/container'
+import { readContainer, shouldWarnOpeningInDevBuild, vaultFileStatus } from './vault/container'
 import { KEY_FILE_MAX_BYTES, memzero, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
@@ -617,9 +617,9 @@ export function registerIpcHandlers(
   handle('vault:has-vault', (_e, filePath?: string) => {
     try {
       const path = filePath ?? getCurrentVaultPath()
-      if (!path) return ok(false)
+      if (!path) return ok('missing')
       if (!isLocalVaultPath(path)) return fail('Vaults on network shares are not supported')
-      return ok(existsSync(path) && isValidNotvexFile(path))
+      return ok(vaultFileStatus(path))
     } catch (e) {
       return fail(e)
     }
@@ -961,12 +961,8 @@ export function registerIpcHandlers(
   handle('vault:switch', async (_e, filePath: string) => {
     try {
       // Validate before closeVaultDrained() so a bad target never locks the current vault
-      if (!existsSync(filePath)) {
-        return fail('Vault not found. It may have been moved or deleted.')
-      }
-      if (!isValidNotvexFile(filePath)) {
-        return fail('This file is not a valid Notvex vault')
-      }
+      const status = vaultFileStatus(filePath)
+      if (status !== 'usable') return ok(status)
       await lockAndRecycle(liveWin(), { next: { path: filePath, mode: 'open' } })
       try {
         promoteVaultToTop(filePath)
@@ -974,7 +970,7 @@ export function registerIpcHandlers(
         // The vault is already closed: failing here would strand the renderer unlocked over it
         logError('[switch] promote failed:', e)
       }
-      return ok(null)
+      return ok(status)
     } catch (e) {
       return fail(e)
     }
@@ -1515,14 +1511,7 @@ export function registerIpcHandlers(
 
   handle('prefs:get', () => {
     try {
-      const prefs = getPrefs()
-      const validatedVaults = prefs.recentVaults.filter(
-        (v) => existsSync(v.path) && isValidNotvexFile(v.path)
-      )
-      if (validatedVaults.length !== prefs.recentVaults.length) {
-        setPref('recentVaults', validatedVaults)
-      }
-      return ok({ ...prefs, recentVaults: validatedVaults })
+      return ok(getPrefs())
     } catch (e) {
       return fail(e)
     }
@@ -1534,6 +1523,18 @@ export function registerIpcHandlers(
       if (!isValidPref(key, value)) return fail(`Invalid value for preference: ${key}`)
 
       setPref(key, value)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('prefs:remove-recent-vault', (_e, filePath: unknown) => {
+    try {
+      if (typeof filePath !== 'string' || filePath === '') {
+        return fail("Couldn't remove this vault from the list")
+      }
+      removeRecentVault(filePath)
       return ok(null)
     } catch (e) {
       return fail(e)

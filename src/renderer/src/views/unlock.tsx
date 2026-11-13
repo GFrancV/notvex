@@ -1,10 +1,12 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
+import { UnopenableVault } from '@/components/UnopenableVault'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -23,6 +25,7 @@ import { usePickVault } from '@/hooks/use-pick-vault'
 import { openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
 import { truncatePath } from '@/lib/utils'
+import type { VaultFileProblem } from '@/lib/vault-file-problem'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import type { UnlockThrottleStatus } from '@shared/types'
@@ -50,6 +53,8 @@ export function Unlock(): ReactNode {
   const initialPath = pendingOpenVaultPath ?? lastOpenedVaultPath
   const [vaultPath, setVaultPath] = useState<string | null>(initialPath)
   const [vaultExists, setVaultExists] = useState<boolean>(initialPath !== null)
+  const [unopenable, setUnopenable] = useState<VaultFileProblem | null>(null)
+  const [retryFailed, setRetryFailed] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(() =>
     initialPath !== null ? usePrefsStore.getState().getHasKeyFileForPath(initialPath) : false
   )
@@ -100,6 +105,31 @@ export function Unlock(): ReactNode {
     }
   }, [startCountdown])
 
+  // Points the screen at another vault: forgets what was typed for the previous one, then shows
+  // either its unlock form or why it can't be opened
+  const showVault = useCallback(
+    async (path: string): Promise<void> => {
+      setVaultPath(path)
+      setVaultExists(true)
+      setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(path))
+      setUnopenable(null)
+      setRetryFailed(false)
+      setError('')
+      setPassword('')
+      setMnemonic('')
+      keyFileContentsRef.current = null
+      recoveryKeyFileContentsRef.current = null
+      const fileRes = await notvex.vault.hasVault(path)
+      if (fileRes.success && fileRes.data !== 'usable') {
+        setUnopenable(fileRes.data)
+        return
+      }
+      await refreshThrottleStatus()
+      focusInput()
+    },
+    [refreshThrottleStatus, focusInput]
+  )
+
   // Init: clear pending path from store + fetch throttle status
   useEffect(() => {
     void (async (): Promise<void> => {
@@ -108,6 +138,12 @@ export function Unlock(): ReactNode {
       }
 
       if (!vaultPath) return
+
+      const fileRes = await notvex.vault.hasVault(vaultPath)
+      if (fileRes.success && fileRes.data !== 'usable') {
+        setUnopenable(fileRes.data)
+        return
+      }
 
       await refreshThrottleStatus()
     })()
@@ -121,19 +157,10 @@ export function Unlock(): ReactNode {
   useEffect(() => {
     if (!pendingOpenVaultPath) return
     void (async (): Promise<void> => {
-      setVaultPath(pendingOpenVaultPath)
-      setVaultExists(true)
-      setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(pendingOpenVaultPath))
-      setError('')
-      setPassword('')
-      setMnemonic('')
-      keyFileContentsRef.current = null
-      recoveryKeyFileContentsRef.current = null
       setPendingOpenVaultPath(null)
-      await refreshThrottleStatus()
-      focusInput()
+      await showVault(pendingOpenVaultPath)
     })()
-  }, [pendingOpenVaultPath, refreshThrottleStatus, setPendingOpenVaultPath, focusInput])
+  }, [pendingOpenVaultPath, setPendingOpenVaultPath, showVault])
 
   async function afterUnlock(viaRecovery = false): Promise<void> {
     await Promise.all([refreshAll(), usePrefsStore.getState().load()])
@@ -199,18 +226,42 @@ export function Unlock(): ReactNode {
     await afterUnlock(true)
   }
 
+  const handleRetry = async (): Promise<void> => {
+    if (!vaultPath) return
+    // A live region announces only when its text changes, so clear it while the retry runs
+    setRetryFailed(false)
+    const fileRes = await notvex.vault.hasVault(vaultPath)
+    if (fileRes.success) {
+      if (fileRes.data === 'usable') {
+        setUnopenable(null)
+        await refreshThrottleStatus()
+        focusInput()
+        return
+      }
+      setUnopenable(fileRes.data)
+    }
+    setRetryFailed(true)
+  }
+
+  const handleRemove = async (): Promise<void> => {
+    if (!vaultPath) return
+    const removed = await notvex.prefs.removeRecentVault(vaultPath)
+    if (!removed.success) {
+      toast.error(removed.error)
+      return
+    }
+    await usePrefsStore.getState().load()
+    const next = usePrefsStore.getState().recentVaults[0]?.path ?? null
+    if (next === null) {
+      setStatus('uninitialized')
+      return
+    }
+    await showVault(next)
+  }
+
   const handleOpenOther = async (): Promise<void> => {
     const selectedPath = await pickExistingVault()
-    if (selectedPath === null) return
-
-    setVaultPath(selectedPath)
-    setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(selectedPath))
-    setVaultExists(true)
-    setError('')
-    keyFileContentsRef.current = null
-    recoveryKeyFileContentsRef.current = null
-    await refreshThrottleStatus()
-    focusInput()
+    if (selectedPath !== null) await showVault(selectedPath)
   }
 
   const handleCreateNew = async (): Promise<void> => {
@@ -273,11 +324,23 @@ export function Unlock(): ReactNode {
           </div>
         )}
 
+        {vaultPath && unopenable && (
+          <UnopenableVault
+            status={unopenable}
+            path={vaultPath}
+            retryFailed={retryFailed}
+            onRetry={() => void handleRetry()}
+            onRemove={() => void handleRemove()}
+            onOpenOther={() => void handleOpenOther()}
+            onCreateNew={() => void handleCreateNew()}
+          />
+        )}
+
         {/* Vault file not found */}
         {vaultExists === false && (
           <div className="space-y-4 rounded-lg border p-4">
             <p className="text-muted-foreground text-sm">
-              The vault file couldn&apos;t be found at the saved location.
+              No saved vault found. Create a new vault or open an existing one.
             </p>
 
             <div className="flex flex-col gap-4">
@@ -300,7 +363,7 @@ export function Unlock(): ReactNode {
         )}
 
         {/* Unlock form */}
-        {vaultExists === true && (
+        {vaultExists === true && unopenable === null && (
           <div
             key={mode}
             className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-4 duration-200"

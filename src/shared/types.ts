@@ -179,12 +179,14 @@ export interface BugReportParts {
 
 export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
 
+export type VaultFileStatus = 'usable' | 'missing' | 'not-vault' | 'unreadable'
+
 export type Platform = 'darwin' | 'win32' | 'linux'
 
 export interface NotvexAPI {
   platform: Platform
   vault: {
-    hasVault(filePath?: string): Promise<IpcResult<boolean>>
+    hasVault(filePath?: string): Promise<IpcResult<VaultFileStatus>>
     create(filePath: string, password: string): Promise<IpcResult<CreateVaultResult>>
     open(
       filePath: string,
@@ -211,7 +213,7 @@ export interface NotvexAPI {
     close(createPath?: string): Promise<IpcResult<null>>
     clearDecryptedContent(): Promise<IpcResult<null>>
     status(): Promise<IpcResult<VaultStatus>>
-    switchTo(filePath: string): Promise<IpcResult<null>>
+    switchTo(filePath: string): Promise<IpcResult<VaultFileStatus>>
     chooseFile(mode: 'new' | 'existing'): Promise<IpcResult<string | null>>
     selectKeyFile(): Promise<IpcResult<KeyFileSelection | null>>
     getUnlockThrottleStatus(): Promise<IpcResult<UnlockThrottleStatus>>
@@ -279,6 +281,7 @@ export interface NotvexAPI {
   prefs: {
     get(): Promise<IpcResult<Prefs>>
     set<K extends keyof Prefs>(key: K, value: Prefs[K]): Promise<IpcResult<void>>
+    removeRecentVault(filePath: string): Promise<IpcResult<null>>
   }
   clipboard: {
     /** Main clears it after the auto-clear pref, or after a fixed 30 s when `secret`.
