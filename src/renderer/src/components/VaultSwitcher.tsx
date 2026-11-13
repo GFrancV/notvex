@@ -38,8 +38,10 @@ function displayName(path: string): string {
   return parent ? `${parent} • ${name}` : name
 }
 
+// Case differences only matter on Windows, as in main's samePath
 function isSamePath(a: string | null, b: string): boolean {
-  return a !== null && a.toLowerCase() === b.toLowerCase()
+  if (a === null) return false
+  return notvex.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
 export function VaultSwitcher(): ReactNode {

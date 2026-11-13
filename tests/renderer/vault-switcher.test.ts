@@ -177,6 +177,27 @@ describe('VaultSwitcher', () => {
     expect(switchTo).not.toHaveBeenCalled()
   })
 
+  it('on a case-sensitive platform, a vault whose path differs only in case is another vault', async () => {
+    const twin = 'C:/vaults/Work.nvx'
+    const { notvex } = await import('@/lib/ipc')
+    Object.defineProperty(notvex, 'platform', { value: 'linux', configurable: true })
+    try {
+      usePrefsStore.setState({
+        recentVaults: [
+          { path: CURRENT, hasKeyFile: false, lastOpenedAt: 2 },
+          { path: twin, hasKeyFile: false, lastOpenedAt: 1 }
+        ]
+      })
+      render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+      fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
+
+      await screen.findByRole('menuitem', { name: /Work\.nvx/ })
+      expect(screen.getByRole('button', { name: /Remove .*Work\.nvx/ })).toBeTruthy()
+    } finally {
+      Object.defineProperty(notvex, 'platform', { value: 'win32', configurable: true })
+    }
+  })
+
   it('the open vault has no x and Delete on it does nothing', async () => {
     await openMenuWithOtherMissing()
 
