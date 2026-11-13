@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 
 import { notvex } from '@/lib/ipc'
+import { showVaultFileProblem } from '@/lib/vault-file-problem'
 
 interface UsePickVaultReturn {
   pickExistingVault: () => Promise<string | null>
@@ -14,8 +15,12 @@ export function usePickVault(): UsePickVaultReturn {
     if (!chooseFileRes.success || !chooseFileRes.data) return null
 
     const hasVaultRes = await notvex.vault.hasVault(chooseFileRes.data)
-    if (!hasVaultRes.success || hasVaultRes.data !== 'usable') {
-      toast.error(hasVaultRes.success ? 'This file is not a valid Notvex vault' : hasVaultRes.error)
+    if (!hasVaultRes.success) {
+      toast.error(hasVaultRes.error)
+      return null
+    }
+    if (hasVaultRes.data !== 'usable') {
+      showVaultFileProblem(hasVaultRes.data, chooseFileRes.data)
       return null
     }
 
