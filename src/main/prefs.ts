@@ -4,6 +4,8 @@ import { isAbsolute, join } from 'path'
 
 import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
+import { logError } from './log'
+
 const DEFAULTS: Prefs = {
   recentVaults: [],
   unconfirmedRecoveryVaults: [],
@@ -39,13 +41,8 @@ export function isLocalVaultPath(p: string): boolean {
 
 function isRecentVault(v: unknown): v is RecentVault {
   if (typeof v !== 'object' || v === null) return false
-  const { path, hasKeyFile, lastOpenedAt } = v as Record<string, unknown>
-  return (
-    typeof path === 'string' &&
-    isLocalVaultPath(path) &&
-    typeof hasKeyFile === 'boolean' &&
-    typeof lastOpenedAt === 'number'
-  )
+  const { path, lastOpenedAt } = v as Record<string, unknown>
+  return typeof path === 'string' && isLocalVaultPath(path) && typeof lastOpenedAt === 'number'
 }
 
 const PREFS_VALIDATORS = {
@@ -98,7 +95,7 @@ export function getPrefs(): Prefs {
       ? prefs.recentVaults
           .filter(isRecentVault)
           .slice(0, MAX_RECENT_VAULTS)
-          .map(({ path, hasKeyFile, lastOpenedAt }) => ({ path, hasKeyFile, lastOpenedAt }))
+          .map(({ path, lastOpenedAt }) => ({ path, lastOpenedAt }))
       : []
     prefs.unconfirmedRecoveryVaults = Array.isArray(prefs.unconfirmedRecoveryVaults)
       ? prefs.unconfirmedRecoveryVaults.filter((p) => typeof p === 'string' && p !== '')
@@ -119,6 +116,19 @@ export function setPrefs(patch: Partial<Prefs>): Prefs {
   return updated
 }
 
+// Earlier versions stored a per-vault key-file flag in prefs.json. getPrefs ignores it, but the
+// bytes stay on disk until the file is rewritten.
+// Never throws: a failed cleanup must not stop the app from starting.
+export function scrubLegacyPrefs(): void {
+  try {
+    if (!existsSync(prefsPath())) return
+    if (!readFileSync(prefsPath(), 'utf8').includes('"hasKeyFile"')) return
+    setPrefs({})
+  } catch (e) {
+    logError('prefs: legacy scrub failed:', e)
+  }
+}
+
 export function getPref<K extends keyof Prefs>(key: K): Prefs[K] {
   return getPrefs()[key]
 }
@@ -131,15 +141,12 @@ export function samePath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
-export function recordVaultUsed(path: string, hasKeyFile: boolean = false): void {
+export function recordVaultUsed(path: string): void {
   const recentVaults = getPrefs().recentVaults
   const rest = recentVaults.filter((recentVault) => !samePath(recentVault.path, path))
 
   setPrefs({
-    recentVaults: [{ path, hasKeyFile, lastOpenedAt: Date.now() }, ...rest].slice(
-      0,
-      MAX_RECENT_VAULTS
-    )
+    recentVaults: [{ path, lastOpenedAt: Date.now() }, ...rest].slice(0, MAX_RECENT_VAULTS)
   })
 }
 
@@ -172,7 +179,7 @@ export function promoteVaultToTop(vaultPath: string): void {
   const existing = recentVaults.find((v) => samePath(v.path, vaultPath))
 
   if (!existing) {
-    recordVaultUsed(vaultPath, false)
+    recordVaultUsed(vaultPath)
     return
   }
 

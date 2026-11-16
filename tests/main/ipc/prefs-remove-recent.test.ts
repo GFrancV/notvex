@@ -45,9 +45,9 @@ function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(fn(event, ...args))
 }
 
-const first = { path: '/vaults/a.nvx', hasKeyFile: false, lastOpenedAt: 3 }
-const second = { path: '/vaults/b.nvx', hasKeyFile: true, lastOpenedAt: 2 }
-const third = { path: '/vaults/c.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+const first = { path: '/vaults/a.nvx', lastOpenedAt: 3 }
+const second = { path: '/vaults/b.nvx', lastOpenedAt: 2 }
+const third = { path: '/vaults/c.nvx', lastOpenedAt: 1 }
 
 function writtenRecents(): unknown {
   const [, json] = vi.mocked(writeFileSync).mock.calls.at(-1) ?? []
@@ -86,7 +86,7 @@ describe('prefs:remove-recent-vault', () => {
   describe('matching a path that differs only in letter case', () => {
     const platform = process.platform
     // Absolute on every host, since prefs reads drop paths that aren't absolute where they run
-    const stored = { path: '/Vaults/Work.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+    const stored = { path: '/Vaults/Work.nvx', lastOpenedAt: 1 }
 
     afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
 

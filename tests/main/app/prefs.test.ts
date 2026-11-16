@@ -22,6 +22,8 @@ const {
   isPrefKey,
   isRecoveryUnconfirmed,
   markRecoveryUnconfirmed,
+  recordVaultUsed,
+  scrubLegacyPrefs,
   setPrefs
 } = await import('@main/prefs')
 
@@ -154,7 +156,7 @@ describe('setPrefs after an invalid read', () => {
 })
 
 describe('getPrefs recentVaults', () => {
-  const vault = { path: '/vaults/a.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+  const vault = { path: '/vaults/a.nvx', lastOpenedAt: 1 }
 
   it('keeps well-formed entries', () => {
     fsState.contents = JSON.stringify({ recentVaults: [vault] })
@@ -172,7 +174,7 @@ describe('getPrefs recentVaults', () => {
 
   it('drops malformed entries and keeps the valid ones', () => {
     fsState.contents = JSON.stringify({
-      recentVaults: [vault, { path: 1 }, null, 'x', { ...vault, hasKeyFile: 'no' }]
+      recentVaults: [vault, { path: 1 }, null, 'x', { path: '/vaults/b.nvx' }]
     })
     expect(getPrefs().recentVaults).toEqual([vault])
   })
@@ -192,15 +194,83 @@ describe('getPrefs recentVaults', () => {
     expect(getPrefs().recentVaults).toEqual([vault])
   })
 
-  it('keeps only the three known fields of an entry', () => {
+  it('keeps only the two known fields of an entry', () => {
     fsState.contents = JSON.stringify({ recentVaults: [{ ...vault, extra: 1 }] })
     expect(getPrefs().recentVaults).toStrictEqual([vault])
+  })
+
+  it('drops the legacy hasKeyFile field and keeps the entries in the same order', () => {
+    const second = { path: '/vaults/b.nvx', lastOpenedAt: 0 }
+    fsState.contents = JSON.stringify({
+      recentVaults: [
+        { ...vault, hasKeyFile: true },
+        { ...second, hasKeyFile: false }
+      ]
+    })
+    expect(getPrefs().recentVaults).toStrictEqual([vault, second])
   })
 
   it('keeps only the first 5 entries', () => {
     const vaults = Array.from({ length: 7 }, (_, i) => ({ ...vault, path: `/vaults/${i}.nvx` }))
     fsState.contents = JSON.stringify({ recentVaults: vaults })
     expect(getPrefs().recentVaults).toEqual(vaults.slice(0, 5))
+  })
+})
+
+describe('recordVaultUsed', () => {
+  it('writes the entry without any key-file field', () => {
+    recordVaultUsed('/vaults/a.nvx')
+
+    const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1])
+    expect(written.recentVaults).toStrictEqual([
+      { path: '/vaults/a.nvx', lastOpenedAt: expect.any(Number) }
+    ])
+  })
+})
+
+describe('scrubLegacyPrefs', () => {
+  it('rewrites prefs.json without hasKeyFile, keeping the list order', () => {
+    fsState.contents = JSON.stringify({
+      recentVaults: [
+        { path: '/vaults/b.nvx', hasKeyFile: true, lastOpenedAt: 2 },
+        { path: '/vaults/a.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+      ]
+    })
+
+    scrubLegacyPrefs()
+
+    expect(fsMock.writeFileSync).toHaveBeenCalledExactlyOnceWith(TMP_PATH, expect.any(String))
+    const written = fsMock.writeFileSync.mock.calls[0][1]
+    expect(written).not.toContain('hasKeyFile')
+    expect(JSON.parse(written).recentVaults).toStrictEqual([
+      { path: '/vaults/b.nvx', lastOpenedAt: 2 },
+      { path: '/vaults/a.nvx', lastOpenedAt: 1 }
+    ])
+    expect(fsMock.renameSync).toHaveBeenCalledExactlyOnceWith(TMP_PATH, PREFS_PATH)
+  })
+
+  it('does not write when no entry carries the field', () => {
+    fsState.contents = JSON.stringify({
+      recentVaults: [{ path: '/vaults/a.nvx', lastOpenedAt: 1 }]
+    })
+
+    scrubLegacyPrefs()
+
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled()
+    expect(fsMock.renameSync).not.toHaveBeenCalled()
+  })
+
+  it('does not throw when the rewrite fails', () => {
+    fsState.contents = JSON.stringify({
+      recentVaults: [{ path: '/vaults/a.nvx', hasKeyFile: true, lastOpenedAt: 1 }]
+    })
+    fsMock.writeFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    expect(() => scrubLegacyPrefs()).not.toThrow()
+    expect(console.error).toHaveBeenCalledExactlyOnceWith('prefs: legacy scrub failed:', 'EACCES')
   })
 })
 

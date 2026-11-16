@@ -108,7 +108,7 @@ describe('a failed prefs write after a successful vault change', () => {
     try {
       await expect(invoke(channel, ...args)).resolves.toEqual({ success: true, data })
 
-      expect(recordVaultUsed).toHaveBeenCalledExactlyOnceWith(PATH, false)
+      expect(recordVaultUsed).toHaveBeenCalledExactlyOnceWith(PATH)
       expect(closeVault).not.toHaveBeenCalled()
       expect(console.error).toHaveBeenCalledExactlyOnceWith(
         `[${channel}] record vault used failed:`,
@@ -122,33 +122,33 @@ describe('a failed prefs write after a successful vault change', () => {
   })
 
   // The vault was re-encrypted with a new recovery mnemonic the user must still be shown
-  it.each([
-    ['vault:configure-key-file', true],
-    ['vault:remove-key-file', false]
-  ])('%s still returns the new mnemonic', async (channel, hasKeyFile) => {
-    vi.mocked(isVaultOpen).mockReturnValue(true)
-    vi.mocked(recordVaultUsed).mockImplementationOnce(() => {
-      throw Object.assign(new Error(`EACCES: permission denied, open '${PATH}'`), {
-        code: 'EACCES'
+  it.each(['vault:configure-key-file', 'vault:remove-key-file'])(
+    '%s still returns the new mnemonic',
+    async (channel) => {
+      vi.mocked(isVaultOpen).mockReturnValue(true)
+      vi.mocked(recordVaultUsed).mockImplementationOnce(() => {
+        throw Object.assign(new Error(`EACCES: permission denied, open '${PATH}'`), {
+          code: 'EACCES'
+        })
       })
-    })
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
-    try {
-      await expect(invoke(channel, 'pw', new Uint8Array([1]))).resolves.toEqual({
-        success: true,
-        data: { mnemonic: 'rotated words' }
-      })
+      try {
+        await expect(invoke(channel, 'pw', new Uint8Array([1]))).resolves.toEqual({
+          success: true,
+          data: { mnemonic: 'rotated words' }
+        })
 
-      expect(recordVaultUsed).toHaveBeenCalledExactlyOnceWith('/v.nvx', hasKeyFile)
-      expect(console.error).toHaveBeenCalledExactlyOnceWith(
-        `[${channel}] record vault used failed:`,
-        'EACCES'
-      )
-    } finally {
-      vi.mocked(console.error).mockRestore()
-      vi.mocked(recordVaultUsed).mockReset()
-      vi.mocked(isVaultOpen).mockReturnValue(false)
+        expect(recordVaultUsed).toHaveBeenCalledExactlyOnceWith('/v.nvx')
+        expect(console.error).toHaveBeenCalledExactlyOnceWith(
+          `[${channel}] record vault used failed:`,
+          'EACCES'
+        )
+      } finally {
+        vi.mocked(console.error).mockRestore()
+        vi.mocked(recordVaultUsed).mockReset()
+        vi.mocked(isVaultOpen).mockReturnValue(false)
+      }
     }
-  })
+  )
 })

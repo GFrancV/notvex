@@ -55,7 +55,7 @@ describe('Unlock focus', () => {
     vi.mocked(notvex.vault.openWithRecovery).mockReset()
     useVaultStore.setState({ status: 'locked', pendingOpenVaultPath: null })
     usePrefsStore.setState({
-      recentVaults: [{ path: VAULT, hasKeyFile: false, lastOpenedAt: 1 }]
+      recentVaults: [{ path: VAULT, lastOpenedAt: 1 }]
     })
   })
 

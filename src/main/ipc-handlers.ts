@@ -560,9 +560,9 @@ async function relockOrphanedVault(): Promise<IpcResult<never>> {
 
 // Runs after the vault change already happened: failing the handler here would leave the
 // renderer believing the change didn't, while main holds the result (open vault, new mnemonic).
-function recordVaultUsedNonFatal(tag: string, path: string, hasKeyFile = false): void {
+function recordVaultUsedNonFatal(tag: string, path: string): void {
   try {
-    recordVaultUsed(path, hasKeyFile)
+    recordVaultUsed(path)
   } catch (e) {
     logError(`[${tag}] record vault used failed:`, e)
   }
@@ -714,7 +714,7 @@ export function registerIpcHandlers(
         if (vaultVersion !== null) {
           unlockThrottle.failedAttempts = 0
           unlockThrottle.lockedUntil = 0
-          recordVaultUsedNonFatal('vault:open', filePath, keyFileContents !== undefined)
+          recordVaultUsedNonFatal('vault:open', filePath)
           touchActivity()
         } else {
           unlockThrottle.failedAttempts += 1
@@ -854,11 +854,7 @@ export function registerIpcHandlers(
           if (vaultVersion !== null) {
             unlockThrottle.failedAttempts = 0
             unlockThrottle.lockedUntil = 0
-            recordVaultUsedNonFatal(
-              'vault:open-with-recovery',
-              filePath,
-              keyFileContents !== undefined
-            )
+            recordVaultUsedNonFatal('vault:open-with-recovery', filePath)
             touchActivity()
           } else {
             unlockThrottle.failedAttempts += 1
@@ -1100,7 +1096,7 @@ export function registerIpcHandlers(
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await configureKeyFile(password, kfContents)
       markIssuedRecoveryKey(getVaultPath()!)
-      recordVaultUsedNonFatal('vault:configure-key-file', getVaultPath()!, true)
+      recordVaultUsedNonFatal('vault:configure-key-file', getVaultPath()!)
       return ok(result)
     } catch (e) {
       await notifyIfRotationLocked()
@@ -1115,7 +1111,7 @@ export function registerIpcHandlers(
       const kfContents = readKeyFileContents(keyFileContents)
       const result = await removeKeyFile(password, kfContents)
       markIssuedRecoveryKey(getVaultPath()!)
-      recordVaultUsedNonFatal('vault:remove-key-file', getVaultPath()!, false)
+      recordVaultUsedNonFatal('vault:remove-key-file', getVaultPath()!)
       return ok(result)
     } catch (e) {
       await notifyIfRotationLocked()

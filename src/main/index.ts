@@ -9,6 +9,7 @@ import { logError } from './log'
 import { installNavigationGuard } from './navigation-guard'
 import { takePendingVault } from './pending-vault'
 import { installPermissionGuard } from './permission-guard'
+import { scrubLegacyPrefs } from './prefs'
 import { hardenProcess } from './process-hardening'
 import { cleanupOrphanedTempDbs } from './vault/container'
 import { initSodium } from './vault/crypto'
@@ -81,6 +82,7 @@ function openMainWindow(): void {
 
 void app.whenReady().then(async (): Promise<void> => {
   cleanupOrphanedTempDbs()
+  scrubLegacyPrefs()
   await initSodium()
   installPermissionGuard()
   installAppMenu()

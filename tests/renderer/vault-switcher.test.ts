@@ -52,7 +52,7 @@ async function openMenuWithOtherMissing(): Promise<void> {
   removeRecentVault.mockImplementation(async () => {
     prefsGet.mockResolvedValue({
       success: true,
-      data: { recentVaults: [{ path: CURRENT, hasKeyFile: false, lastOpenedAt: 2 }] }
+      data: { recentVaults: [{ path: CURRENT, lastOpenedAt: 2 }] }
     })
     return { success: true, data: null }
   })
@@ -74,8 +74,8 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {})
   usePrefsStore.setState({
     recentVaults: [
-      { path: CURRENT, hasKeyFile: false, lastOpenedAt: 2 },
-      { path: OTHER, hasKeyFile: false, lastOpenedAt: 1 }
+      { path: CURRENT, lastOpenedAt: 2 },
+      { path: OTHER, lastOpenedAt: 1 }
     ]
   })
   useVaultStore.setState({
@@ -184,8 +184,8 @@ describe('VaultSwitcher', () => {
     try {
       usePrefsStore.setState({
         recentVaults: [
-          { path: CURRENT, hasKeyFile: false, lastOpenedAt: 2 },
-          { path: twin, hasKeyFile: false, lastOpenedAt: 1 }
+          { path: CURRENT, lastOpenedAt: 2 },
+          { path: twin, lastOpenedAt: 1 }
         ]
       })
       render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
@@ -214,7 +214,7 @@ describe('VaultSwitcher', () => {
     const PLAY = 'C:/vaults/play.nvx'
     const entry = (path: string, i: number): RecentVault => ({
       path,
-      hasKeyFile: false,
+
       lastOpenedAt: 3 - i
     })
 
