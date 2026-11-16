@@ -339,3 +339,46 @@ describe('remind me later and session dismissal', () => {
     expect(stored).toBeNull()
   })
 })
+
+describe('error messages', () => {
+  let updater: typeof import('@main/updater')
+  let autoUpdater: EventEmitter & { downloadUpdate?: () => Promise<unknown> }
+
+  beforeEach(async () => {
+    vi.resetModules()
+    ;({ autoUpdater } = (await import('electron-updater')) as unknown as {
+      autoUpdater: EventEmitter
+    })
+    autoUpdater.removeAllListeners()
+    updater = await import('@main/updater')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('an error during a download sends "Couldn\'t download the update"', () => {
+    // Like electron-updater: the download settles only after its error event.
+    autoUpdater.downloadUpdate = () => new Promise(() => {})
+    const w = fakeWindow()
+    updater.initAutoUpdater(w.win)
+
+    void updater.downloadUpdate()
+    autoUpdater.emit('error', new Error('net::ERR_CONNECTION_RESET'))
+
+    expect(w.payloads.at(-1)).toEqual({ message: "Couldn't download the update" })
+  })
+
+  it('an error outside a download sends "Couldn\'t check for updates"', async () => {
+    // A download that already failed must not leave the next check's error mislabeled.
+    autoUpdater.downloadUpdate = () => Promise.reject(new Error('net::ERR_CONNECTION_RESET'))
+    const w = fakeWindow()
+    updater.initAutoUpdater(w.win)
+    await updater.downloadUpdate().catch(() => {})
+
+    autoUpdater.emit('error', new Error('net::ERR_INTERNET_DISCONNECTED'))
+
+    expect(w.payloads.at(-1)).toEqual({ message: "Couldn't check for updates" })
+  })
+})

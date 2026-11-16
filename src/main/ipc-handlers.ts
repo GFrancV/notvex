@@ -73,7 +73,12 @@ import {
   removeRecentVault,
   setPref
 } from './prefs'
-import { clearUpdateSilences, dismissUpdateForSession, snoozeUpdate } from './updater'
+import {
+  clearUpdateSilences,
+  dismissUpdateForSession,
+  downloadUpdate,
+  snoozeUpdate
+} from './updater'
 import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
 import {
   createVaultBackup,
@@ -1672,7 +1677,7 @@ export function registerIpcHandlers(
 
   handle('updater:download', async () => {
     try {
-      await autoUpdater.downloadUpdate()
+      await downloadUpdate()
       return ok(null)
     } catch (e) {
       return fail(e)

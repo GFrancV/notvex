@@ -40,6 +40,19 @@ function isSilenced(version: string): boolean {
   return snooze?.version === version && Date.now() < snooze.until
 }
 
+// electron-updater emits 'error' before the download promise rejects, so the error listener
+// still sees this set and can say which step failed
+let downloading = false
+
+export async function downloadUpdate(): Promise<void> {
+  downloading = true
+  try {
+    await autoUpdater.downloadUpdate()
+  } finally {
+    downloading = false
+  }
+}
+
 // Any failure falls back to the full notes from latest.yml: the dialog must never wait on
 // or break because of GitHub's API.
 async function fetchInAppNotes(version: string): Promise<InAppNotes | null> {
@@ -129,7 +142,7 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.on('error', (err) => {
     logError('[updater] error:', err)
     send('updater:error', {
-      message: 'Update check failed. Please try again later.'
+      message: downloading ? "Couldn't download the update" : "Couldn't check for updates"
     })
   })
 }
