@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { UpdateInfo } from '@shared/types'
+import type { DownloadProgress, UpdateInfo } from '@shared/types'
 
 type Listener<T> = (data: T) => void
 
@@ -20,11 +20,13 @@ const info: UpdateInfo = {
 
 const listeners = vi.hoisted(() => ({
   available: undefined as Listener<UpdateInfo> | undefined,
+  progress: undefined as Listener<DownloadProgress> | undefined,
   error: undefined as Listener<{ message: string }> | undefined
 }))
 
 const openExternal = vi.hoisted(() => vi.fn())
 const exits = vi.hoisted(() => ({ snooze: vi.fn(), dismiss: vi.fn() }))
+const download = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
@@ -36,7 +38,10 @@ vi.mock('@/lib/ipc', () => ({
         listeners.available = cb
         return () => {}
       },
-      onDownloadProgress: () => () => {},
+      onDownloadProgress: (cb: Listener<DownloadProgress>) => {
+        listeners.progress = cb
+        return () => {}
+      },
       onUpdateDownloaded: () => () => {},
       onError: (cb: Listener<{ message: string }>) => {
         listeners.error = cb
@@ -45,7 +50,7 @@ vi.mock('@/lib/ipc', () => ({
       checkOnStartup: vi.fn(),
       snooze: exits.snooze,
       dismiss: exits.dismiss,
-      download: vi.fn(),
+      download,
       installNow: vi.fn()
     }
   }
@@ -240,6 +245,54 @@ describe('UpdateAvailableDialog content', () => {
     expect(exits.dismiss).toHaveBeenCalledExactlyOnceWith('9.9.9')
     expect(exits.snooze).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('download progress shows downloaded and total MB alongside the percentage', () => {
+    openWith({})
+    fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+
+    act(() =>
+      listeners.progress?.({
+        percent: 11,
+        bytesPerSecond: 1,
+        transferred: 12.4 * 1024 * 1024,
+        total: 111 * 1024 * 1024
+      })
+    )
+
+    expect(screen.getByText('12.4 MB of 111 MB')).toBeTruthy()
+    expect(screen.getByText('11%')).toBeTruthy()
+  })
+
+  it('a failed download keeps the dialog open with the error and a Retry button', () => {
+    openWith({})
+    fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+
+    act(() => listeners.error?.({ message: "Couldn't download the update" }))
+
+    expect(screen.getByRole('dialog', { description: "Couldn't download the update" })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+  })
+
+  it('Retry starts the download again', () => {
+    download.mockClear()
+    openWith({})
+    fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+    act(() => listeners.error?.({ message: "Couldn't download the update" }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    expect(download).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Download progress')).toBeTruthy()
+  })
+
+  it('a failed check (not a download) shows no Retry button', () => {
+    openWith({})
+
+    act(() => listeners.error?.({ message: "Couldn't check for updates" }))
+
+    expect(screen.getByRole('dialog', { description: "Couldn't check for updates" })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 
   it('without a summary, shows the sanitized full release notes', () => {

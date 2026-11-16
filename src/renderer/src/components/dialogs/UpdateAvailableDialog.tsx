@@ -20,13 +20,15 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { notvex } from '@/lib/ipc'
+import { formatFileSize } from '@/lib/utils'
 import type { UpdateInfo } from '@shared/types'
 
 type Phase =
   | { phase: 'available'; info: UpdateInfo }
-  | { phase: 'downloading'; percent: number }
+  | { phase: 'downloading'; percent: number; transferred: number; total: number }
   | { phase: 'installing' }
-  | { phase: 'error'; message: string }
+  // retry: the failure came from the download, which can simply start again
+  | { phase: 'error'; message: string; retry: boolean }
 
 const RELEASE_NOTES_SANITIZE_CONFIG = {
   ALLOWED_TAGS: ['p', 'br', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'code', 'h1', 'h2', 'h3'],
@@ -73,7 +75,7 @@ function releaseMeta(info: UpdateInfo): string {
   const date = info.releaseDate
     ? `Released ${RELEASE_DATE_FORMAT.format(new Date(info.releaseDate))}`
     : null
-  const size = info.size ? `${Math.round(info.size / 1024 / 1024)} MB` : null
+  const size = info.size ? formatFileSize(info.size) : null
   return [date, size].filter(Boolean).join(' · ')
 }
 
@@ -101,14 +103,23 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
         setState({ phase: 'available', info })
       }),
       notvex.updater.onDownloadProgress((p) =>
-        setState({ phase: 'downloading', percent: p.percent })
+        setState({
+          phase: 'downloading',
+          percent: p.percent,
+          transferred: p.transferred,
+          total: p.total
+        })
       ),
       notvex.updater.onUpdateDownloaded(() => {
         setState({ phase: 'installing' })
         void notvex.updater.installNow()
       }),
       notvex.updater.onError((err) =>
-        setState((prev) => (prev === null ? prev : { phase: 'error', message: err.message }))
+        setState((prev) =>
+          prev === null
+            ? prev
+            : { phase: 'error', message: err.message, retry: prev.phase === 'downloading' }
+        )
       )
     ]
 
@@ -139,7 +150,7 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
   const dismissible = state?.phase === 'available' || state?.phase === 'error'
 
   const handleUpdateNow = (): void => {
-    setState({ phase: 'downloading', percent: 0 })
+    setState({ phase: 'downloading', percent: 0, transferred: 0, total: 0 })
     void notvex.updater.download()
   }
 
@@ -238,7 +249,12 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
             <Field className="text-muted-foreground w-full">
               <FieldLabel htmlFor="progress-download">
                 <span>Download progress</span>
-                <span className="ml-auto">{state.percent}%</span>
+                {state.total > 0 && (
+                  <span className="ml-auto">
+                    {formatFileSize(state.transferred)} of {formatFileSize(state.total)}
+                  </span>
+                )}
+                <span className={state.total > 0 ? undefined : 'ml-auto'}>{state.percent}%</span>
               </FieldLabel>
               <Progress value={state.percent} id="progress-download" />
             </Field>
@@ -274,6 +290,7 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
               <Button variant="secondary" onClick={() => setState(null)}>
                 Close
               </Button>
+              {state.retry && <Button onClick={handleUpdateNow}>Retry</Button>}
             </DialogFooter>
           </>
         )}
