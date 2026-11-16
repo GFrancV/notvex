@@ -53,6 +53,11 @@ vi.mock('@main/vault/container', () => ({
   cleanupOrphanedTempDbs: vi.fn()
 }))
 
+// The real one reads and rewrites prefs.json in userData.
+vi.mock('@main/prefs', () => ({
+  scrubLegacyPrefs: vi.fn()
+}))
+
 vi.mock('@main/permission-guard', () => ({
   installPermissionGuard: vi.fn()
 }))
@@ -279,6 +284,16 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
     const install = vi.mocked((await import('@main/app-menu')).installAppMenu)
     expect(install).toHaveBeenCalledOnce()
     expect(install.mock.invocationCallOrder[0]).toBeLessThan(
+      createWindow.mock.invocationCallOrder[0]!
+    )
+  })
+
+  // The rewritten file is what the first window's unlock screen reads.
+  it('scrubs legacy prefs once, before the first window', async () => {
+    await startApp()
+    const scrub = vi.mocked((await import('@main/prefs')).scrubLegacyPrefs)
+    expect(scrub).toHaveBeenCalledOnce()
+    expect(scrub.mock.invocationCallOrder[0]).toBeLessThan(
       createWindow.mock.invocationCallOrder[0]!
     )
   })

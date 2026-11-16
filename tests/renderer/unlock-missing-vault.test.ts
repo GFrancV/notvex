@@ -41,7 +41,7 @@ describe('Unlock with a vault that can not be opened', () => {
     vi.mocked(notvex.vault.hasVault).mockResolvedValue({ success: true, data: 'missing' })
     useVaultStore.setState({ status: 'locked', pendingOpenVaultPath: null })
     usePrefsStore.setState({
-      recentVaults: [{ path: VAULT, hasKeyFile: false, lastOpenedAt: 1 }]
+      recentVaults: [{ path: VAULT, lastOpenedAt: 1 }]
     })
   })
 
@@ -59,8 +59,8 @@ describe('Unlock with a vault that can not be opened', () => {
   it('keeps the first recent vault as the target and offers no password form', async () => {
     usePrefsStore.setState({
       recentVaults: [
-        { path: VAULT, hasKeyFile: false, lastOpenedAt: 2 },
-        { path: '/vaults/other.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+        { path: VAULT, lastOpenedAt: 2 },
+        { path: '/vaults/other.nvx', lastOpenedAt: 1 }
       ]
     })
     render(createElement(Unlock), { wrapper: TooltipProvider })
@@ -141,9 +141,9 @@ describe('Unlock with a vault that can not be opened', () => {
   })
 
   it('removes the vault on request and shows the next recent vault', async () => {
-    const other = { path: '/vaults/other.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+    const other = { path: '/vaults/other.nvx', lastOpenedAt: 1 }
     usePrefsStore.setState({
-      recentVaults: [{ path: VAULT, hasKeyFile: false, lastOpenedAt: 2 }, other]
+      recentVaults: [{ path: VAULT, lastOpenedAt: 2 }, other]
     })
     vi.mocked(notvex.vault.hasVault).mockImplementation(async (path) => ({
       success: true,

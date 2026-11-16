@@ -17,7 +17,6 @@ interface PrefsStore {
   recentVaults: RecentVault[]
   load: () => Promise<void>
   setPref: <K extends SettingKey>(key: K, value: Prefs[K]) => Promise<void>
-  getHasKeyFileForPath: (path: string) => boolean
 }
 
 export const usePrefsStore = create<PrefsStore>((set, get) => ({
@@ -59,10 +58,5 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
     } catch {
       set({ [key]: previous })
     }
-  },
-
-  getHasKeyFileForPath: (path) => {
-    const norm = (p: string): string => (notvex.platform === 'win32' ? p.toLowerCase() : p)
-    return get().recentVaults.find((v) => norm(v.path) === norm(path))?.hasKeyFile ?? false
   }
 }))

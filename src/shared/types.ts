@@ -102,7 +102,6 @@ export interface PendingVault {
 }
 export interface RecentVault {
   path: string
-  hasKeyFile: boolean
   lastOpenedAt: number
 }
 export interface CreateVaultResult {

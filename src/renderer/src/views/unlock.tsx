@@ -55,9 +55,7 @@ export function Unlock(): ReactNode {
   const [vaultExists, setVaultExists] = useState<boolean>(initialPath !== null)
   const [unopenable, setUnopenable] = useState<VaultFileProblem | null>(null)
   const [retryFailed, setRetryFailed] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(() =>
-    initialPath !== null ? usePrefsStore.getState().getHasKeyFileForPath(initialPath) : false
-  )
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [mode, setMode] = useState<UnlockMode>('password')
   const [password, setPassword] = useState('')
   const [mnemonic, setMnemonic] = useState('')
@@ -111,7 +109,7 @@ export function Unlock(): ReactNode {
     async (path: string): Promise<void> => {
       setVaultPath(path)
       setVaultExists(true)
-      setAdvancedOpen(usePrefsStore.getState().getHasKeyFileForPath(path))
+      setAdvancedOpen(false)
       setUnopenable(null)
       setRetryFailed(false)
       setError('')

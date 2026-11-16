@@ -47,7 +47,7 @@ function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
 }
 
 const UNC = '\\\\host\\share\\v.nvx'
-const local = { path: '/vaults/a.nvx', hasKeyFile: false, lastOpenedAt: 1 }
+const local = { path: '/vaults/a.nvx', lastOpenedAt: 1 }
 
 beforeEach(() => {
   vi.clearAllMocks()

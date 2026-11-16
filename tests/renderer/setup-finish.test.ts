@@ -14,8 +14,8 @@ const MNEMONIC = Array.from({ length: 24 }, (_, i) => `word${i}`).join(' ')
 // What main's prefs look like after vault:create recorded the new vault as most recent.
 const prefsAfterCreate: Prefs = {
   recentVaults: [
-    { path: CREATED_VAULT, hasKeyFile: false, lastOpenedAt: 2 },
-    { path: PREVIOUS_VAULT, hasKeyFile: false, lastOpenedAt: 1 }
+    { path: CREATED_VAULT, lastOpenedAt: 2 },
+    { path: PREVIOUS_VAULT, lastOpenedAt: 1 }
   ],
   unconfirmedRecoveryVaults: [],
   autoLockMinutes: 15,
@@ -66,7 +66,7 @@ describe('Setup finish', () => {
       pendingNewVaultPath: CREATED_VAULT
     })
     usePrefsStore.setState({
-      recentVaults: [{ path: PREVIOUS_VAULT, hasKeyFile: false, lastOpenedAt: 1 }]
+      recentVaults: [{ path: PREVIOUS_VAULT, lastOpenedAt: 1 }]
     })
   })
 
