@@ -73,7 +73,7 @@ import {
   removeRecentVault,
   setPref
 } from './prefs'
-import { clearUpdateSilences } from './updater'
+import { clearUpdateSilences, dismissUpdateForSession, snoozeUpdate } from './updater'
 import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
 import {
   createVaultBackup,
@@ -1653,6 +1653,22 @@ export function registerIpcHandlers(
   handle('updater:check-on-startup', () =>
     app.isPackaged && getPref('checkUpdatesOnStartup') ? checkForUpdates() : ok(null)
   )
+
+  handle('updater:snooze', (_e, version: unknown) => {
+    if (typeof version !== 'string' || version === '') return fail('Invalid version')
+    try {
+      snoozeUpdate(version)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('updater:dismiss', (_e, version: unknown) => {
+    if (typeof version !== 'string' || version === '') return fail('Invalid version')
+    dismissUpdateForSession(version)
+    return ok(null)
+  })
 
   handle('updater:download', async () => {
     try {

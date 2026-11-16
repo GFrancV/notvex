@@ -322,6 +322,10 @@ export interface NotvexAPI {
     checkNow(): Promise<IpcResult<string | null>>
     /** Like checkNow, but main skips it (data null) when checkUpdatesOnStartup is off. */
     checkOnStartup(): Promise<IpcResult<string | null>>
+    /** "Remind me later": startup checks skip this version for 3 days. */
+    snooze(version: string): Promise<IpcResult<null>>
+    /** Closing the dialog: startup checks skip this version until the app quits. */
+    dismiss(version: string): Promise<IpcResult<null>>
     download(): Promise<IpcResult<null>>
     installNow(): Promise<IpcResult<null>>
     getCurrentVersion(): Promise<IpcResult<string>>
