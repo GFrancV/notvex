@@ -24,7 +24,8 @@ const prefsAfterCreate: Prefs = {
   clipboardClearSeconds: 60,
   clearClipboardOnLock: true,
   noteSort: { field: 'updatedAt', direction: 'desc' },
-  checkUpdatesOnStartup: true
+  checkUpdatesOnStartup: true,
+  updateSnooze: null
 }
 
 vi.mock('@/lib/ipc', () => ({

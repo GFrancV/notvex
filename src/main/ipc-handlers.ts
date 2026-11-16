@@ -73,6 +73,7 @@ import {
   removeRecentVault,
   setPref
 } from './prefs'
+import { clearUpdateSilences } from './updater'
 import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
 import {
   createVaultBackup,
@@ -1637,7 +1638,14 @@ export function registerIpcHandlers(
     }
   }
 
-  handle('updater:check-now', checkForUpdates)
+  handle('updater:check-now', () => {
+    try {
+      clearUpdateSilences()
+    } catch (e) {
+      return fail(e)
+    }
+    return checkForUpdates()
+  })
 
   // The opt-out is enforced here, not in the renderer, so a renderer bug can't leak the request.
   // Each check downloads latest.yml from the real release, and its download count is the only

@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // window — and macOS `activate` creates more than one.
 
 const netFetch = vi.hoisted(() => vi.fn())
+const prefs = vi.hoisted(() => ({ getPref: vi.fn(), setPref: vi.fn() }))
 
 vi.mock('electron', () => ({ app: { isPackaged: true }, net: { fetch: netFetch } }))
+vi.mock('@main/prefs', () => prefs)
 
 vi.mock('electron-updater', async () => {
   const { EventEmitter } = await import('node:events')
@@ -218,5 +220,122 @@ describe('update-available payload', () => {
 
     await vi.advanceTimersByTimeAsync(1)
     expect(w.payloads[0]).toMatchObject({ summary: null, security: false })
+  })
+})
+
+describe('remind me later and session dismissal', () => {
+  let updater: typeof import('@main/updater')
+
+  beforeEach(async () => {
+    vi.resetModules()
+    prefs.getPref.mockReset()
+    prefs.setPref.mockReset()
+    updater = await import('@main/updater')
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('snoozing stores the version and an expiry 3 days ahead in prefs', () => {
+    vi.useFakeTimers({ now: new Date('2026-11-13T10:00:00.000Z') })
+
+    updater.snoozeUpdate('1.2.3')
+
+    expect(prefs.setPref).toHaveBeenCalledWith('updateSnooze', {
+      version: '1.2.3',
+      until: new Date('2026-11-16T10:00:00.000Z').getTime()
+    })
+  })
+
+  // A startup check that finds `version`, with `snooze` stored in prefs; returns what reached
+  // the window.
+  async function startupCheck(
+    snooze: { version: string; until: number } | null,
+    version: string
+  ): Promise<string[]> {
+    prefs.getPref.mockImplementation((key: string) => (key === 'updateSnooze' ? snooze : undefined))
+    netFetch.mockResolvedValue(new Response(JSON.stringify({ body: '' })))
+    const { autoUpdater } = (await import('electron-updater')) as unknown as {
+      autoUpdater: EventEmitter
+    }
+    autoUpdater.removeAllListeners()
+    const w = fakeWindow()
+    updater.initAutoUpdater(w.win)
+    autoUpdater.emit('update-available', { version, files: [] })
+    await vi.advanceTimersByTimeAsync(0)
+    return w.sent
+  }
+
+  it('a startup check does not send a snoozed version within 3 days', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-13T10:00:00.000Z') })
+    const active = { version: '1.2.3', until: new Date('2026-11-16T09:59:59.999Z').getTime() }
+
+    expect(await startupCheck(active, '1.2.3')).toEqual([])
+  })
+
+  it('a startup check sends the snoozed version once 3 days have passed', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-16T10:00:00.000Z') })
+    const expired = { version: '1.2.3', until: new Date('2026-11-16T10:00:00.000Z').getTime() }
+
+    expect(await startupCheck(expired, '1.2.3')).toEqual(['updater:update-available'])
+  })
+
+  it('a startup check sends a newer version than the snoozed one', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-13T10:00:00.000Z') })
+    const active = { version: '1.2.3', until: new Date('2026-11-16T10:00:00.000Z').getTime() }
+
+    expect(await startupCheck(active, '1.2.4')).toEqual(['updater:update-available'])
+  })
+
+  // A hand-edited prefs.json may skip a version for a release cycle, but a wrong clock at
+  // snooze time or a huge value must never hide it for longer.
+  it.each([
+    ['honors a snooze up to 30 days ahead', '2026-12-13T10:00:00.000Z', []],
+    [
+      'ignores a snooze further than 30 days ahead',
+      '2026-12-13T10:00:00.001Z',
+      ['updater:update-available']
+    ]
+  ])('a startup check %s', async (_case, until, sent) => {
+    vi.useFakeTimers({ now: new Date('2026-11-13T10:00:00.000Z') })
+    const snooze = { version: '1.2.3', until: new Date(until).getTime() }
+
+    expect(await startupCheck(snooze, '1.2.3')).toEqual(sent)
+  })
+
+  it('a startup check does not send a version dismissed this session', async () => {
+    vi.useFakeTimers()
+    updater.dismissUpdateForSession('1.2.3')
+
+    expect(await startupCheck(null, '1.2.3')).toEqual([])
+  })
+
+  it('a manual check sends the version despite a snooze or dismissal, and clears the snooze', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-13T10:00:00.000Z') })
+    // prefs backed by a real value, so clearing the snooze is visible to the next read
+    let stored: unknown = {
+      version: '1.2.3',
+      until: new Date('2026-11-16T10:00:00.000Z').getTime()
+    }
+    prefs.getPref.mockImplementation((key: string) => (key === 'updateSnooze' ? stored : undefined))
+    prefs.setPref.mockImplementation((key: string, value: unknown) => {
+      if (key === 'updateSnooze') stored = value
+    })
+    netFetch.mockResolvedValue(new Response(JSON.stringify({ body: '' })))
+    const { autoUpdater } = (await import('electron-updater')) as unknown as {
+      autoUpdater: EventEmitter
+    }
+    autoUpdater.removeAllListeners()
+    const w = fakeWindow()
+    updater.initAutoUpdater(w.win)
+    updater.dismissUpdateForSession('1.2.3')
+
+    updater.clearUpdateSilences()
+    autoUpdater.emit('update-available', { version: '1.2.3', files: [] })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(w.sent).toEqual(['updater:update-available'])
+    expect(stored).toBeNull()
   })
 })

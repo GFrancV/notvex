@@ -141,6 +141,8 @@ export interface Prefs {
   clearClipboardOnLock: boolean
   noteSort: NoteSort
   checkUpdatesOnStartup: boolean
+  // "Remind me later": the version stays hidden from startup checks until `until` (epoch ms)
+  updateSnooze: { version: string; until: number } | null
 }
 
 export interface UnlockThrottleStatus {

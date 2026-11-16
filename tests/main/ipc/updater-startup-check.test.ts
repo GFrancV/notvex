@@ -114,4 +114,12 @@ describe('updater:check-now', () => {
     await expect(invoke('updater:check-now')).resolves.toEqual({ success: true, data: '9.9.9' })
     expect(checkForUpdates).toHaveBeenCalledOnce()
   })
+
+  it('returns a failure result instead of throwing when clearing the snooze fails', async () => {
+    const { setPref } = await import('@main/prefs')
+    vi.mocked(setPref).mockImplementationOnce(() => {
+      throw new Error('EPERM')
+    })
+    await expect(invoke('updater:check-now')).resolves.toMatchObject({ success: false })
+  })
 })

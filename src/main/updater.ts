@@ -4,11 +4,41 @@ import { autoUpdater } from 'electron-updater'
 import type { UpdateInfo } from '@shared/types'
 
 import { logError } from './log'
+import { getPref, setPref } from './prefs'
 import { parseInAppBlock, type InAppNotes } from './release-notes'
 
 const RELEASE_API_URL = 'https://api.github.com/repos/GFrancV/notvex/releases/tags/v'
 const RELEASE_PAGE_URL = 'https://github.com/GFrancV/notvex/releases/tag/v'
 const RELEASE_API_TIMEOUT_MS = 5000
+// Short enough that a patch still shows up inside its 7-day release window
+const SNOOZE_MS = 3 * 24 * 60 * 60 * 1000
+// prefs.json can be hand-edited to skip a version for up to one minor release cycle; a longer
+// expiry (a wrong clock when snoozing, a huge value) is ignored so no version stays hidden for good
+const MAX_SNOOZE_MS = 30 * 24 * 60 * 60 * 1000
+
+export function snoozeUpdate(version: string): void {
+  setPref('updateSnooze', { version, until: Date.now() + SNOOZE_MS })
+}
+
+// Closing the dialog hides the version until the app quits, so it lives in memory, not prefs
+let dismissedVersion: string | null = null
+
+export function dismissUpdateForSession(version: string): void {
+  dismissedVersion = version
+}
+
+// A manual check is an explicit request to see the update, so it forgets both
+export function clearUpdateSilences(): void {
+  dismissedVersion = null
+  setPref('updateSnooze', null)
+}
+
+function isSilenced(version: string): boolean {
+  if (version === dismissedVersion) return true
+  const snooze = getPref('updateSnooze')
+  if (snooze && snooze.until > Date.now() + MAX_SNOOZE_MS) return false
+  return snooze?.version === version && Date.now() < snooze.until
+}
 
 // Any failure falls back to the full notes from latest.yml: the dialog must never wait on
 // or break because of GitHub's API.
@@ -64,6 +94,8 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   }
 
   autoUpdater.on('update-available', async (info) => {
+    // Main decides, not the renderer: the renderer is recycled on every lock and would forget
+    if (isSilenced(info.version)) return
     const notes = await fetchInAppNotes(info.version)
     const payload: UpdateInfo = {
       version: info.version,

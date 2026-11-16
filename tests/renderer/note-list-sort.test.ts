@@ -169,7 +169,8 @@ describe('note list sort sources', () => {
       clipboardClearSeconds: 60,
       clearClipboardOnLock: true,
       noteSort: { field: 'title', direction: 'desc' },
-      checkUpdatesOnStartup: true
+      checkUpdatesOnStartup: true,
+      updateSnooze: null
     }
     ipc.prefs.get.mockResolvedValue({ success: true, data: saved })
     render(createElement(NoteList), { wrapper: TooltipProvider })
