@@ -12,3 +12,4 @@ Thumbs.db
 coverage/
 build/icon.*
 !build/icon.png
+.claude/
