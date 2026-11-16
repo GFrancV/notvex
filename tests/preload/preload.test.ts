@@ -84,6 +84,14 @@ describe('preload: updater.checkOnStartup', () => {
 
     expect(invoke).toHaveBeenLastCalledWith('updater:check-on-startup')
   })
+
+  it('sends snooze and dismiss to their channels with the version', () => {
+    void api.updater.snooze('1.2.3')
+    expect(invoke).toHaveBeenLastCalledWith('updater:snooze', '1.2.3')
+
+    void api.updater.dismiss('1.2.3')
+    expect(invoke).toHaveBeenLastCalledWith('updater:dismiss', '1.2.3')
+  })
 })
 
 // The IPC tests call the handlers by channel name, so a typo here would pass them all.

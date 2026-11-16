@@ -46,10 +46,10 @@ vi.mock('@main/drain-renderer', () => ({}))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
 
-function invoke(channel: string): Promise<unknown> {
+function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   const fn = handlers.get(channel)
   if (!fn) throw new Error(`no handler for ${channel}`)
-  return Promise.resolve(fn({ sender: {}, senderFrame }))
+  return Promise.resolve(fn({ sender: {}, senderFrame }, ...args))
 }
 
 let ipc: typeof import('@main/ipc-handlers')
@@ -113,5 +113,40 @@ describe('updater:check-now', () => {
     app.isPackaged = false
     await expect(invoke('updater:check-now')).resolves.toEqual({ success: true, data: '9.9.9' })
     expect(checkForUpdates).toHaveBeenCalledOnce()
+  })
+
+  it('returns a failure result instead of throwing when clearing the snooze fails', async () => {
+    const { setPref } = await import('@main/prefs')
+    vi.mocked(setPref).mockImplementationOnce(() => {
+      throw new Error('EPERM')
+    })
+    await expect(invoke('updater:check-now')).resolves.toMatchObject({ success: false })
+  })
+})
+
+// The version comes from the renderer; main must not trust its shape.
+describe('updater:snooze and updater:dismiss', () => {
+  it('snoozes a version through prefs', async () => {
+    const { setPref } = await import('@main/prefs')
+    await expect(invoke('updater:snooze', '9.9.9')).resolves.toEqual({ success: true, data: null })
+    expect(setPref).toHaveBeenCalledWith(
+      'updateSnooze',
+      expect.objectContaining({ version: '9.9.9' })
+    )
+  })
+
+  it.each([
+    ['updater:snooze', ''],
+    ['updater:snooze', 42],
+    ['updater:snooze', undefined],
+    ['updater:dismiss', ''],
+    ['updater:dismiss', { version: '9.9.9' }]
+  ])('%s rejects the version %j', async (channel, version) => {
+    const { setPref } = await import('@main/prefs')
+    await expect(invoke(channel, version)).resolves.toEqual({
+      success: false,
+      error: 'Invalid version'
+    })
+    expect(setPref).not.toHaveBeenCalled()
   })
 })

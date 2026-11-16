@@ -15,7 +15,8 @@ const DEFAULTS: Prefs = {
   clipboardClearSeconds: 60,
   clearClipboardOnLock: true,
   noteSort: { field: 'updatedAt', direction: 'desc' },
-  checkUpdatesOnStartup: true
+  checkUpdatesOnStartup: true,
+  updateSnooze: null
 }
 
 const MAX_RECENT_VAULTS = 5
@@ -39,6 +40,18 @@ export function isLocalVaultPath(p: string): boolean {
   return isAbsolute(p) && !/^[\\/]{2}/.test(p)
 }
 
+function isUpdateSnooze(v: unknown): v is NonNullable<Prefs['updateSnooze']> {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+  const { version, until, ...rest } = v as Record<string, unknown>
+  return (
+    Object.keys(rest).length === 0 &&
+    typeof version === 'string' &&
+    version !== '' &&
+    typeof until === 'number' &&
+    Number.isFinite(until)
+  )
+}
+
 function isRecentVault(v: unknown): v is RecentVault {
   if (typeof v !== 'object' || v === null) return false
   const { path, lastOpenedAt } = v as Record<string, unknown>
@@ -56,7 +69,7 @@ const PREFS_VALIDATORS = {
     typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
   noteSort: isNoteSort
 } satisfies Record<
-  Exclude<keyof Prefs, 'recentVaults' | 'unconfirmedRecoveryVaults'>,
+  Exclude<keyof Prefs, 'recentVaults' | 'unconfirmedRecoveryVaults' | 'updateSnooze'>,
   (v: unknown) => boolean
 >
 
@@ -100,6 +113,7 @@ export function getPrefs(): Prefs {
     prefs.unconfirmedRecoveryVaults = Array.isArray(prefs.unconfirmedRecoveryVaults)
       ? prefs.unconfirmedRecoveryVaults.filter((p) => typeof p === 'string' && p !== '')
       : []
+    if (!isUpdateSnooze(prefs.updateSnooze)) prefs.updateSnooze = null
     return prefs
   } catch {
     return { ...DEFAULTS }

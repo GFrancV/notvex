@@ -73,6 +73,12 @@ import {
   removeRecentVault,
   setPref
 } from './prefs'
+import {
+  clearUpdateSilences,
+  dismissUpdateForSession,
+  downloadUpdate,
+  snoozeUpdate
+} from './updater'
 import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
 import {
   createVaultBackup,
@@ -1637,7 +1643,14 @@ export function registerIpcHandlers(
     }
   }
 
-  handle('updater:check-now', checkForUpdates)
+  handle('updater:check-now', () => {
+    try {
+      clearUpdateSilences()
+    } catch (e) {
+      return fail(e)
+    }
+    return checkForUpdates()
+  })
 
   // The opt-out is enforced here, not in the renderer, so a renderer bug can't leak the request.
   // Each check downloads latest.yml from the real release, and its download count is the only
@@ -1646,9 +1659,25 @@ export function registerIpcHandlers(
     app.isPackaged && getPref('checkUpdatesOnStartup') ? checkForUpdates() : ok(null)
   )
 
+  handle('updater:snooze', (_e, version: unknown) => {
+    if (typeof version !== 'string' || version === '') return fail('Invalid version')
+    try {
+      snoozeUpdate(version)
+      return ok(null)
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle('updater:dismiss', (_e, version: unknown) => {
+    if (typeof version !== 'string' || version === '') return fail('Invalid version')
+    dismissUpdateForSession(version)
+    return ok(null)
+  })
+
   handle('updater:download', async () => {
     try {
-      await autoUpdater.downloadUpdate()
+      await downloadUpdate()
       return ok(null)
     } catch (e) {
       return fail(e)

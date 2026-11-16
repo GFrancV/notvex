@@ -138,7 +138,8 @@ describe('getPrefs', () => {
       clipboardClearSeconds: 60,
       clearClipboardOnLock: true,
       noteSort: { field: 'updatedAt', direction: 'desc' },
-      checkUpdatesOnStartup: true
+      checkUpdatesOnStartup: true,
+      updateSnooze: null
     })
   })
 })
@@ -301,6 +302,30 @@ describe('getPrefs unconfirmedRecoveryVaults', () => {
   })
 })
 
+describe('getPrefs updateSnooze', () => {
+  it('keeps a well-formed snooze', () => {
+    fsState.contents = JSON.stringify({ updateSnooze: { version: '1.2.3', until: 1700000000000 } })
+    expect(getPrefs().updateSnooze).toEqual({ version: '1.2.3', until: 1700000000000 })
+  })
+
+  it.each([
+    ['a string', 'x'],
+    ['an array', [1]],
+    ['a missing version', { until: 1700000000000 }],
+    ['an empty version', { version: '', until: 1700000000000 }],
+    ['a string expiry', { version: '1.2.3', until: '2026-11-16' }],
+    ['a non-finite expiry', { version: '1.2.3', until: null }],
+    ['an extra field', { version: '1.2.3', until: 1700000000000, extra: true }]
+  ])('falls back to no snooze for %s', (_label, updateSnooze) => {
+    fsState.contents = JSON.stringify({ updateSnooze })
+    expect(getPrefs().updateSnooze).toBeNull()
+  })
+
+  it('is not a renderer-writable key', () => {
+    expect(isPrefKey('updateSnooze')).toBe(false)
+  })
+})
+
 describe('recovery-unconfirmed helpers', () => {
   function written(): Prefs {
     return JSON.parse(fsMock.writeFileSync.mock.calls.at(-1)![1] as string) as Prefs
@@ -357,7 +382,8 @@ describe('getPrefs with every pref invalid', () => {
       clipboardClearSeconds: 45,
       clearClipboardOnLock: null,
       noteSort: 'title',
-      checkUpdatesOnStartup: 0
+      checkUpdatesOnStartup: 0,
+      updateSnooze: 'x'
     })
     expect(getPrefs()).toEqual({
       recentVaults: [],
@@ -368,7 +394,8 @@ describe('getPrefs with every pref invalid', () => {
       clipboardClearSeconds: 60,
       clearClipboardOnLock: true,
       noteSort: { field: 'updatedAt', direction: 'desc' },
-      checkUpdatesOnStartup: true
+      checkUpdatesOnStartup: true,
+      updateSnooze: null
     })
   })
 })
