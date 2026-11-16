@@ -7,7 +7,6 @@ import { notvex } from '@/lib/ipc'
 const REPO_URL = 'https://github.com/GFrancV/notvex'
 export const DOCS_URL = 'https://notvex.vercel.app/docs/getting-started'
 export const ISSUE_URL = `${REPO_URL}/issues/new`
-const ISSUE_TITLE = '[BUG] '
 // Browsers and GitHub start refusing long URLs not far past this.
 const URL_MAX = 8 * 1024
 
@@ -27,14 +26,13 @@ export function reportBody({ environment, log }: BugReportParts): string {
   return lines.join('\n')
 }
 
-// The newest log lines are the ones that explain the bug, so the oldest go first.
-export function issueUrl(parts: BugReportParts): string {
-  let lines = parts.log ? parts.log.split('\n') : []
+// The form's title and label come from bug_report.yml. The newest log lines are the ones that
+// explain the bug, so the oldest go first.
+export function issueUrl({ environment, log }: BugReportParts): string {
+  let lines = log ? log.split('\n') : []
   for (;;) {
-    const params = new URLSearchParams({
-      title: ISSUE_TITLE,
-      body: reportBody({ ...parts, log: lines.join('\n') })
-    })
+    const params = new URLSearchParams({ template: 'bug_report.yml', environment })
+    if (lines.length > 0) params.set('logs', lines.join('\n'))
     const url = `${ISSUE_URL}?${params}`
     if (url.length <= URL_MAX || lines.length === 0) return url
     lines = lines.slice(1)

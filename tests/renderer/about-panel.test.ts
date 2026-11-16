@@ -41,7 +41,7 @@ describe('AboutPanel links', () => {
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(url)
   })
 
-  it('"Report a bug" opens a prefilled bug report in the system browser', async () => {
+  it('"Report a bug" opens the bug report form in the system browser', async () => {
     render(createElement(AboutPanel))
     const link = screen.getByRole('button', { name: 'Report a bug (opens in your browser)' })
 
@@ -50,7 +50,7 @@ describe('AboutPanel links', () => {
     expect(link.closest('a[href]')).toBeNull()
     await waitFor(() => expect(openExternal).toHaveBeenCalledTimes(1))
     expect(openExternal.mock.calls[0][0]).toMatch(
-      /^https:\/\/github\.com\/GFrancV\/notvex\/issues\/new\?.*body=/
+      /^https:\/\/github\.com\/GFrancV\/notvex\/issues\/new\?.*template=bug_report\.yml/
     )
   })
 })
