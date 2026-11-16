@@ -147,7 +147,11 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
     <Dialog
       open={state !== null}
       onOpenChange={(v) => {
-        if (!v && dismissible) setState(null)
+        if (!v && dismissible) {
+          // Escape or a click outside; the footer buttons close by setting state instead
+          if (state?.phase === 'available') void notvex.updater.dismiss(state.info.version)
+          setState(null)
+        }
       }}
     >
       <DialogContent
@@ -211,7 +215,13 @@ export function UpdateAvailableDialog({ ready }: UpdateAvailableDialogProps): Re
                 Release notes
                 <ExternalLinkIcon aria-hidden />
               </Button>
-              <Button variant="ghost" onClick={() => setState(null)}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void notvex.updater.snooze(state.info.version)
+                  setState(null)
+                }}
+              >
                 Remind me later
               </Button>
               <Button onClick={handleUpdateNow}>Update now</Button>

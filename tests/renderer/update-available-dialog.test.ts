@@ -24,6 +24,7 @@ const listeners = vi.hoisted(() => ({
 }))
 
 const openExternal = vi.hoisted(() => vi.fn())
+const exits = vi.hoisted(() => ({ snooze: vi.fn(), dismiss: vi.fn() }))
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
@@ -42,6 +43,8 @@ vi.mock('@/lib/ipc', () => ({
         return () => {}
       },
       checkOnStartup: vi.fn(),
+      snooze: exits.snooze,
+      dismiss: exits.dismiss,
       download: vi.fn(),
       installNow: vi.fn()
     }
@@ -212,6 +215,31 @@ describe('UpdateAvailableDialog content', () => {
       ['https://example.com/docs'],
       ['https://github.com/GFrancV/notvex/releases/tag/v9.9.9']
     ])
+  })
+
+  it('"Remind me later" snoozes the version', () => {
+    exits.snooze.mockClear()
+    exits.dismiss.mockClear()
+    openWith({})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remind me later' }))
+
+    expect(exits.snooze).toHaveBeenCalledExactlyOnceWith('9.9.9')
+    expect(exits.dismiss).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  // A click outside reaches the same onOpenChange(false) through Radix; jsdom can't simulate it.
+  it('closing the dialog with Escape dismisses it for the session', () => {
+    exits.snooze.mockClear()
+    exits.dismiss.mockClear()
+    openWith({})
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+
+    expect(exits.dismiss).toHaveBeenCalledExactlyOnceWith('9.9.9')
+    expect(exits.snooze).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('without a summary, shows the sanitized full release notes', () => {
