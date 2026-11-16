@@ -1,5 +1,4 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import millify from 'millify'
 
 // Every TooltipProvider uses it, so hover hints wait the same everywhere.
 export const TOOLTIP_DELAY = 500
@@ -12,11 +11,16 @@ export function formatDateTime(timestamp: number): string {
   return format(new Date(timestamp), 'PP p')
 }
 
+const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
+
 export function formatFileSize(bytes: number): string {
-  return millify(bytes, {
-    units: ['B', 'KB', 'MB', 'GB', 'TB'],
-    space: true
-  })
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < SIZE_UNITS.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${Number(value.toFixed(1))} ${SIZE_UNITS[unit]}`
 }
 
 /** A vault's file name, for places too tight for its path; show the path in a tooltip there. */
