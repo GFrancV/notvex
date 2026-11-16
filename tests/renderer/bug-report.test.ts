@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { createElement } from 'react'
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -28,7 +31,7 @@ const { BugReportActions } = await import('@/components/BugReportActions')
 const ENVIRONMENT = '**Version:** 1.4.0 · **Electron:** 38.0.0 · **OS:** win32 10.0 x64'
 const LOG = '2026-01-01T00:00:00.000Z [renderer] v1.4.0 TypeError\n    at f (out/x.js:1:1)'
 
-const bodyOf = (url: string): string => new URL(url).searchParams.get('body') ?? ''
+const paramOf = (url: string, name: string): string | null => new URL(url).searchParams.get(name)
 
 describe('reportBody', () => {
   it('includes the environment, a prompt and the log', () => {
@@ -45,11 +48,22 @@ describe('reportBody', () => {
 })
 
 describe('issueUrl', () => {
-  it('opens a new issue with the full report when it fits', () => {
+  it('opens the bug report form with the environment and the log', () => {
     const url = issueUrl({ environment: ENVIRONMENT, log: LOG })
 
     expect(url.startsWith(`${ISSUE_URL}?`)).toBe(true)
-    expect(bodyOf(url)).toBe(reportBody({ environment: ENVIRONMENT, log: LOG }))
+    expect(paramOf(url, 'template')).toBe('bug_report.yml')
+    expect(paramOf(url, 'environment')).toBe(ENVIRONMENT)
+    expect(paramOf(url, 'logs')).toBe(LOG)
+    expect(paramOf(url, 'title')).toBeNull()
+    expect(paramOf(url, 'body')).toBeNull()
+  })
+
+  it('leaves the logs field out when there is no log', () => {
+    const url = issueUrl({ environment: ENVIRONMENT, log: '' })
+
+    expect(paramOf(url, 'environment')).toBe(ENVIRONMENT)
+    expect(new URL(url).searchParams.has('logs')).toBe(false)
   })
 
   it('stays under 8 KB by dropping the oldest log lines first', () => {
@@ -58,9 +72,23 @@ describe('issueUrl', () => {
     const url = issueUrl({ environment: ENVIRONMENT, log: lines.join('\n') })
 
     expect(url.length).toBeLessThanOrEqual(8 * 1024)
-    expect(bodyOf(url)).toContain('line-299 ')
-    expect(bodyOf(url)).not.toContain('line-0 ')
-    expect(bodyOf(url)).toContain(ENVIRONMENT)
+    expect(paramOf(url, 'logs')).toContain('line-299 ')
+    expect(paramOf(url, 'logs')).not.toContain('line-0 ')
+    expect(paramOf(url, 'environment')).toBe(ENVIRONMENT)
+  })
+})
+
+// GitHub fills the form by field id, so a renamed id silently stops prefilling it.
+describe('bug_report.yml', () => {
+  const template = readFileSync(resolve('.github/ISSUE_TEMPLATE/bug_report.yml'), 'utf8')
+  const fieldOf = (id: string): string =>
+    template
+      .split(/^ {2}- type:/m)
+      .find((field) => new RegExp(`^ {4}id: ${id}\\r?$`, 'm').test(field)) ?? ''
+
+  it.each(['environment', 'logs'])('has a %s field that says Report a bug fills it in', (id) => {
+    expect(fieldOf(id)).not.toBe('')
+    expect(fieldOf(id)).toContain('Report a bug in Notvex fills this in.')
   })
 })
 
