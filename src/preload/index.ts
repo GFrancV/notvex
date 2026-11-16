@@ -124,7 +124,8 @@ const api: NotvexAPI = {
   },
   prefs: {
     get: () => ipcRenderer.invoke('prefs:get'),
-    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value)
+    set: (key, value) => ipcRenderer.invoke('prefs:set', key, value),
+    removeRecentVault: (filePath) => ipcRenderer.invoke('prefs:remove-recent-vault', filePath)
   },
   clipboard: {
     write: (text, opts) => ipcRenderer.invoke('clipboard:write', text, opts)

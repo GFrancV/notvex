@@ -1,5 +1,3 @@
-import { existsSync } from 'fs'
-
 import type { BrowserWindow } from 'electron'
 
 import { lockAndRecycle } from './ipc-handlers'
@@ -19,7 +17,7 @@ export function extractNvxArgv(argv: string[]): string | null {
 }
 
 export function setValidatedPending(filePath: string): void {
-  if (existsSync(filePath) && isValidNotvexFile(filePath)) {
+  if (isValidNotvexFile(filePath)) {
     setPendingVault({ path: filePath, mode: 'open' })
   }
 }
@@ -32,7 +30,7 @@ export async function resolveOpenFilePath(
   win: BrowserWindow | null,
   filePath: string
 ): Promise<void> {
-  if (!existsSync(filePath) || !isValidNotvexFile(filePath)) return
+  if (!isValidNotvexFile(filePath)) return
 
   // Same vault already unlocked → just focus the window
   const currentPath = getVaultPath()

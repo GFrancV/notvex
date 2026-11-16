@@ -34,7 +34,10 @@ vi.mock('@main/prefs', () => ({
   samePath: (a: string, b: string) => a === b
 }))
 vi.mock('@main/vault/backups', () => ({}))
-vi.mock('@main/vault/container', () => ({ isValidNotvexFile: vi.fn(() => true) }))
+vi.mock('@main/vault/container', () => ({
+  isValidNotvexFile: vi.fn(() => true),
+  vaultFileStatus: vi.fn(() => 'usable')
+}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({
   isVaultOpen: vi.fn(() => vault.open),
@@ -204,7 +207,7 @@ describe('renderer recycle on lock', () => {
   })
 
   it('vault:switch queues its target and recycles', async () => {
-    await invoke('vault:switch', OTHER)
+    expect(await invoke('vault:switch', OTHER)).toEqual({ success: true, data: 'usable' })
 
     expectRecycledAfterClose()
     expect(pending.takePendingVault()).toEqual({ path: OTHER, mode: 'open' })

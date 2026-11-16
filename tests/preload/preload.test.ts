@@ -133,3 +133,16 @@ describe('preload: Markdown export/import channels', () => {
     expect(invoke).toHaveBeenLastCalledWith('notes:import')
   })
 })
+
+// The handler is asserted in tests/main/ipc/prefs-remove-recent.test.ts.
+describe('preload: prefs.removeRecentVault', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('sends the path to prefs:remove-recent-vault', () => {
+    void api.prefs.removeRecentVault('/vaults/a.nvx')
+
+    expect(invoke).toHaveBeenLastCalledWith('prefs:remove-recent-vault', '/vaults/a.nvx')
+  })
+})

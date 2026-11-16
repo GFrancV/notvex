@@ -29,7 +29,10 @@ vi.mock('@main/prefs', async (importOriginal) => ({
   isLocalVaultPath: (await importOriginal<typeof import('@main/prefs')>()).isLocalVaultPath
 }))
 vi.mock('@main/vault/backups', () => ({}))
-vi.mock('@main/vault/container', () => ({ isValidNotvexFile: vi.fn(() => true) }))
+vi.mock('@main/vault/container', () => ({
+  isValidNotvexFile: vi.fn(() => true),
+  vaultFileStatus: vi.fn(() => 'usable')
+}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({}))
 vi.mock('@main/db/queries', () => ({}))
@@ -37,9 +40,8 @@ vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { existsSync } = await import('fs')
 const { getCurrentVaultPath } = await import('@main/prefs')
-const { isValidNotvexFile } = await import('@main/vault/container')
+const { vaultFileStatus } = await import('@main/vault/container')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 
@@ -55,6 +57,7 @@ const LOCAL = '/vaults/a.nvx'
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getCurrentVaultPath).mockReturnValue(null)
+  vi.mocked(vaultFileStatus).mockReturnValue('usable')
   registerIpcHandlers({} as BrowserWindow, () => null)
 })
 
@@ -74,19 +77,22 @@ describe('vault:has-vault', () => {
         success: false,
         error: 'Vaults on network shares are not supported'
       })
-      expect(existsSync).not.toHaveBeenCalled()
-      expect(isValidNotvexFile).not.toHaveBeenCalled()
+      expect(vaultFileStatus).not.toHaveBeenCalled()
     }
   )
 
-  it('checks a local path on disk', async () => {
-    expect(await invoke('vault:has-vault', LOCAL)).toEqual({ success: true, data: true })
-    expect(existsSync).toHaveBeenCalledWith(LOCAL)
-    expect(isValidNotvexFile).toHaveBeenCalledWith(LOCAL)
-  })
+  it.each(['usable', 'missing', 'not-vault', 'unreadable'] as const)(
+    'reports the status of the file on disk: %s',
+    async (status) => {
+      vi.mocked(vaultFileStatus).mockReturnValue(status)
 
-  it('returns false with no path and no recent vault', async () => {
-    expect(await invoke('vault:has-vault')).toEqual({ success: true, data: false })
-    expect(existsSync).not.toHaveBeenCalled()
+      expect(await invoke('vault:has-vault', LOCAL)).toEqual({ success: true, data: status })
+      expect(vaultFileStatus).toHaveBeenCalledWith(LOCAL)
+    }
+  )
+
+  it('returns missing with no path and no recent vault', async () => {
+    expect(await invoke('vault:has-vault')).toEqual({ success: true, data: 'missing' })
+    expect(vaultFileStatus).not.toHaveBeenCalled()
   })
 })
