@@ -192,8 +192,6 @@ export function computeHeaderHmac(headerBytes: Buffer, masterKey: Buffer): Buffe
   return Buffer.from(hmac)
 }
 
-// Measures how long Argon2id takes on this machine, returns the highest-security
-// tier that finishes within targetMs. Only called once at vault creation.
 // Throws when Argon2 can't allocate the level's memory. Blocks the main thread for the duration,
 // like an unlock at that level does.
 export async function measureKdfLevel(tier: number): Promise<number> {
@@ -203,21 +201,4 @@ export async function measureKdfLevel(tier: number): Promise<number> {
   const t0 = performance.now()
   deriveKey('measurement', salt, params)
   return Math.round(performance.now() - t0)
-}
-
-export function calibrateArgon2id(targetMs = 1500): { tier: number } {
-  assertReady()
-  const testPassword = 'calibration-benchmark'
-  const testSalt = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES)
-  const ALG = sodium.crypto_pwhash_ALG_ARGON2ID13
-
-  for (const [key, params] of Object.entries(KDF_TIERS)) {
-    const t0 = performance.now()
-    sodium.crypto_pwhash(32, testPassword, testSalt, params.iterations, params.memory, ALG)
-    if (performance.now() - t0 <= targetMs) {
-      return { tier: Number(key) }
-    }
-  }
-
-  return { tier: 10 }
 }

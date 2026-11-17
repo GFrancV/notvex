@@ -5,7 +5,7 @@ import { join } from 'path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { createNote, getNote, listNotes, updateNote } from '@main/db/queries'
-import { calibrateArgon2id, getArgon2Params } from '@main/vault/crypto'
+import { getArgon2Params } from '@main/vault/crypto'
 import {
   closeVault,
   createVault,
@@ -16,28 +16,23 @@ import {
   withVaultLock
 } from '@main/vault/vault'
 
-// Pass-through spies so calibration and the Argon2 params can be stubbed.
+// Pass-through spy so the Argon2 params can be stubbed.
 vi.mock('@main/vault/crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@main/vault/crypto')>()
-  return {
-    ...actual,
-    calibrateArgon2id: vi.fn(actual.calibrateArgon2id),
-    getArgon2Params: vi.fn(actual.getArgon2Params)
-  }
+  return { ...actual, getArgon2Params: vi.fn(actual.getArgon2Params) }
 })
 
 // The editor's autosave ends with a queued notes:list resolving with an array; forwarded to
-// doCloseVault it would land in skipPack. Calibration is stubbed to the cheapest tier.
+// doCloseVault it would land in skipPack. The vault is created at the cheapest tier.
 describe('closeVault() packs regardless of the previous queued operation (issue #61)', () => {
   const PASSWORD = 'correct horse battery staple'
   let vaultDir: string
   let vaultPath: string
 
   beforeAll(async () => {
-    vi.mocked(calibrateArgon2id).mockReturnValue({ tier: 10 })
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     vaultPath = join(vaultDir, 'test.nvx')
-    await createVault(vaultPath, PASSWORD)
+    await createVault(vaultPath, PASSWORD, false, 10)
     await closeVault()
   }, 60_000)
 
@@ -47,7 +42,6 @@ describe('closeVault() packs regardless of the previous queued operation (issue 
   })
 
   afterAll(() => {
-    vi.mocked(calibrateArgon2id).mockReset()
     rmSync(vaultDir, { recursive: true, force: true })
   })
 
