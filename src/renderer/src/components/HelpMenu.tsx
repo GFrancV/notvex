@@ -19,7 +19,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { DOCS_URL, loadDebugInfo, openBugReport } from '@/lib/bug-report'
+import { loadDebugInfo, openBugReport } from '@/lib/bug-report'
+import { DOCS_URL } from '@/lib/links'
 import { notvex } from '@/lib/ipc'
 
 interface Props {
