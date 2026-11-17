@@ -14,3 +14,9 @@ export const KDF_LEVELS: readonly KdfLevel[] = [
 ]
 
 export const DEFAULT_KDF_LEVEL_ID = 4
+
+export function isKdfLevelId(value: unknown): value is number {
+  return KDF_LEVELS.some((level) => level.id === value)
+}
+
+export type KdfMeasurement = { status: 'measured'; ms: number } | { status: 'unavailable' }

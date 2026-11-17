@@ -136,7 +136,7 @@ describe('app:reload-window', () => {
     })
 
     it('refuses to reload', async () => {
-      const creating = invoke('vault:create', '/v.nvx', 'pw')
+      const creating = invoke('vault:create', '/v.nvx', 'pw', 4)
       await flush()
 
       const res = await invoke('app:reload-window')
@@ -151,7 +151,7 @@ describe('app:reload-window', () => {
       ['succeeded', undefined],
       ['failed', new Error('disk full')]
     ])('reloads again once the create %s', async (_outcome, error) => {
-      const creating = invoke('vault:create', '/v.nvx', 'pw')
+      const creating = invoke('vault:create', '/v.nvx', 'pw', 4)
       await flush()
       finishCreate(error)
       await creating
