@@ -345,7 +345,6 @@ export function Unlock(): ReactNode {
             onRetry={() => void handleRetry()}
             onRemove={() => void handleRemove()}
             onOpenOther={() => void handleOpenOther()}
-            onCreateNew={() => void handleCreateNew()}
           />
         )}
 
@@ -459,18 +458,6 @@ export function Unlock(): ReactNode {
                     className="text-muted-foreground h-auto p-0 text-xs"
                   >
                     Forgot your password? <span className="text-foreground">Use recovery key</span>
-                  </Button>
-                </p>
-
-                <p className="text-center">
-                  <Button
-                    variant="link"
-                    className="text-muted-foreground h-auto p-0 text-xs font-normal"
-                    onClick={(): void => {
-                      void handleCreateNew()
-                    }}
-                  >
-                    Create a new vault
                   </Button>
                 </p>
               </>

@@ -176,6 +176,24 @@ describe('Unlock vault selector', () => {
     expect(screen.getByLabelText('Master password')).toBeTruthy()
   })
 
+  it('shows the vault as folder • file, with its full path on hover', async () => {
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByLabelText('Master password')
+    const selector = screen.getByRole('button', { name: /main\.nvx/ })
+    expect(selector.textContent).toBe('vaults • main.nvx')
+
+    fireEvent.pointerMove(screen.getByText('vaults • main.nvx'))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe(MAIN)
+  })
+
+  it('has no separate link to create a vault under the unlock form', async () => {
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByLabelText('Master password')
+
+    expect(screen.queryByRole('button', { name: /Create (a )?new vault/ })).toBeNull()
+  })
+
   it('shows why a picked vault can not be opened instead of its form', async () => {
     await openSelector()
 

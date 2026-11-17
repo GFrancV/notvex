@@ -14,7 +14,6 @@ interface UnopenableVaultProps {
   onRetry: () => void
   onRemove: () => void
   onOpenOther: () => void
-  onCreateNew: () => void
 }
 
 export function UnopenableVault({
@@ -23,8 +22,7 @@ export function UnopenableVault({
   retryFailed,
   onRetry,
   onRemove,
-  onOpenOther,
-  onCreateNew
+  onOpenOther
 }: UnopenableVaultProps): ReactNode {
   const problem = vaultFileProblem(status, path)
 
@@ -56,17 +54,8 @@ export function UnopenableVault({
       <div className="mt-4 flex flex-col gap-4">
         <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
         <Button variant="outline" className="w-full" onClick={onOpenOther}>
-          Open existing vault
+          Open existing vault…
         </Button>
-        <p className="text-center">
-          <Button
-            variant="link"
-            className="text-muted-foreground h-auto p-0 text-xs font-normal"
-            onClick={onCreateNew}
-          >
-            Create new vault
-          </Button>
-        </p>
       </div>
     </>
   )
