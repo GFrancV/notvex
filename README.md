@@ -42,7 +42,7 @@ The [user guide](https://notvex.vercel.app/docs/getting-started) walks through e
 Notvex is built for one situation: someone gets a copy of your vault file, but not your password. The file on its own should reveal nothing, and guessing the password should be slow.
 
 - **Two layers of encryption.** SQLCipher encrypts the whole database with AES-256, and each note's title and content are encrypted again with XChaCha20-Poly1305.
-- **Argon2id** turns your password into the key, tuned to take about 1.5 seconds on your computer, so an attacker pays that cost on every guess.
+- **Argon2id** turns your password into the key. You choose how much memory it uses, from 64 MiB to 512 MiB (256 MiB by default), so an attacker pays that cost on every guess.
 - **A 24-word recovery key** gets you back in if you forget your password, and an optional key file adds a second factor.
 - **The master key never touches the disk.** It lives only in memory, which Notvex asks the OS to keep out of swap, and is wiped when the vault locks: on sleep, on screen lock, after a period of inactivity, and, if you choose, on minimize.
 - **No telemetry.** The only network request is the update check on startup, which you can turn off.
