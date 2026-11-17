@@ -46,7 +46,7 @@ export function Unlock(): ReactNode {
   } = useVaultStore()
   const pendingOpenVaultPath = useVaultStore((s) => s.pendingOpenVaultPath)
 
-  const { pickExistingVault } = usePickVault()
+  const { pickExistingVault, pickNewVault } = usePickVault()
 
   // Prefs already loaded by App.tsx before Unlock mounts — reads are synchronous
   const lastOpenedVaultPath = usePrefsStore((s) => s.recentVaults[0]?.path ?? null)
@@ -265,10 +265,9 @@ export function Unlock(): ReactNode {
   }
 
   const handleCreateNew = async (): Promise<void> => {
-    const res = await notvex.vault.chooseFile('new')
-    if (!res.success || !res.data) return
+    const path = await pickNewVault((existing) => void showVault(existing))
     // Setup mounts on the password step with this path; its "Back to unlock" returns here
-    setPendingNewVaultPath(res.data)
+    if (path) setPendingNewVaultPath(path)
   }
 
   const switchToRecovery = (): void => {

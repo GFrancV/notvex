@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const MAIN = '/vaults/main.nvx'
@@ -41,6 +41,7 @@ vi.stubGlobal(
 
 const { Unlock } = await import('@/views/unlock')
 const { notvex } = await import('@/lib/ipc')
+const { toast } = await import('sonner')
 const { useVaultStore } = await import('@/store/vault.store')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
@@ -62,7 +63,11 @@ describe('Unlock vault selector', () => {
     }))
     // Failing keeps the seeded recentVaults, as when main has nothing newer to report
     vi.mocked(notvex.prefs.get).mockResolvedValue({ success: false, error: 'not needed' })
-    useVaultStore.setState({ status: 'locked', pendingOpenVaultPath: null })
+    useVaultStore.setState({
+      status: 'locked',
+      pendingNewVaultPath: null,
+      pendingOpenVaultPath: null
+    })
     usePrefsStore.setState({
       recentVaults: [
         { path: MAIN, lastOpenedAt: 3 },
@@ -127,6 +132,48 @@ describe('Unlock vault selector', () => {
     expect(notvex.prefs.removeRecentVault).toHaveBeenCalledExactlyOnceWith(OTHER)
     expect(screen.getByRole('menuitem', { name: /Create new vault…/ })).toBeTruthy()
     expect(notvex.vault.switchTo).not.toHaveBeenCalled()
+  })
+
+  it('"Create new vault…" checks the chosen file, then starts creating it', async () => {
+    const NEW = '/vaults/new.nvx'
+    vi.mocked(notvex.vault.chooseFile).mockResolvedValue({ success: true, data: NEW })
+    vi.mocked(notvex.vault.hasVault).mockImplementation(async (path) => ({
+      success: true,
+      data: path === NEW || path === GONE ? 'missing' : 'usable'
+    }))
+    await openSelector()
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Create new vault…/ }))
+
+    await waitFor(() => expect(useVaultStore.getState().pendingNewVaultPath).toBe(NEW))
+    expect(notvex.vault.chooseFile).toHaveBeenCalledExactlyOnceWith('new')
+    expect(notvex.vault.hasVault).toHaveBeenCalledWith(NEW)
+  })
+
+  it('"Create new vault…" on an existing vault starts nothing and offers to open it', async () => {
+    vi.mocked(notvex.vault.chooseFile).mockResolvedValue({ success: true, data: OTHER })
+    await openSelector()
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Create new vault…/ }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        'That file is already a Notvex vault',
+        expect.objectContaining({ description: 'vaults • other.nvx', duration: Infinity })
+      )
+    )
+    expect(useVaultStore.getState().pendingNewVaultPath).toBeNull()
+
+    const options = vi.mocked(toast.error).mock.calls[0][1] as {
+      action: { label: string; onClick: () => void }
+    }
+    expect(options.action.label).toBe('Open it')
+    act(() => options.action.onClick())
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'vaults • other.nvx' })).toBeTruthy()
+    )
+    expect(screen.getByLabelText('Master password')).toBeTruthy()
   })
 
   it('shows why a picked vault can not be opened instead of its form', async () => {
