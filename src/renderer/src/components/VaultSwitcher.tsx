@@ -159,6 +159,9 @@ export function VaultSwitcher(): ReactNode {
                     if (el) items.current.set(vault.path, el)
                     else items.current.delete(vault.path)
                   }}
+                  aria-label={
+                    isCurrent ? `${vaultFolderAndName(vault.path)}, current vault` : undefined
+                  }
                   aria-keyshortcuts={isCurrent ? undefined : 'Delete'}
                   onKeyDown={(e) => {
                     if (isCurrent || e.key !== 'Delete') return
@@ -211,7 +214,7 @@ export function VaultSwitcher(): ReactNode {
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleOpenOther}>
           <FolderOpenIcon />
-          Open vault…
+          Open existing vault…
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleCreateNew}>
           <PlusIcon />
