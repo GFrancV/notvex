@@ -69,6 +69,7 @@ export function Unlock(): ReactNode {
   const keyFileContentsRef = useRef<Uint8Array | null>(null)
   const recoveryKeyFileContentsRef = useRef<Uint8Array | null>(null)
   const pendingPathRef = useRef(pendingOpenVaultPath)
+  const pickedFromMenuRef = useRef(false)
   const passwordRef = useRef<HTMLInputElement>(null)
   const mnemonicRef = useRef<HTMLTextAreaElement>(null)
 
@@ -321,7 +322,16 @@ export function Unlock(): ReactNode {
                 </Button>
               }
               currentPath={vaultPath}
-              onSelect={(path) => void showVault(path)}
+              onSelect={(path) => {
+                pickedFromMenuRef.current = true
+                void showVault(path)
+              }}
+              // The password gets the focus the menu would otherwise take back to its trigger
+              onCloseAutoFocus={(e) => {
+                if (!pickedFromMenuRef.current) return
+                pickedFromMenuRef.current = false
+                e.preventDefault()
+              }}
               onOpenExisting={() => void handleOpenOther()}
               onCreateNew={() => void handleCreateNew()}
             />

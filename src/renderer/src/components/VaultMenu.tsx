@@ -31,6 +31,8 @@ interface VaultMenuProps {
   onSelect: (path: string, problem: VaultFileProblem | undefined) => void
   onOpenExisting: () => void
   onCreateNew: () => void
+  /** Radix hands focus back to the trigger on close; the consumer can cancel that. */
+  onCloseAutoFocus?: (event: Event) => void
   /** Extra items, after a separator below "Create new vault…". */
   children?: ReactNode
 }
@@ -42,6 +44,7 @@ export function VaultMenu({
   onSelect,
   onOpenExisting,
   onCreateNew,
+  onCloseAutoFocus,
   children
 }: VaultMenuProps): ReactNode {
   const { load: loadPrefs } = usePrefsStore()
@@ -96,7 +99,13 @@ export function VaultMenu({
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-      <DropdownMenuContent side="right" align="end" sideOffset={4} className="w-64">
+      <DropdownMenuContent
+        side="right"
+        align="end"
+        sideOffset={4}
+        className="w-64"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DropdownMenuLabel>Recent vaults</DropdownMenuLabel>
         {recentVaults.map((vault) => {
           const isCurrent = isSamePath(currentPath, vault.path)

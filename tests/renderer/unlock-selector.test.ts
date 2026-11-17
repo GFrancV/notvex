@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const MAIN = '/vaults/main.nvx'
@@ -20,6 +20,7 @@ vi.mock('@/lib/ipc', () => ({
       }),
       chooseFile: vi.fn(),
       hasVault: vi.fn(),
+      switchTo: vi.fn(),
       open: vi.fn(),
       openWithRecovery: vi.fn()
     }
@@ -87,5 +88,20 @@ describe('Unlock vault selector', () => {
     expect(items[0].querySelector('.lucide-check')).not.toBeNull()
     expect(screen.getByRole('button', { name: /Remove .*other\.nvx/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Remove .*gone\.nvx/ })).toBeTruthy()
+  })
+
+  it('shows the unlock form of the picked vault with the password focused', async () => {
+    await openSelector()
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /other\.nvx/ }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'vaults • other.nvx' })).toBeTruthy()
+    )
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Master password'))
+    )
+    expect(notvex.vault.hasVault).toHaveBeenCalledWith(OTHER)
+    expect(notvex.vault.switchTo).not.toHaveBeenCalled()
   })
 })
