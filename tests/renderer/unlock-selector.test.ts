@@ -104,4 +104,40 @@ describe('Unlock vault selector', () => {
     expect(notvex.vault.hasVault).toHaveBeenCalledWith(OTHER)
     expect(notvex.vault.switchTo).not.toHaveBeenCalled()
   })
+
+  it('removes another vault from the list and keeps the selector open', async () => {
+    vi.mocked(notvex.prefs.removeRecentVault).mockImplementation(async () => {
+      vi.mocked(notvex.prefs.get).mockResolvedValue({
+        success: true,
+        data: {
+          recentVaults: [
+            { path: MAIN, lastOpenedAt: 3 },
+            { path: GONE, lastOpenedAt: 1 }
+          ]
+        } as never
+      })
+      return { success: true, data: null }
+    })
+    await openSelector()
+    expect(screen.queryByRole('button', { name: /Remove .*main\.nvx/ })).toBeNull()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Remove .*other\.nvx/ }))
+
+    await waitFor(() => expect(screen.queryByRole('menuitem', { name: /other\.nvx/ })).toBeNull())
+    expect(notvex.prefs.removeRecentVault).toHaveBeenCalledExactlyOnceWith(OTHER)
+    expect(screen.getByRole('menuitem', { name: /Create new vault…/ })).toBeTruthy()
+    expect(notvex.vault.switchTo).not.toHaveBeenCalled()
+  })
+
+  it('shows why a picked vault can not be opened instead of its form', async () => {
+    await openSelector()
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /gone\.nvx.*Not found/ }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain("Couldn't find this vault")
+    expect(alert.textContent).toContain(`gone.nvx isn't at ${GONE}.`)
+    expect(screen.queryByLabelText('Master password')).toBeNull()
+    expect(screen.getByRole('button', { name: 'vaults • gone.nvx' })).toBeTruthy()
+  })
 })
