@@ -28,6 +28,7 @@ import { confirmError, newPasswordError } from '@/lib/password-rules'
 import { truncatePath, vaultName } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
+import { DEFAULT_KDF_LEVEL_ID } from '@shared/kdf-levels'
 
 type Step = 'location' | 'password' | 'recovery'
 
@@ -74,7 +75,7 @@ export function Setup(): ReactNode {
     setError('')
     if (!fields.submit()) return
     setLoading(true)
-    const res = await notvex.vault.create(vaultPath, password)
+    const res = await notvex.vault.create(vaultPath, password, DEFAULT_KDF_LEVEL_ID)
     setLoading(false)
     if (!res.success) {
       setError(res.error)

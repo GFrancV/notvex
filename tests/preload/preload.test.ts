@@ -45,6 +45,26 @@ describe('preload: onPackFailed (issue #61)', () => {
   })
 })
 
+// The channel names and argument order must match the handlers asserted in
+// tests/main/ipc/vault-create-level.test.ts and kdf-measure.test.ts.
+describe('preload: key derivation level', () => {
+  beforeAll(async () => {
+    await import('../../src/preload/index')
+  })
+
+  it('sends the chosen level along with vault:create', async () => {
+    await api.vault.create('/v.nvx', 'a long enough password', 7)
+
+    expect(invoke).toHaveBeenLastCalledWith('vault:create', '/v.nvx', 'a long enough password', 7)
+  })
+
+  it('measures a level through kdf:measure', async () => {
+    await api.vault.measureKdfLevel(4)
+
+    expect(invoke).toHaveBeenLastCalledWith('kdf:measure', 4)
+  })
+})
+
 // The app menu sends 'app:reload-requested' (asserted in tests/main/app/app-menu.test.ts).
 describe('preload: onReloadRequested', () => {
   beforeAll(async () => {
