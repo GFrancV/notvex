@@ -194,7 +194,7 @@ describe('Unlock with a vault that can not be opened', () => {
     const password = await screen.findByLabelText('Master password')
     await waitFor(() => expect(document.activeElement).toBe(password))
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('button', { name: new RegExp(OTHER) })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'vaults • other.nvx' })).toBeTruthy()
   })
 
   it('starts creating a vault from the message', async () => {

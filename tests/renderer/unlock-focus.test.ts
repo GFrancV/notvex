@@ -11,6 +11,8 @@ const MNEMONIC = Array.from({ length: 24 }, (_, i) => `word${i}`).join(' ')
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     app: { isDev: vi.fn().mockResolvedValue({ success: true, data: false }) },
+    // Opening the vault selector reloads the list; failing keeps the seeded one
+    prefs: { get: vi.fn().mockResolvedValue({ success: false, error: 'not needed' }) },
     vault: {
       getUnlockThrottleStatus: vi.fn().mockResolvedValue({
         success: true,
@@ -23,6 +25,16 @@ vi.mock('@/lib/ipc', () => ({
     }
   }
 }))
+
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
 
 const { Unlock } = await import('@/views/unlock')
 const { notvex } = await import('@/lib/ipc')
@@ -84,10 +96,11 @@ describe('Unlock focus', () => {
 
   it('refocuses the password input after picking another vault', async () => {
     await renderUnlock()
-    const vaultButton = screen.getByRole('button', { name: new RegExp(VAULT) })
-    vaultButton.focus()
+    const selector = screen.getByRole('button', { name: /main\.nvx/ })
+    selector.focus()
+    fireEvent.keyDown(selector, { key: 'Enter' })
 
-    fireEvent.click(vaultButton)
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Open existing vault…/ }))
 
     await waitFor(() => expect(document.activeElement).toBe(passwordInput()))
   })

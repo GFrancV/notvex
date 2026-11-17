@@ -1,12 +1,13 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronsUpDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
 import { UnopenableVault } from '@/components/UnopenableVault'
+import { VaultMenu } from '@/components/VaultMenu'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -24,7 +25,7 @@ import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
-import { truncatePath } from '@/lib/utils'
+import { vaultFolderAndName } from '@/lib/utils'
 import type { VaultFileProblem } from '@/lib/vault-file-problem'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -305,20 +306,25 @@ export function Unlock(): ReactNode {
         {/* Vault selector */}
         {vaultPath && (
           <div className="mx-auto mb-5 text-center">
-            <Button
-              variant="outline"
-              onClick={handleOpenOther}
-              className="text-muted-foreground mx-auto text-xs"
-            >
-              <FolderOpenIcon />
+            <VaultMenu
+              trigger={
+                <Button variant="outline" className="text-muted-foreground mx-auto text-xs">
+                  <FolderOpenIcon />
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>{truncatePath(vaultPath)}</span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{vaultPath}</TooltipContent>
-              </Tooltip>
-            </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>{vaultFolderAndName(vaultPath)}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{vaultPath}</TooltipContent>
+                  </Tooltip>
+                  <ChevronsUpDownIcon />
+                </Button>
+              }
+              currentPath={vaultPath}
+              onSelect={(path) => void showVault(path)}
+              onOpenExisting={() => void handleOpenOther()}
+              onCreateNew={() => void handleCreateNew()}
+            />
           </div>
         )}
 
