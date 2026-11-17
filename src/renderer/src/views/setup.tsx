@@ -4,6 +4,7 @@ import { FolderOpenIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { FieldErrorSlot } from '@/components/FieldErrorSlot'
+import { KdfLevelChooser } from '@/components/KdfLevelChooser'
 import { PasswordInput } from '@/components/PasswordInput'
 import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { RecoveryKeyStep } from '@/components/RecoveryKeyStep'
@@ -52,6 +53,7 @@ export function Setup(): ReactNode {
   const [mnemonic, setMnemonic] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [kdfLevelId, setKdfLevelId] = useState(DEFAULT_KDF_LEVEL_ID)
 
   const fields = useFieldErrors({
     password: newPasswordError(password),
@@ -75,7 +77,7 @@ export function Setup(): ReactNode {
     setError('')
     if (!fields.submit()) return
     setLoading(true)
-    const res = await notvex.vault.create(vaultPath, password, DEFAULT_KDF_LEVEL_ID)
+    const res = await notvex.vault.create(vaultPath, password, kdfLevelId)
     setLoading(false)
     if (!res.success) {
       setError(res.error)
@@ -206,6 +208,8 @@ export function Setup(): ReactNode {
                 <FieldErrorSlot>{fields.error('confirm')}</FieldErrorSlot>
               </Field>
             </FieldGroup>
+
+            <KdfLevelChooser value={kdfLevelId} onChange={setKdfLevelId} />
 
             <FieldError>{error}</FieldError>
 
