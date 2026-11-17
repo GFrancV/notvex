@@ -10,12 +10,14 @@ const switchTo = vi.hoisted(() => vi.fn())
 const hasVault = vi.hoisted(() => vi.fn())
 const prefsGet = vi.hoisted(() => vi.fn())
 const removeRecentVault = vi.hoisted(() => vi.fn())
+const chooseFile = vi.hoisted(() => vi.fn())
+const close = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     platform: 'win32',
     prefs: { get: prefsGet, removeRecentVault },
-    vault: { switchTo, hasVault }
+    vault: { switchTo, hasVault, chooseFile, close }
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -86,6 +88,7 @@ beforeEach(() => {
     tagCounts: { t1: 1 },
     noteTagsMap: { n1: ['t1'] },
     activeNoteId: 'n1',
+    pendingNewVaultPath: null,
     pendingOpenVaultPath: null
   })
 })
@@ -264,6 +267,46 @@ describe('VaultSwitcher', () => {
     expect(s.status).toBe('unlocked')
     expect(s.notes).toEqual([note])
     expect(s.pendingOpenVaultPath).toBeNull()
+  })
+
+  it('"Create new vault…" checks the chosen file, then locks and carries the new path', async () => {
+    const NEW = 'C:/vaults/new.nvx'
+    chooseFile.mockResolvedValue({ success: true, data: NEW })
+    hasVault.mockImplementation(async (path: string) => ({
+      success: true,
+      data: path === NEW ? 'missing' : 'usable'
+    }))
+    close.mockResolvedValue({ success: true, data: null })
+    render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+    fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Create new vault…/ }))
+
+    await waitFor(() => expect(useVaultStore.getState().status).toBe('locked'))
+    expect(chooseFile).toHaveBeenCalledExactlyOnceWith('new')
+    expect(hasVault).toHaveBeenCalledWith(NEW)
+    expect(close).toHaveBeenCalledExactlyOnceWith(NEW)
+    expect(useVaultStore.getState().pendingNewVaultPath).toBe(NEW)
+  })
+
+  it('"Create new vault…" on a file that is already a vault keeps the session and says so', async () => {
+    chooseFile.mockResolvedValue({ success: true, data: OTHER })
+    render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+    fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Create new vault…/ }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        'That file is already a Notvex vault',
+        expect.objectContaining({ description: 'vaults • home.nvx' })
+      )
+    )
+    expect(close).not.toHaveBeenCalled()
+    const s = useVaultStore.getState()
+    expect(s.status).toBe('unlocked')
+    expect(s.notes).toEqual([note])
+    expect(s.pendingNewVaultPath).toBeNull()
   })
 
   it('a rejected switch keeps the session and says why', async () => {

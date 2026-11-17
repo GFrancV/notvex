@@ -12,7 +12,9 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
+import { vaultFolderAndName } from '@/lib/utils'
 import {
   type VaultFileProblem,
   showVaultFileProblem,
@@ -31,13 +33,6 @@ import {
 } from './ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-function displayName(path: string): string {
-  const segments = path.split(/[\\/]/).filter(Boolean)
-  const name = segments[segments.length - 1] ?? path
-  const parent = segments[segments.length - 2]
-  return parent ? `${parent} • ${name}` : name
-}
-
 // Case differences only matter on Windows, as in main's samePath
 function isSamePath(a: string | null, b: string): boolean {
   if (a === null) return false
@@ -45,6 +40,7 @@ function isSamePath(a: string | null, b: string): boolean {
 }
 
 export function VaultSwitcher(): ReactNode {
+  const { pickNewVault } = usePickVault()
   const { clearSession, setPendingOpenVaultPath, lock } = useVaultStore()
   const currentVaultPath = useVaultStore((s) => s.currentVaultPath)
 
@@ -128,9 +124,8 @@ export function VaultSwitcher(): ReactNode {
   }
 
   const handleCreateNew = async (): Promise<void> => {
-    const res = await notvex.vault.chooseFile('new')
-    if (!res.success || !res.data) return
-    await lock(res.data)
+    const path = await pickNewVault((existing) => void handleSwitch(existing))
+    if (path) await lock(path)
   }
 
   return (
@@ -142,7 +137,7 @@ export function VaultSwitcher(): ReactNode {
         >
           <LockOpenIcon className="text-primary size-3.5 shrink-0" />
           <span className="text-muted-foreground min-w-0 flex-1 truncate text-left text-xs">
-            {currentVaultPath ? displayName(currentVaultPath) : 'Vault unlocked'}
+            {currentVaultPath ? vaultFolderAndName(currentVaultPath) : 'Vault unlocked'}
           </span>
           <ChevronsUpDownIcon className="text-muted-foreground size-3 shrink-0" />
         </Button>
@@ -177,7 +172,7 @@ export function VaultSwitcher(): ReactNode {
                     else void handleSwitch(vault.path)
                   }}
                 >
-                  <span className="min-w-0 flex-1 truncate">{displayName(vault.path)}</span>
+                  <span className="min-w-0 flex-1 truncate">{vaultFolderAndName(vault.path)}</span>
                   {problems[vault.path] && (
                     <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
                       <AlertTriangleIcon className="text-warning size-3" aria-hidden />
@@ -193,7 +188,7 @@ export function VaultSwitcher(): ReactNode {
                           variant="ghost"
                           size="icon-xs"
                           tabIndex={-1}
-                          aria-label={`Remove ${displayName(vault.path)} from recent vaults`}
+                          aria-label={`Remove ${vaultFolderAndName(vault.path)} from recent vaults`}
                           className="shrink-0 opacity-0 group-hover/item:opacity-100"
                           onClick={(e) => {
                             // Keep the menu open and don't select the entry underneath
