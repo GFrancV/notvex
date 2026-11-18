@@ -114,15 +114,6 @@ describe('Unlock focus', () => {
     await waitFor(() => expect(document.activeElement).toBe(passwordInput()))
   })
 
-  it('focuses the password input after picking a vault from the not-found state', async () => {
-    usePrefsStore.setState({ recentVaults: [] })
-    render(createElement(Unlock), { wrapper: TooltipProvider })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open existing vault' }))
-
-    await waitFor(() => expect(document.activeElement).toBe(passwordInput()))
-  })
-
   it.each(failures)('refocuses and selects the password after %s', async (_, res) => {
     vi.mocked(notvex.vault.open).mockResolvedValueOnce(res)
     await renderUnlock()

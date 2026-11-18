@@ -11,13 +11,7 @@ import { VaultMenu } from '@/components/VaultMenu'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  FieldSeparator
-} from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Spinner } from '@/components/ui/spinner'
@@ -53,7 +47,6 @@ export function Unlock(): ReactNode {
 
   const initialPath = pendingOpenVaultPath ?? lastOpenedVaultPath
   const [vaultPath, setVaultPath] = useState<string | null>(initialPath)
-  const [vaultExists, setVaultExists] = useState<boolean>(initialPath !== null)
   const [unopenable, setUnopenable] = useState<VaultFileProblem | null>(null)
   const [retryFailed, setRetryFailed] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -110,7 +103,6 @@ export function Unlock(): ReactNode {
   const showVault = useCallback(
     async (path: string): Promise<void> => {
       setVaultPath(path)
-      setVaultExists(true)
       setAdvancedOpen(false)
       setUnopenable(null)
       setRetryFailed(false)
@@ -296,9 +288,7 @@ export function Unlock(): ReactNode {
               {isDev && <Badge variant="secondary">Dev</Badge>}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              {vaultExists === true && mode === 'recovery'
-                ? 'Account recovery'
-                : 'Unlock your vault'}
+              {mode === 'recovery' ? 'Account recovery' : 'Unlock your vault'}
             </p>
           </div>
         </div>
@@ -348,34 +338,8 @@ export function Unlock(): ReactNode {
           />
         )}
 
-        {/* Vault file not found */}
-        {vaultExists === false && (
-          <div className="space-y-4 rounded-lg border p-4">
-            <p className="text-muted-foreground text-sm">
-              No saved vault found. Create a new vault or open an existing one.
-            </p>
-
-            <div className="flex flex-col gap-4">
-              <Button
-                className="w-full"
-                onClick={(): void => {
-                  void handleCreateNew()
-                }}
-              >
-                Create new vault
-              </Button>
-
-              <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
-
-              <Button variant="outline" className="w-full" onClick={handleOpenOther}>
-                Open existing vault
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Unlock form */}
-        {vaultExists === true && unopenable === null && (
+        {vaultPath && unopenable === null && (
           <div
             key={mode}
             className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-4 duration-200"
