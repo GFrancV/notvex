@@ -95,7 +95,7 @@ const ISSUERS = [
   {
     channel: 'vault:create',
     fn: 'createVault',
-    args: ['/vaults/new.nvx', 'pw'],
+    args: ['/vaults/new.nvx', 'pw', 4],
     path: '/vaults/new.nvx'
   },
   { channel: 'vault:change-password', fn: 'changePassword', args: ['old', 'new'], path: VAULT },

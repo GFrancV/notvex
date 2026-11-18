@@ -57,7 +57,7 @@ describe('packContainer WAL checkpoint (issue #16 regression)', () => {
     for (const [id, title] of expectedTitles) {
       expect(persisted.get(id)).toBe(title)
     }
-  }, 60_000) // real Argon2id calibration + KDF on vault creation
+  }, 60_000) // real Argon2id KDF on vault creation
 
   it('persists notes written just before closeVault(), even without an explicit syncContainer() call', async () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))

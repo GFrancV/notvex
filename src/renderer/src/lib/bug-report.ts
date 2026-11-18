@@ -5,7 +5,6 @@ import type { BugReportParts } from '@shared/types'
 import { notvex } from '@/lib/ipc'
 
 const REPO_URL = 'https://github.com/GFrancV/notvex'
-export const DOCS_URL = 'https://notvex.vercel.app/docs/getting-started'
 export const ISSUE_URL = `${REPO_URL}/issues/new`
 // Browsers and GitHub start refusing long URLs not far past this.
 const URL_MAX = 8 * 1024
