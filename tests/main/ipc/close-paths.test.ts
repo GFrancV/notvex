@@ -45,11 +45,8 @@ vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
-// Real Argon2id, cheapest tier: calibration is not what's under test.
-vi.mock('@main/vault/crypto', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@main/vault/crypto')>()
-  return { ...actual, calibrateArgon2id: vi.fn(() => ({ tier: 10 })) }
-})
+// Real Argon2id at the cheapest tier: the KDF cost is not what's under test.
+const CHEAPEST_KDF_TIER = 10
 
 const APP_URL = pathToFileURL(rendererIndexPath).href
 const PASSWORD = 'correct horse battery staple'
@@ -80,7 +77,7 @@ describe('every close path packs the latest edit (issue #61)', () => {
     vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
     vaultPath = join(vaultDir, 'test.nvx')
     otherVaultPath = join(vaultDir, 'other.nvx')
-    await createVault(vaultPath, PASSWORD)
+    await createVault(vaultPath, PASSWORD, false, CHEAPEST_KDF_TIER)
     await closeVault()
     // vault:switch only validates its target; a copy is a valid .nvx without a second KDF run
     copyFileSync(vaultPath, otherVaultPath)

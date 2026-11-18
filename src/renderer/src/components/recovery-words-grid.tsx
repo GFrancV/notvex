@@ -4,10 +4,9 @@ import { CheckIcon, CopyIcon, ExternalLinkIcon, ShieldIcon } from 'lucide-react'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { notvex } from '@/lib/ipc'
+import { SECURITY_PRACTICES_URL } from '@/lib/links'
 
 import { Button } from './ui/button'
-
-const SECURITY_PRACTICES_URL = 'https://notvex.vercel.app/docs/security-practices'
 
 interface RecoveryWordsGridProps {
   mnemonic: string

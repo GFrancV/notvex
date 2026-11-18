@@ -94,7 +94,7 @@ describe('a failed prefs write after a successful vault change', () => {
   })
 
   it.each<[string, unknown[], unknown]>([
-    ['vault:create', [PATH, 'pw'], { mnemonic: 'created words' }],
+    ['vault:create', [PATH, 'pw', 4], { mnemonic: 'created words' }],
     ['vault:open', [PATH, 'pw'], { maj: 1, min: 0 }],
     ['vault:open-with-recovery', [PATH, 'recovery words'], { maj: 1, min: 0 }]
   ])('%s still succeeds and leaves the vault open', async (channel, args, data) => {

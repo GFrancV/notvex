@@ -15,6 +15,7 @@ import {
 import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
+import { isKdfLevelId, type KdfMeasurement } from '@shared/kdf-levels'
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
 import type { PendingVault } from '@shared/types'
 import { clearClipboardIfOurs, writeClipboard } from './clipboard-guard'
@@ -87,7 +88,7 @@ import {
   hasAnyBackups
 } from './vault/backups'
 import { readContainer, shouldWarnOpeningInDevBuild, vaultFileStatus } from './vault/container'
-import { KEY_FILE_MAX_BYTES, memzero, readKeyFileContents } from './vault/crypto'
+import { KEY_FILE_MAX_BYTES, measureKdfLevel, memzero, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
   closeVault,
@@ -631,10 +632,24 @@ export function registerIpcHandlers(
     }
   })
 
-  handle('vault:create', async (_e, filePath: string, password: string) => {
+  handle('kdf:measure', async (_e, kdfLevelId: unknown): Promise<IpcResult<KdfMeasurement>> => {
+    if (!isKdfLevelId(kdfLevelId)) {
+      return fail(new Error("Couldn't measure the level: unknown key derivation level"))
+    }
+    try {
+      return ok({ status: 'measured', ms: await measureKdfLevel(kdfLevelId) })
+    } catch {
+      return ok({ status: 'unavailable' })
+    }
+  })
+
+  handle('vault:create', async (_e, filePath: string, password: string, kdfLevelId: unknown) => {
+    if (!isKdfLevelId(kdfLevelId)) {
+      return fail(new Error("Couldn't create the vault: unknown key derivation level"))
+    }
     isCreating = true
     try {
-      const result = await createVault(filePath, password, !app.isPackaged)
+      const result = await createVault(filePath, password, !app.isPackaged, kdfLevelId)
       markIssuedRecoveryKey(filePath)
       recordVaultUsedNonFatal('vault:create', filePath)
       touchActivity()

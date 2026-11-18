@@ -9,6 +9,7 @@ import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 
+import { DEFAULT_KDF_LEVEL_ID } from '@shared/kdf-levels'
 import { CURRENT_VERSION_MIN, PASSWORD_MIN_LENGTH, type VaultVersion } from '@shared/types'
 import { logError } from '../log'
 import { runMigrations, type SchemaMigrationGate } from '../db/migrations'
@@ -23,7 +24,6 @@ import {
 } from './container'
 import {
   type KdfInputV1,
-  calibrateArgon2id,
   decryptBytes,
   decryptField,
   deriveKey,
@@ -314,7 +314,8 @@ function requireNewPasswordLength(password: string): void {
 export async function createVault(
   filePath: string,
   password: string,
-  devBuild = false
+  devBuild = false,
+  tier = DEFAULT_KDF_LEVEL_ID
 ): Promise<CreateVaultResult> {
   await initSodium()
 
@@ -324,11 +325,15 @@ export async function createVault(
     throw new Error('A vault already exists at this location.')
   }
 
-  const { tier } = calibrateArgon2id(1500)
   const salt = Buffer.from(generateSalt())
   const kdfInput: KdfInputV1 = { version: 1, salt, kdfTier: tier }
   const { params: kdfParams } = getArgon2Params(kdfInput)
-  const rawKey = deriveKey(password, salt, kdfParams)
+  let rawKey: Uint8Array
+  try {
+    rawKey = deriveKey(password, salt, kdfParams)
+  } catch {
+    throw new Error("Couldn't create the vault: this computer doesn't have enough memory for it")
+  }
 
   // Build the DB in a temp file
   const tmp = makeTempDbPath()

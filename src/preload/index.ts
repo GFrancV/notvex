@@ -36,7 +36,9 @@ const api: NotvexAPI = {
   platform: process.platform as Platform,
   vault: {
     hasVault: (filePath) => ipcRenderer.invoke('vault:has-vault', filePath),
-    create: (filePath, pw) => ipcRenderer.invoke('vault:create', filePath, pw),
+    create: (filePath, pw, kdfLevelId) =>
+      ipcRenderer.invoke('vault:create', filePath, pw, kdfLevelId),
+    measureKdfLevel: (kdfLevelId) => ipcRenderer.invoke('kdf:measure', kdfLevelId),
     open: (filePath, pw, keyFileContents) =>
       ipcRenderer.invoke('vault:open', filePath, pw, keyFileContents),
     openWithRecovery: (filePath, m, keyFileContents) =>
