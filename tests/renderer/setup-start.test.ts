@@ -73,6 +73,20 @@ describe('Setup start screen', () => {
     expect(screen.getByRole('button', { name: 'Create new vault…' })).toBeTruthy()
   })
 
+  it('on first run the password step has one "← Back" link to the start screen', async () => {
+    vi.mocked(notvex.vault.chooseFile).mockResolvedValue({ success: true, data: NEW_VAULT })
+    vi.mocked(notvex.vault.hasVault).mockResolvedValue({ success: true, data: 'missing' })
+    fireEvent.click(screen.getByRole('button', { name: 'Create new vault…' }))
+    await screen.findByLabelText('Master password')
+
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+    expect(screen.queryByText('← Back to unlock')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '← Back' }))
+
+    expect(screen.queryByLabelText('Master password')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Create new vault…' })).toBeTruthy()
+  })
+
   it('"Open it" on the refusal sends that vault to its unlock form', async () => {
     vi.mocked(notvex.vault.chooseFile).mockResolvedValue({ success: true, data: EXISTING_VAULT })
     vi.mocked(notvex.vault.hasVault).mockResolvedValue({ success: true, data: 'usable' })

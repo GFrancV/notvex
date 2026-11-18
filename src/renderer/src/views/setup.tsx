@@ -193,21 +193,16 @@ export function Setup(): ReactNode {
 
             <FieldError>{error}</FieldError>
 
-            <div className="flex gap-3">
-              <Button variant="ghost" className="flex-1" onClick={() => setStep('location')}>
-                Back
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={(): void => {
-                  void handleCreate()
-                }}
-                disabled={loading}
-              >
-                {loading && <Spinner aria-hidden />}
-                {loading ? 'Creating vault…' : 'Create vault'}
-              </Button>
-            </div>
+            <Button
+              className="w-full"
+              onClick={(): void => {
+                void handleCreate()
+              }}
+              disabled={loading}
+            >
+              {loading && <Spinner aria-hidden />}
+              {loading ? 'Creating vault…' : 'Create vault'}
+            </Button>
 
             <p className="text-muted-foreground text-center text-xs">
               This derives your encryption key using Argon2id. May take a few seconds.
@@ -228,16 +223,16 @@ export function Setup(): ReactNode {
           </div>
         )}
 
-        {/* Escape hatch when creating a new vault from the switcher — hidden once the
-            vault exists (recovery step) */}
-        {pendingNewVaultPath && step !== 'recovery' && (
+        {/* The one way back: to Unlock when the location came from there or from the vault menu,
+            otherwise to the start screen. Gone once the vault exists (recovery step). */}
+        {step === 'password' && (
           <p className="mt-6 text-center">
             <Button
               variant="link"
               className="text-muted-foreground h-auto p-0 text-xs font-normal"
-              onClick={handleBackToUnlock}
+              onClick={pendingNewVaultPath ? handleBackToUnlock : () => setStep('location')}
             >
-              ← Back to unlock
+              {pendingNewVaultPath ? '← Back to unlock' : '← Back'}
             </Button>
           </p>
         )}

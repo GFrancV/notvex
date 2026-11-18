@@ -52,6 +52,16 @@ describe('Setup password step', () => {
     expect((await screen.findByRole('tooltip')).textContent).toBe('/vaults/new.nvx')
   })
 
+  it('has one "← Back to unlock" link when the vault came from Unlock or the menu', () => {
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '← Back' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '← Back to unlock' }))
+
+    expect(useVaultStore.getState().status).toBe('locked')
+    expect(useVaultStore.getState().pendingNewVaultPath).toBeNull()
+  })
+
   it('says nothing until a field is left', () => {
     fireEvent.change(password(), { target: { value: 'short' } })
 
