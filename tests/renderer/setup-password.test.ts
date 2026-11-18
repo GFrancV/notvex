@@ -13,6 +13,16 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
+
 const { Setup } = await import('@/views/setup')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
@@ -34,6 +44,14 @@ afterEach(() => {
 })
 
 describe('Setup password step', () => {
+  it('shows the vault as folder • file, with its full path on hover', async () => {
+    expect(screen.getByText('Create new vault')).toBeTruthy()
+
+    fireEvent.pointerMove(screen.getByText('vaults • new.nvx'))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('/vaults/new.nvx')
+  })
+
   it('says nothing until a field is left', () => {
     fireEvent.change(password(), { target: { value: 'short' } })
 

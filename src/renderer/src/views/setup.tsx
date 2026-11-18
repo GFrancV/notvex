@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react'
 
-import { FolderOpenIcon, PlusIcon } from 'lucide-react'
+import { FolderOpenIcon, LockIcon, PlusIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { FieldErrorSlot } from '@/components/FieldErrorSlot'
@@ -12,17 +12,24 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { confirmError, newPasswordError } from '@/lib/password-rules'
-import { truncatePath } from '@/lib/utils'
+import { vaultFolderAndName } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import { DEFAULT_KDF_LEVEL_ID } from '@shared/kdf-levels'
 
 type Step = 'location' | 'password' | 'recovery'
+
+const SUBTITLES: Record<Step, string> = {
+  location: 'Create or open a vault',
+  password: 'Create new vault',
+  recovery: 'Create your secure vault'
+}
 
 export function Setup(): ReactNode {
   const isDev = useIsDev()
@@ -112,9 +119,7 @@ export function Setup(): ReactNode {
               Notvex
               {isDev && <Badge variant="secondary">Dev</Badge>}
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {step === 'location' ? 'Create or open a vault' : 'Create your secure vault'}
-            </p>
+            <p className="text-muted-foreground mt-1 text-sm">{SUBTITLES[step]}</p>
           </div>
         </div>
 
@@ -139,11 +144,18 @@ export function Setup(): ReactNode {
         {/* Step: Password */}
         {step === 'password' && (
           <div className="space-y-6">
-            <div className="bg-sidebar rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">
-                <span className="text-muted-foreground">File:</span> {truncatePath(vaultPath)}
-              </p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  tabIndex={0}
+                  className="bg-sidebar text-muted-foreground flex items-center gap-2 rounded-lg border p-3 text-xs"
+                >
+                  <LockIcon className="size-3.5" aria-hidden />
+                  <span>{vaultFolderAndName(vaultPath)}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>{vaultPath}</TooltipContent>
+            </Tooltip>
 
             <FieldGroup>
               <Field data-invalid={!!fields.error('password')}>
