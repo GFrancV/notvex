@@ -24,7 +24,17 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
+
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
 
 const { Unlock } = await import('@/views/unlock')
 const { toast } = await import('sonner')
@@ -54,6 +64,43 @@ describe('Unlock with a vault that can not be opened', () => {
       "main.nvx isn't at /vaults/main.nvx. It may have been moved, renamed or be on a disconnected drive."
     )
     await waitFor(() => expect(notvex.vault.hasVault).toHaveBeenCalledWith(VAULT))
+  })
+
+  it('offers retrying, removing and opening another vault, but not creating one', async () => {
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove from recent vaults' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open existing vault…' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Create new vault/ })).toBeNull()
+  })
+
+  it('still offers the other known vaults and creating one while the message shows', async () => {
+    usePrefsStore.setState({
+      recentVaults: [
+        { path: VAULT, lastOpenedAt: 2 },
+        { path: '/vaults/other.nvx', lastOpenedAt: 1 }
+      ]
+    })
+    vi.mocked(notvex.vault.hasVault).mockImplementation(async (path) => ({
+      success: true,
+      data: path === VAULT ? 'missing' : 'usable'
+    }))
+    // Failing keeps the seeded list when the selector reloads it
+    vi.mocked(notvex.prefs.get).mockResolvedValue({ success: false, error: 'not needed' })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByRole('alert')
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /main\.nvx/ }), { key: 'Enter' })
+
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.map((item) => item.getAttribute('aria-label') ?? item.textContent)).toEqual([
+      'vaults • main.nvx, current vault',
+      'vaults • other.nvx',
+      'Open existing vault…',
+      'Create new vault…'
+    ])
   })
 
   it('keeps the first recent vault as the target and offers no password form', async () => {
@@ -189,28 +236,12 @@ describe('Unlock with a vault that can not be opened', () => {
     render(createElement(Unlock), { wrapper: TooltipProvider })
     await screen.findByRole('alert')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open existing vault' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open existing vault…' }))
 
     const password = await screen.findByLabelText('Master password')
     await waitFor(() => expect(document.activeElement).toBe(password))
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('button', { name: new RegExp(OTHER) })).toBeTruthy()
-  })
-
-  it('starts creating a vault from the message', async () => {
-    vi.mocked(notvex.vault.chooseFile).mockResolvedValue({
-      success: true,
-      data: '/vaults/new.nvx'
-    })
-    render(createElement(Unlock), { wrapper: TooltipProvider })
-    await screen.findByRole('alert')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create new vault' }))
-
-    await waitFor(() =>
-      expect(useVaultStore.getState().pendingNewVaultPath).toBe('/vaults/new.nvx')
-    )
-    expect(notvex.vault.chooseFile).toHaveBeenCalledWith('new')
+    expect(screen.getByRole('button', { name: 'vaults • other.nvx' })).toBeTruthy()
   })
 
   it.each([
@@ -231,25 +262,5 @@ describe('Unlock with a vault that can not be opened', () => {
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain(title)
     expect(alert.textContent).toContain(body)
-  })
-})
-
-describe('Unlock with no saved vault', () => {
-  afterEach(cleanup)
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    useVaultStore.setState({ status: 'locked', pendingOpenVaultPath: null })
-    usePrefsStore.setState({ recentVaults: [] })
-  })
-
-  it('says there is no saved vault instead of blaming a saved location', () => {
-    render(createElement(Unlock), { wrapper: TooltipProvider })
-
-    expect(
-      screen.getByText('No saved vault found. Create a new vault or open an existing one.')
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create new vault' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open existing vault' })).toBeTruthy()
   })
 })

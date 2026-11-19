@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react'
 
-import { FolderOpenIcon } from 'lucide-react'
+import { FolderOpenIcon, LockIcon, PlusIcon } from 'lucide-react'
 
 import { AppLogo } from '@/components/AppLogo'
 import { FieldErrorSlot } from '@/components/FieldErrorSlot'
@@ -10,28 +10,26 @@ import { PasswordStrengthBar } from '@/components/password-strength-bar'
 import { RecoveryKeyStep } from '@/components/RecoveryKeyStep'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldSeparator
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useFieldErrors } from '@/hooks/use-field-errors'
 import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { notvex } from '@/lib/ipc'
 import { confirmError, newPasswordError } from '@/lib/password-rules'
-import { truncatePath, vaultName } from '@/lib/utils'
+import { vaultFolderAndName } from '@/lib/utils'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
 import { DEFAULT_KDF_LEVEL_ID } from '@shared/kdf-levels'
 
 type Step = 'location' | 'password' | 'recovery'
+
+const SUBTITLES: Record<Step, string> = {
+  location: 'Create or open a vault',
+  password: 'Create new vault',
+  recovery: 'Create your secure vault'
+}
 
 export function Setup(): ReactNode {
   const isDev = useIsDev()
@@ -43,7 +41,7 @@ export function Setup(): ReactNode {
     setPendingOpenVaultPath
   } = useVaultStore()
 
-  const { pickExistingVault } = usePickVault()
+  const { pickExistingVault, pickNewVault } = usePickVault()
 
   // When opened from the vault switcher the path is already chosen — skip the location step
   const [step, setStep] = useState<Step>(pendingNewVaultPath ? 'password' : 'location')
@@ -60,17 +58,21 @@ export function Setup(): ReactNode {
     confirm: confirmError(password, confirm)
   })
 
-  const handleChooseFile = async (): Promise<void> => {
-    const res = await notvex.vault.chooseFile('new')
-    if (res.success && res.data) setVaultPath(res.data)
+  const showUnlockFor = (path: string): void => {
+    setPendingOpenVaultPath(path)
+    handleBackToUnlock()
+  }
+
+  const handleCreateNew = async (): Promise<void> => {
+    const path = await pickNewVault(showUnlockFor)
+    if (!path) return
+    setVaultPath(path)
+    setStep('password')
   }
 
   const handleOpenExisting = async (): Promise<void> => {
     const selectedPath = await pickExistingVault()
-    if (!selectedPath) return
-
-    setPendingOpenVaultPath(selectedPath)
-    handleBackToUnlock()
+    if (selectedPath) showUnlockFor(selectedPath)
   }
 
   const handleCreate = async (): Promise<void> => {
@@ -117,65 +119,43 @@ export function Setup(): ReactNode {
               Notvex
               {isDev && <Badge variant="secondary">Dev</Badge>}
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm">Create your secure vault</p>
+            <p className="text-muted-foreground mt-1 text-sm">{SUBTITLES[step]}</p>
           </div>
         </div>
 
         {/* Step: Location */}
         {step === 'location' && (
-          <div className="flex flex-col gap-4">
-            <FieldGroup>
-              <Field>
-                <FieldLabel>Vault file</FieldLabel>
-                <div className="flex gap-2">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Input
-                        value={vaultPath ? vaultName(vaultPath) : ''}
-                        placeholder="Choose where to save…"
-                        readOnly
-                        className="flex-1"
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>{vaultPath}</TooltipContent>
-                  </Tooltip>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={(): void => {
-                      void handleChooseFile()
-                    }}
-                  >
-                    <FolderOpenIcon />
-                  </Button>
-                </div>
-                <FieldDescription className="text-muted-foreground text-xs">
-                  Your vault will be saved as a single <code className="text-primary">.nvx</code>{' '}
-                  file. Copy it to back up everything.
-                </FieldDescription>
-              </Field>
-
-              <Button className="w-full" disabled={!vaultPath} onClick={() => setStep('password')}>
-                Continue
-              </Button>
-            </FieldGroup>
-
-            <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
-
-            <Button variant="outline" className="w-full" onClick={handleOpenExisting}>
-              Open existing vault
+          <div className="flex flex-col gap-3">
+            <Button className="w-full" onClick={() => void handleCreateNew()}>
+              <PlusIcon aria-hidden />
+              Create new vault…
             </Button>
+            <Button variant="outline" className="w-full" onClick={handleOpenExisting}>
+              <FolderOpenIcon aria-hidden />
+              Open existing vault…
+            </Button>
+            <p className="text-muted-foreground mt-1 text-center text-xs">
+              Each vault is a single <code className="text-primary">.nvx</code> file. Copy it to
+              back up everything.
+            </p>
           </div>
         )}
 
         {/* Step: Password */}
         {step === 'password' && (
           <div className="space-y-6">
-            <div className="bg-sidebar rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">
-                <span className="text-muted-foreground">File:</span> {truncatePath(vaultPath)}
-              </p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  tabIndex={0}
+                  className="bg-sidebar text-muted-foreground flex items-center gap-2 rounded-lg border p-3 text-xs"
+                >
+                  <LockIcon className="size-3.5" aria-hidden />
+                  <span>{vaultFolderAndName(vaultPath)}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>{vaultPath}</TooltipContent>
+            </Tooltip>
 
             <FieldGroup>
               <Field data-invalid={!!fields.error('password')}>
@@ -213,21 +193,16 @@ export function Setup(): ReactNode {
 
             <FieldError>{error}</FieldError>
 
-            <div className="flex gap-3">
-              <Button variant="ghost" className="flex-1" onClick={() => setStep('location')}>
-                Back
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={(): void => {
-                  void handleCreate()
-                }}
-                disabled={loading}
-              >
-                {loading && <Spinner aria-hidden />}
-                {loading ? 'Creating vault…' : 'Create vault'}
-              </Button>
-            </div>
+            <Button
+              className="w-full"
+              onClick={(): void => {
+                void handleCreate()
+              }}
+              disabled={loading}
+            >
+              {loading && <Spinner aria-hidden />}
+              {loading ? 'Creating vault…' : 'Create vault'}
+            </Button>
 
             <p className="text-muted-foreground text-center text-xs">
               This derives your encryption key using Argon2id. May take a few seconds.
@@ -248,16 +223,17 @@ export function Setup(): ReactNode {
           </div>
         )}
 
-        {/* Escape hatch when creating a new vault from the switcher — hidden once the
-            vault exists (recovery step) */}
-        {pendingNewVaultPath && step !== 'recovery' && (
+        {/* The one way back: to Unlock when the location came from there or from the vault menu,
+            otherwise to the start screen. Gone once the vault exists (recovery step). */}
+        {step === 'password' && (
           <p className="mt-6 text-center">
             <Button
               variant="link"
               className="text-muted-foreground h-auto p-0 text-xs font-normal"
-              onClick={handleBackToUnlock}
+              disabled={loading}
+              onClick={pendingNewVaultPath ? handleBackToUnlock : () => setStep('location')}
             >
-              ← Back to unlock
+              {pendingNewVaultPath ? '← Back to unlock' : '← Back'}
             </Button>
           </p>
         )}

@@ -1,22 +1,17 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
-import { ChevronDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronsUpDownIcon, ExternalLinkIcon, FolderOpenIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AppLogo } from '@/components/AppLogo'
 import { KeyFileInput } from '@/components/KeyFileInput'
 import { PasswordInput } from '@/components/PasswordInput'
 import { UnopenableVault } from '@/components/UnopenableVault'
+import { VaultMenu } from '@/components/VaultMenu'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  FieldSeparator
-} from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Spinner } from '@/components/ui/spinner'
@@ -24,7 +19,7 @@ import { useIsDev } from '@/hooks/use-is-dev'
 import { usePickVault } from '@/hooks/use-pick-vault'
 import { openBugReport } from '@/lib/bug-report'
 import { notvex } from '@/lib/ipc'
-import { truncatePath } from '@/lib/utils'
+import { vaultFolderAndName } from '@/lib/utils'
 import type { VaultFileProblem } from '@/lib/vault-file-problem'
 import { usePrefsStore } from '@/store/prefs.store'
 import { useVaultStore } from '@/store/vault.store'
@@ -45,14 +40,13 @@ export function Unlock(): ReactNode {
   } = useVaultStore()
   const pendingOpenVaultPath = useVaultStore((s) => s.pendingOpenVaultPath)
 
-  const { pickExistingVault } = usePickVault()
+  const { pickExistingVault, pickNewVault, dismissRefusal } = usePickVault()
 
   // Prefs already loaded by App.tsx before Unlock mounts — reads are synchronous
   const lastOpenedVaultPath = usePrefsStore((s) => s.recentVaults[0]?.path ?? null)
 
   const initialPath = pendingOpenVaultPath ?? lastOpenedVaultPath
   const [vaultPath, setVaultPath] = useState<string | null>(initialPath)
-  const [vaultExists, setVaultExists] = useState<boolean>(initialPath !== null)
   const [unopenable, setUnopenable] = useState<VaultFileProblem | null>(null)
   const [retryFailed, setRetryFailed] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -68,6 +62,7 @@ export function Unlock(): ReactNode {
   const keyFileContentsRef = useRef<Uint8Array | null>(null)
   const recoveryKeyFileContentsRef = useRef<Uint8Array | null>(null)
   const pendingPathRef = useRef(pendingOpenVaultPath)
+  const pickedFromMenuRef = useRef(false)
   const passwordRef = useRef<HTMLInputElement>(null)
   const mnemonicRef = useRef<HTMLTextAreaElement>(null)
 
@@ -108,11 +103,11 @@ export function Unlock(): ReactNode {
   const showVault = useCallback(
     async (path: string): Promise<void> => {
       setVaultPath(path)
-      setVaultExists(true)
       setAdvancedOpen(false)
       setUnopenable(null)
       setRetryFailed(false)
       setError('')
+      setMode('password')
       setPassword('')
       setMnemonic('')
       keyFileContentsRef.current = null
@@ -135,7 +130,11 @@ export function Unlock(): ReactNode {
         setPendingOpenVaultPath(null)
       }
 
-      if (!vaultPath) return
+      // Nothing to unlock and no selector to pick from: start over from Setup
+      if (!vaultPath) {
+        setStatus('uninitialized')
+        return
+      }
 
       const fileRes = await notvex.vault.hasVault(vaultPath)
       if (fileRes.success && fileRes.data !== 'usable') {
@@ -172,56 +171,67 @@ export function Unlock(): ReactNode {
     if (countdown > 0) return
     setError('')
     setLoading(true)
-    const res = await notvex.vault.open(
-      vaultPath,
-      password,
-      keyFileContentsRef.current ?? undefined
-    )
-    setLoading(false)
-    if (!res.success) {
-      // User declined the vault-format update prompt, or the dev-build
-      // warning — neither is a credential failure, so return to an idle
-      // unlock form instead of showing an error.
-      if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
-      setError(res.error)
-      focusInput(true)
-      await refreshThrottleStatus()
-      return
+    dismissRefusal()
+    // Kept until the session is loaded: the selector must stay off while main has the vault open
+    try {
+      const res = await notvex.vault.open(
+        vaultPath,
+        password,
+        keyFileContentsRef.current ?? undefined
+      )
+      if (!res.success) {
+        // User declined the vault-format update prompt, or the dev-build
+        // warning — neither is a credential failure, so return to an idle
+        // unlock form instead of showing an error.
+        if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED')
+          return
+        setError(res.error)
+        focusInput(true)
+        await refreshThrottleStatus()
+        return
+      }
+      if (res.data === null) {
+        setError('Incorrect password or key file.')
+        focusInput(true)
+        await refreshThrottleStatus()
+        return
+      }
+      setVaultVersion(res.data)
+      await afterUnlock()
+    } finally {
+      setLoading(false)
     }
-    if (res.data === null) {
-      setError('Incorrect password or key file.')
-      focusInput(true)
-      await refreshThrottleStatus()
-      return
-    }
-    setVaultVersion(res.data)
-    await afterUnlock()
   }
 
   const handleRecoveryUnlock = async (): Promise<void> => {
     if (!vaultPath) return
     setError('')
     setLoading(true)
-    const res = await notvex.vault.openWithRecovery(
-      vaultPath,
-      mnemonic.trim(),
-      recoveryKeyFileContentsRef.current ?? undefined
-    )
-    setLoading(false)
-    if (!res.success) {
-      // A declined prompt, not a credential failure — see handleUnlockVault.
-      if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
-      setError(res.error)
-      focusInput()
-      return
+    dismissRefusal()
+    try {
+      const res = await notvex.vault.openWithRecovery(
+        vaultPath,
+        mnemonic.trim(),
+        recoveryKeyFileContentsRef.current ?? undefined
+      )
+      if (!res.success) {
+        // A declined prompt, not a credential failure — see handleUnlockVault.
+        if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED')
+          return
+        setError(res.error)
+        focusInput()
+        return
+      }
+      if (res.data === null) {
+        setError('Invalid recovery key or key file.')
+        focusInput()
+        return
+      }
+      setVaultVersion(res.data)
+      await afterUnlock(true)
+    } finally {
+      setLoading(false)
     }
-    if (res.data === null) {
-      setError('Invalid recovery key or key file.')
-      focusInput()
-      return
-    }
-    setVaultVersion(res.data)
-    await afterUnlock(true)
   }
 
   const handleRetry = async (): Promise<void> => {
@@ -263,10 +273,10 @@ export function Unlock(): ReactNode {
   }
 
   const handleCreateNew = async (): Promise<void> => {
-    const res = await notvex.vault.chooseFile('new')
-    if (!res.success || !res.data) return
-    // Setup mounts on the password step with this path; its "Back to unlock" returns here
-    setPendingNewVaultPath(res.data)
+    const path = await pickNewVault((existing) => void showVault(existing))
+    // Setup mounts on the password step with this path; its "Back to unlock" returns to Unlock, or
+    // to Setup's start screen when there is no known vault to show
+    if (path) setPendingNewVaultPath(path)
   }
 
   const switchToRecovery = (): void => {
@@ -295,9 +305,7 @@ export function Unlock(): ReactNode {
               {isDev && <Badge variant="secondary">Dev</Badge>}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              {vaultExists === true && mode === 'recovery'
-                ? 'Account recovery'
-                : 'Unlock your vault'}
+              {mode === 'recovery' ? 'Account recovery' : 'Unlock your vault'}
             </p>
           </div>
         </div>
@@ -305,20 +313,38 @@ export function Unlock(): ReactNode {
         {/* Vault selector */}
         {vaultPath && (
           <div className="mx-auto mb-5 text-center">
-            <Button
-              variant="outline"
-              onClick={handleOpenOther}
-              className="text-muted-foreground mx-auto text-xs"
-            >
-              <FolderOpenIcon />
+            <VaultMenu
+              trigger={
+                <Button
+                  variant="outline"
+                  className="text-muted-foreground mx-auto text-xs"
+                  disabled={loading}
+                >
+                  <FolderOpenIcon />
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>{truncatePath(vaultPath)}</span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{vaultPath}</TooltipContent>
-              </Tooltip>
-            </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>{vaultFolderAndName(vaultPath)}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{vaultPath}</TooltipContent>
+                  </Tooltip>
+                  <ChevronsUpDownIcon />
+                </Button>
+              }
+              currentPath={vaultPath}
+              onSelect={(path) => {
+                pickedFromMenuRef.current = true
+                void showVault(path)
+              }}
+              // The password gets the focus the menu would otherwise take back to its trigger
+              onCloseAutoFocus={(e) => {
+                if (!pickedFromMenuRef.current) return
+                pickedFromMenuRef.current = false
+                e.preventDefault()
+              }}
+              onOpenExisting={() => void handleOpenOther()}
+              onCreateNew={() => void handleCreateNew()}
+            />
           </div>
         )}
 
@@ -330,38 +356,11 @@ export function Unlock(): ReactNode {
             onRetry={() => void handleRetry()}
             onRemove={() => void handleRemove()}
             onOpenOther={() => void handleOpenOther()}
-            onCreateNew={() => void handleCreateNew()}
           />
         )}
 
-        {/* Vault file not found */}
-        {vaultExists === false && (
-          <div className="space-y-4 rounded-lg border p-4">
-            <p className="text-muted-foreground text-sm">
-              No saved vault found. Create a new vault or open an existing one.
-            </p>
-
-            <div className="flex flex-col gap-4">
-              <Button
-                className="w-full"
-                onClick={(): void => {
-                  void handleCreateNew()
-                }}
-              >
-                Create new vault
-              </Button>
-
-              <FieldSeparator className="my-0 text-xs">or</FieldSeparator>
-
-              <Button variant="outline" className="w-full" onClick={handleOpenOther}>
-                Open existing vault
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Unlock form */}
-        {vaultExists === true && unopenable === null && (
+        {vaultPath && unopenable === null && (
           <div
             key={mode}
             className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-4 duration-200"
@@ -444,18 +443,6 @@ export function Unlock(): ReactNode {
                     className="text-muted-foreground h-auto p-0 text-xs"
                   >
                     Forgot your password? <span className="text-foreground">Use recovery key</span>
-                  </Button>
-                </p>
-
-                <p className="text-center">
-                  <Button
-                    variant="link"
-                    className="text-muted-foreground h-auto p-0 text-xs font-normal"
-                    onClick={(): void => {
-                      void handleCreateNew()
-                    }}
-                  >
-                    Create a new vault
                   </Button>
                 </p>
               </>

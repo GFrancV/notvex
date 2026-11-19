@@ -13,6 +13,16 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
+
 const { Setup } = await import('@/views/setup')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
@@ -34,6 +44,24 @@ afterEach(() => {
 })
 
 describe('Setup password step', () => {
+  it('shows the vault as folder • file, with its full path on hover', async () => {
+    expect(screen.getByText('Create new vault')).toBeTruthy()
+
+    fireEvent.pointerMove(screen.getByText('vaults • new.nvx'))
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe('/vaults/new.nvx')
+  })
+
+  it('has one "← Back to unlock" link when the vault came from Unlock or the menu', () => {
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '← Back' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '← Back to unlock' }))
+
+    expect(useVaultStore.getState().status).toBe('locked')
+    expect(useVaultStore.getState().pendingNewVaultPath).toBeNull()
+  })
+
   it('says nothing until a field is left', () => {
     fireEvent.change(password(), { target: { value: 'short' } })
 
@@ -75,6 +103,19 @@ describe('Setup password step', () => {
     const busy = screen.getByRole('button', { name: 'Creating vault…' }) as HTMLButtonElement
     expect(busy.disabled).toBe(true)
     expect(busy.querySelector('.animate-spin')).not.toBeNull()
+  })
+
+  it('keeps the way back off while the vault is created', async () => {
+    create.mockReturnValue(new Promise(() => {}))
+    fireEvent.change(password(), { target: { value: 'long enough password' } })
+    fireEvent.change(confirm(), { target: { value: 'long enough password' } })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
+    })
+
+    const back = screen.getByRole('button', { name: '← Back to unlock' }) as HTMLButtonElement
+    expect(back.disabled).toBe(true)
   })
 
   it('shows what main refused at the foot of the form', async () => {

@@ -10,21 +10,33 @@ const switchTo = vi.hoisted(() => vi.fn())
 const hasVault = vi.hoisted(() => vi.fn())
 const prefsGet = vi.hoisted(() => vi.fn())
 const removeRecentVault = vi.hoisted(() => vi.fn())
+const chooseFile = vi.hoisted(() => vi.fn())
+const close = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/ipc', () => ({
   notvex: {
     platform: 'win32',
     prefs: { get: prefsGet, removeRecentVault },
-    vault: { switchTo, hasVault }
+    vault: { switchTo, hasVault, chooseFile, close }
   }
 }))
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 
 const { VaultSwitcher } = await import('@/components/VaultSwitcher')
 const { usePrefsStore } = await import('@/store/prefs.store')
 const { useVaultStore } = await import('@/store/vault.store')
 const { toast } = await import('sonner')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
+
+// Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+)
 
 const CURRENT = 'C:/vaults/work.nvx'
 const OTHER = 'C:/vaults/home.nvx'
@@ -86,6 +98,7 @@ beforeEach(() => {
     tagCounts: { t1: 1 },
     noteTagsMap: { n1: ['t1'] },
     activeNoteId: 'n1',
+    pendingNewVaultPath: null,
     pendingOpenVaultPath: null
   })
 })
@@ -198,6 +211,33 @@ describe('VaultSwitcher', () => {
     }
   })
 
+  it('the open vault keeps its check and is announced as the current vault', async () => {
+    render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+    fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
+
+    const current = await screen.findByRole('menuitem', {
+      name: 'vaults • work.nvx, current vault'
+    })
+
+    expect(current.querySelector('.lucide-check')).not.toBeNull()
+    const other = screen.getByRole('menuitem', { name: /home\.nvx/ })
+    expect(other.getAttribute('aria-label')).toBeNull()
+    expect(other.querySelector('.lucide-check')).toBeNull()
+  })
+
+  it('shows each vault as folder • file and its full path on hover', async () => {
+    render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+    const trigger = screen.getByRole('button', { name: /work\.nvx/ })
+    expect(trigger.textContent).toBe('vaults • work.nvx')
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+
+    const other = await screen.findByRole('menuitem', { name: /home\.nvx/ })
+    expect(other.textContent).toContain('vaults • home.nvx')
+    fireEvent.focus(other)
+
+    expect((await screen.findByRole('tooltip')).textContent).toBe(OTHER)
+  })
+
   it('the open vault has no x and Delete on it does nothing', async () => {
     await openMenuWithOtherMissing()
 
@@ -264,6 +304,61 @@ describe('VaultSwitcher', () => {
     expect(s.status).toBe('unlocked')
     expect(s.notes).toEqual([note])
     expect(s.pendingOpenVaultPath).toBeNull()
+  })
+
+  it('"Create new vault…" checks the chosen file, then locks and carries the new path', async () => {
+    const NEW = 'C:/vaults/new.nvx'
+    chooseFile.mockResolvedValue({ success: true, data: NEW })
+    hasVault.mockImplementation(async (path: string) => ({
+      success: true,
+      data: path === NEW ? 'missing' : 'usable'
+    }))
+    close.mockResolvedValue({ success: true, data: null })
+    render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+    fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Create new vault…/ }))
+
+    await waitFor(() => expect(useVaultStore.getState().status).toBe('locked'))
+    expect(chooseFile).toHaveBeenCalledExactlyOnceWith('new')
+    expect(hasVault).toHaveBeenCalledWith(NEW)
+    expect(close).toHaveBeenCalledExactlyOnceWith(NEW)
+    expect(useVaultStore.getState().pendingNewVaultPath).toBe(NEW)
+  })
+
+  it('"Create new vault…" on a file that is already a vault keeps the session and says so', async () => {
+    chooseFile.mockResolvedValue({ success: true, data: OTHER })
+    render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+    fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Create new vault…/ }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        'That file is already a Notvex vault',
+        expect.objectContaining({ description: 'vaults • home.nvx' })
+      )
+    )
+    expect(close).not.toHaveBeenCalled()
+    const s = useVaultStore.getState()
+    expect(s.status).toBe('unlocked')
+    expect(s.notes).toEqual([note])
+    expect(s.pendingNewVaultPath).toBeNull()
+  })
+
+  it('"Open existing vault…" asks for a file and switches to it', async () => {
+    const PICKED = 'C:/vaults/play.nvx'
+    chooseFile.mockResolvedValue({ success: true, data: PICKED })
+    switchTo.mockResolvedValue({ success: true, data: 'usable' })
+    render(createElement(VaultSwitcher), { wrapper: TooltipProvider })
+    fireEvent.keyDown(screen.getByRole('button', { name: /work\.nvx/ }), { key: 'Enter' })
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Open existing vault…/ }))
+
+    await waitFor(() => expect(useVaultStore.getState().status).toBe('locked'))
+    expect(chooseFile).toHaveBeenCalledExactlyOnceWith('existing')
+    expect(switchTo).toHaveBeenCalledExactlyOnceWith(PICKED)
+    expect(useVaultStore.getState().pendingOpenVaultPath).toBe(PICKED)
   })
 
   it('a rejected switch keeps the session and says why', async () => {

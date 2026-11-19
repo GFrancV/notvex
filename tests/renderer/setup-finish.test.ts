@@ -33,6 +33,7 @@ vi.mock('@/lib/ipc', () => ({
     app: { isDev: vi.fn().mockResolvedValue({ success: true, data: false }) },
     vault: {
       chooseFile: vi.fn().mockResolvedValue({ success: true, data: CREATED_VAULT }),
+      hasVault: vi.fn().mockResolvedValue({ success: true, data: 'missing' }),
       create: vi.fn().mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } }),
       confirmRecoverySaved: vi.fn().mockResolvedValue({ success: true, data: null })
     },
@@ -129,11 +130,10 @@ describe('Setup on first run', () => {
   // Prefs still have no vault until Setup finishes, so only this path tells Unlock where it is.
   it('a lock on the recovery step leaves Unlock pointed at the created vault', async () => {
     render(createElement(Setup), { wrapper: TooltipProvider })
-    fireEvent.click(
-      screen.getByPlaceholderText('Choose where to save…').nextElementSibling as HTMLElement
-    )
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
-    fireEvent.change(screen.getByLabelText('Master password'), { target: { value: PASSWORD } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create new vault…' }))
+    fireEvent.change(await screen.findByLabelText('Master password'), {
+      target: { value: PASSWORD }
+    })
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: PASSWORD } })
     fireEvent.click(screen.getByRole('button', { name: 'Create vault' }))
     await screen.findByRole('checkbox')

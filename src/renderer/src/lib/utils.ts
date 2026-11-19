@@ -28,6 +28,20 @@ export function vaultName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path
 }
 
+/**
+ * A vault's parent folder and file name, enough to tell two vaults apart; show the full path in a
+ * tooltip.
+ *
+ * @example vaultFolderAndName('C:\\Users\\ana\\work\\notes.nvx') // 'work • notes.nvx'
+ * @returns `folder • file`, or just the file name when the path has no parent folder.
+ */
+export function vaultFolderAndName(path: string): string {
+  const segments = path.split(/[\\/]/).filter(Boolean)
+  const name = segments[segments.length - 1] ?? path
+  const parent = segments[segments.length - 2]
+  return parent ? `${parent} • ${name}` : name
+}
+
 export function truncatePath(path: string, maxLen = 54): string {
   if (path.length <= maxLen) return path
   const half = Math.floor((maxLen - 3) / 2)
