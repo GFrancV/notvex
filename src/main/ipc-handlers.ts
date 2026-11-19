@@ -143,8 +143,13 @@ function requireVault(): void {
 // warns the next unlock, this one must never keep a later session from locking.
 let recoveryConfirmPending = false
 
+// A lock started mid-rotation queues behind the rekey and closes right after the new key is
+// issued, before the renderer can show it, so the soft locks wait for the rotation too.
+let rotationsRunning = 0
+
+// What the soft locks wait for: a new key on screen, or a rotation about to issue one.
 export function isRecoveryConfirmPending(): boolean {
-  return recoveryConfirmPending
+  return recoveryConfirmPending || rotationsRunning > 0
 }
 
 // Called by every handler that hands out a new recovery key, before it returns. The old key is
@@ -421,7 +426,7 @@ function startAutoLockTimer(): void {
     void (async (): Promise<void> => {
       const minutes = getPref('autoLockMinutes')
       if (minutes === 0) return
-      if (!isVaultOpen() || recoveryConfirmPending) return
+      if (!isVaultOpen() || isRecoveryConfirmPending()) return
       const elapsed = (Date.now() - lastActivityAt) / 60000
       if (elapsed >= minutes) {
         await lockVaultAndNotify(liveWin())
@@ -897,6 +902,7 @@ export function registerIpcHandlers(
     'vault:change-password',
     async (_e, currentPassword: string, newPassword: string, keyFileContents?: Uint8Array) => {
       try {
+        rotationsRunning += 1
         requireVault()
         touchActivity()
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
@@ -906,6 +912,8 @@ export function registerIpcHandlers(
       } catch (e) {
         await notifyIfRotationLocked()
         return fail(e)
+      } finally {
+        rotationsRunning -= 1
       }
     }
   )
@@ -916,6 +924,7 @@ export function registerIpcHandlers(
     'vault:regenerate-recovery-key',
     async (_e, password: string, keyFileContents?: Uint8Array) => {
       try {
+        rotationsRunning += 1
         requireVault()
         touchActivity()
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
@@ -925,12 +934,15 @@ export function registerIpcHandlers(
       } catch (e) {
         await notifyIfRotationLocked()
         return fail(e)
+      } finally {
+        rotationsRunning -= 1
       }
     }
   )
 
   handle('vault:rotate-credentials', async (_e, newPassword: string) => {
     try {
+      rotationsRunning += 1
       requireVault()
       touchActivity()
       const result = await rotateVaultCredentials(newPassword)
@@ -939,6 +951,8 @@ export function registerIpcHandlers(
     } catch (e) {
       await notifyIfRotationLocked()
       return fail(e)
+    } finally {
+      rotationsRunning -= 1
     }
   })
 
@@ -1019,6 +1033,7 @@ export function registerIpcHandlers(
         return fail(new Error("Couldn't change the level: unknown key derivation level"))
       }
       try {
+        rotationsRunning += 1
         requireVault()
         touchActivity()
         const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
@@ -1029,6 +1044,8 @@ export function registerIpcHandlers(
         await notifyIfRotationLocked()
         const reason = e instanceof Error ? e.message : String(e)
         return fail(new Error(`Couldn't change the level: ${reason}`))
+      } finally {
+        rotationsRunning -= 1
       }
     }
   )
@@ -1143,6 +1160,7 @@ export function registerIpcHandlers(
 
   handle('vault:configure-key-file', async (_e, password: string, keyFileContents: Uint8Array) => {
     try {
+      rotationsRunning += 1
       requireVault()
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
@@ -1153,11 +1171,14 @@ export function registerIpcHandlers(
     } catch (e) {
       await notifyIfRotationLocked()
       return fail(e)
+    } finally {
+      rotationsRunning -= 1
     }
   })
 
   handle('vault:remove-key-file', async (_e, password: string, keyFileContents: Uint8Array) => {
     try {
+      rotationsRunning += 1
       requireVault()
       touchActivity()
       const kfContents = readKeyFileContents(keyFileContents)
@@ -1168,6 +1189,8 @@ export function registerIpcHandlers(
     } catch (e) {
       await notifyIfRotationLocked()
       return fail(e)
+    } finally {
+      rotationsRunning -= 1
     }
   })
 

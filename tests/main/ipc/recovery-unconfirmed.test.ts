@@ -228,6 +228,44 @@ describe('soft locks while a new key is on screen', () => {
     expect(vault.closeVault).toHaveBeenCalledOnce()
   })
 
+  const ROTATIONS = ISSUERS.filter(({ channel }) => channel !== 'vault:create')
+
+  it.each(ROTATIONS)(
+    '$channel: soft locks wait while the rotation runs',
+    async ({ channel, fn, args }) => {
+      let finishRekey!: () => void
+      const rekey = new Promise<void>((resolve) => (finishRekey = resolve))
+      vi.mocked(vault[fn]).mockImplementationOnce(async () => {
+        await rekey
+        return MNEMONIC as never
+      })
+
+      const rotation = invoke(channel, ...args)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(ipc.isRecoveryConfirmPending()).toBe(true)
+
+      finishRekey()
+      await rotation
+      expect(ipc.isRecoveryConfirmPending()).toBe(true)
+    }
+  )
+
+  it('auto-lock waits while a rotation runs', async () => {
+    let finishRekey!: () => void
+    const rekey = new Promise<void>((resolve) => (finishRekey = resolve))
+    vi.mocked(vault.changePassword).mockImplementationOnce(async () => {
+      await rekey
+      return MNEMONIC as never
+    })
+
+    const rotation = invoke('vault:change-password', 'old', 'new')
+    await vi.advanceTimersByTimeAsync(5 * MINUTE)
+    expect(vault.closeVault).not.toHaveBeenCalled()
+
+    finishRekey()
+    await rotation
+  })
+
   it('any close drops the pending key, so the next session auto-locks', async () => {
     await invoke('vault:change-password', 'old', 'new')
 
