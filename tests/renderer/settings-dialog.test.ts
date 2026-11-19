@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipc = vi.hoisted(() => ({
   getHasKeyFile: vi.fn(),
+  getKdfLevel: vi.fn(),
   changePassword: vi.fn(),
   generateKeyFile: vi.fn(),
   openBackupsFolder: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('@/lib/ipc', () => ({
   notvex: {
     vault: {
       getHasKeyFile: ipc.getHasKeyFile,
+      getKdfLevel: ipc.getKdfLevel,
       changePassword: ipc.changePassword,
       generateKeyFile: ipc.generateKeyFile,
       openBackupsFolder: ipc.openBackupsFolder
@@ -62,6 +64,7 @@ const currentCrumb = (): Element | null => document.querySelector('[aria-current
 
 beforeEach(() => {
   ipc.getHasKeyFile.mockResolvedValue({ success: true, data: false })
+  ipc.getKdfLevel.mockResolvedValue({ success: true, data: { id: 4, memoryMiB: 256, passes: 3 } })
   ipc.openBackupsFolder.mockResolvedValue({ success: true, data: null })
   ipc.openLogsFolder.mockResolvedValue({ success: true, data: null })
   ipc.clearLogs.mockResolvedValue({ success: true, data: null })

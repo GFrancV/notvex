@@ -4,6 +4,7 @@ import { ShieldCheckIcon, ShieldOffIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -17,12 +18,15 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { notvex } from '@/lib/ipc'
 import { usePrefsStore } from '@/store/prefs.store'
+import { describeKdfLevel, type KdfLevel } from '@shared/kdf-levels'
+import { ChangeKdfLevelPanel } from './ChangeKdfLevelPanel'
 import { ChangePasswordPanel } from './ChangePasswordPanel'
 import { KeyFilePanel, type KeyFileMode } from './KeyFilePanel'
 import { SettingRow, SettingsSection } from './SettingRow'
 
-type Subpage = { kind: 'password' } | { kind: 'key-file'; mode: KeyFileMode } | null
-type RowButton = 'password' | 'generate' | 'existing' | 'remove'
+type Subpage =
+  { kind: 'password' } | { kind: 'level' } | { kind: 'key-file'; mode: KeyFileMode } | null
+type RowButton = 'password' | 'level' | 'generate' | 'existing' | 'remove'
 
 // Radix unmounts an inactive tab, so switching tabs or closing Settings drops any open subpage.
 export function SecurityPanel({
@@ -49,6 +53,7 @@ export function SecurityPanel({
 
   const [subpage, setSubpage] = useState<Subpage>(null)
   const [hasKeyFile, setHasKeyFile] = useState(false)
+  const [kdfLevel, setKdfLevel] = useState<KdfLevel | null>(null)
 
   // The row button is gone while its subpage is open, so focus would land on the dialog root on the
   // way back; the button that opened it autofocuses as it remounts. Adding or removing a key file
@@ -78,14 +83,33 @@ export function SecurityPanel({
     openSubpage({ kind: 'key-file', mode: { kind: 'add', contents, filename, sizeBytes } }, source)
   }
 
+  const loadKdfLevel = (): void => {
+    void notvex.vault.getKdfLevel().then((r) => {
+      if (r.success) setKdfLevel(r.data)
+    })
+  }
+
   useEffect(() => {
     void notvex.vault.getHasKeyFile().then((r) => {
       setHasKeyFile(r.success ? r.data : false)
     })
+    loadKdfLevel()
   }, [])
 
   if (subpage?.kind === 'password') {
     return <ChangePasswordPanel onBack={() => setSubpage(null)} onLockChange={onLockChange} />
+  }
+  if (subpage?.kind === 'level' && kdfLevel) {
+    return (
+      <ChangeKdfLevelPanel
+        current={kdfLevel}
+        onBack={() => {
+          setSubpage(null)
+          loadKdfLevel()
+        }}
+        onLockChange={onLockChange}
+      />
+    )
   }
   if (subpage?.kind === 'key-file') {
     return (
@@ -256,6 +280,36 @@ export function SecurityPanel({
               </Button>
             </div>
           )}
+        </SettingRow>
+      </SettingsSection>
+
+      <Separator />
+
+      <SettingsSection title="Encryption">
+        <SettingRow
+          label="Key derivation"
+          description={
+            <div className="space-y-1">
+              <p>
+                How much memory and time Argon2id spends on each password guess, including an
+                attacker&apos;s.
+              </p>
+              <span className="flex items-center gap-1.5">
+                Current level
+                {kdfLevel && <Badge variant="secondary">{describeKdfLevel(kdfLevel)}</Badge>}
+              </span>
+            </div>
+          }
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!kdfLevel}
+            autoFocus={returnsFocusTo('level')}
+            onClick={() => openSubpage({ kind: 'level' }, 'level')}
+          >
+            Change…
+          </Button>
         </SettingRow>
       </SettingsSection>
 

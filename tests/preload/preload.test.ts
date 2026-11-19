@@ -63,6 +63,15 @@ describe('preload: key derivation level', () => {
 
     expect(invoke).toHaveBeenLastCalledWith('kdf:measure', 4)
   })
+
+  it('reads and changes the open vault level through vault:get-kdf-level and vault:change-kdf-level', async () => {
+    await api.vault.getKdfLevel()
+    expect(invoke).toHaveBeenLastCalledWith('vault:get-kdf-level')
+
+    const keyFile = new Uint8Array([1])
+    await api.vault.changeKdfLevel(5, 'a password', keyFile)
+    expect(invoke).toHaveBeenLastCalledWith('vault:change-kdf-level', 5, 'a password', keyFile)
+  })
 })
 
 // The app menu sends 'app:reload-requested' (asserted in tests/main/app/app-menu.test.ts).

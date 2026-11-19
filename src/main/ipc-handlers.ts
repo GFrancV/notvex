@@ -96,6 +96,7 @@ import {
   createVault,
   getDb,
   getHasKeyFileFromOpenVault,
+  getKdfLevelFromOpenVault,
   getMasterKey,
   getVaultPath,
   isVaultOpen,
@@ -1006,6 +1007,36 @@ export function registerIpcHandlers(
     try {
       requireVault()
       return ok(getHasKeyFileFromOpenVault())
+    } catch (e) {
+      return fail(e)
+    }
+  })
+
+  handle(
+    'vault:change-kdf-level',
+    async (_e, kdfLevelId: unknown, password: string, keyFileContents?: Uint8Array) => {
+      if (!isKdfLevelId(kdfLevelId)) {
+        return fail(new Error("Couldn't change the level: unknown key derivation level"))
+      }
+      try {
+        requireVault()
+        touchActivity()
+        const kfContents = keyFileContents ? readKeyFileContents(keyFileContents) : undefined
+        const result = await changePassword(password, password, kfContents, kdfLevelId)
+        markIssuedRecoveryKey(getVaultPath()!)
+        return ok(result)
+      } catch (e) {
+        await notifyIfRotationLocked()
+        const reason = e instanceof Error ? e.message : String(e)
+        return fail(new Error(`Couldn't change the level: ${reason}`))
+      }
+    }
+  )
+
+  handle('vault:get-kdf-level', () => {
+    try {
+      requireVault()
+      return ok(getKdfLevelFromOpenVault())
     } catch (e) {
       return fail(e)
     }

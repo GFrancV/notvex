@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createNote, getNote } from '@main/db/queries'
+import { readContainer } from '@main/vault/container'
 import { deriveKey, memzero } from '@main/vault/crypto'
 import { allocSecure, freeSecure } from '@main/vault/memlock'
 import {
@@ -15,6 +16,7 @@ import {
   getMasterKey,
   isVaultOpen,
   openVault,
+  openVaultWithRecovery,
   rotateVaultCredentials
 } from '@main/vault/vault'
 import {
@@ -114,6 +116,31 @@ describe('credential rotation rollback (issues #17, #23, #39)', () => {
     await expect(
       changePassword(secondPassword, 'yet another correct horse battery staple')
     ).resolves.toMatchObject({ mnemonic: expect.any(String) })
+  }, 90_000)
+
+  it('changePassword() to another level: a failed rotation leaves the previous level, password and recovery key working', async () => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    const vaultPath = join(vaultDir, 'test.nvx')
+    const password = 'correct horse battery staple'
+    // 7 is the 64 MiB tier id, 5 the 128 MiB one.
+    const { mnemonic } = await createVault(vaultPath, password, false, 7)
+
+    const runSpy = forceNextDbRunToFail(
+      (sql) => sql === 'BEGIN TRANSACTION',
+      'simulated transaction failure'
+    )
+    try {
+      await expect(changePassword(password, password, undefined, 5)).rejects.toThrow(
+        'simulated transaction failure'
+      )
+    } finally {
+      runSpy.mockRestore()
+    }
+
+    expect(readContainer(readFileSync(vaultPath)).kdfInput.kdfTier).toBe(7)
+    await expect(openVault(vaultPath, password)).resolves.not.toBeNull()
+    await closeVault()
+    await expect(openVaultWithRecovery(vaultPath, mnemonic)).resolves.not.toBeNull()
   }, 90_000)
 
   // The rekey sits inside the rollback try, so its failure must close the

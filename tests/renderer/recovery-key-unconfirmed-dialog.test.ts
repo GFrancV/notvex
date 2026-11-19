@@ -100,13 +100,13 @@ describe('RecoveryKeyUnconfirmedDialog', () => {
   it('shows a wrong password and stays on the form', async () => {
     ipc.regenerateRecoveryKey.mockResolvedValue({
       success: false,
-      error: 'Current password is incorrect'
+      error: 'Incorrect password or key file'
     })
     await renderDialog()
 
     await generate('wrong')
 
-    expect(screen.getByText('Current password is incorrect')).toBeTruthy()
+    expect(screen.getByText('Incorrect password or key file')).toBeTruthy()
     expect(useUiStore.getState().settingsLocked).toBe(false)
   })
 

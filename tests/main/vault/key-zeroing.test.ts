@@ -434,7 +434,7 @@ describe('master key zeroing on vault creation and credential rotation (issues #
     try {
       await expect(
         changePassword('not the password', 'a different correct horse battery staple')
-      ).rejects.toThrow('Current password is incorrect')
+      ).rejects.toThrow('Incorrect password or key file')
 
       // Only the verification derive runs; it never reaches newRawKey.
       expect(deriveKeySpy).toHaveBeenCalledTimes(1)

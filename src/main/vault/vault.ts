@@ -9,7 +9,7 @@ import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 
 import type sqlite3 from '@journeyapps/sqlcipher'
 import sqlcipher from '@journeyapps/sqlcipher'
 
-import { DEFAULT_KDF_LEVEL_ID } from '@shared/kdf-levels'
+import { DEFAULT_KDF_LEVEL_ID, type KdfLevel } from '@shared/kdf-levels'
 import { CURRENT_VERSION_MIN, PASSWORD_MIN_LENGTH, type VaultVersion } from '@shared/types'
 import { logError } from '../log'
 import { runMigrations, type SchemaMigrationGate } from '../db/migrations'
@@ -286,6 +286,17 @@ export function getVaultPath(): string | null {
 
 export function getHasKeyFileFromOpenVault(): boolean {
   return currentHasKeyFile
+}
+
+// An older vault can sit on a tier outside KDF_LEVELS, so the id is returned with its parameters.
+export function getKdfLevelFromOpenVault(): KdfLevel {
+  if (!currentMetadata) throw new Error('Vault is not open')
+  const { params } = getArgon2Params(currentMetadata.kdfInput)
+  return {
+    id: currentMetadata.kdfInput.kdfTier,
+    memoryMiB: params.memory / (1024 * 1024),
+    passes: params.iterations
+  }
 }
 
 // No-op for v1.0 — scaffolding for future minor version migrations.
@@ -614,17 +625,23 @@ function commitRotatedContainer(
 export function changePassword(
   currentPassword: string,
   newPassword: string,
-  keyFileContents?: Uint8Array
+  keyFileContents?: Uint8Array,
+  kdfTier?: number
 ): Promise<{ mnemonic: string }> {
-  return withVaultLock(() => doChangePassword(currentPassword, newPassword, keyFileContents))
+  return withVaultLock(() =>
+    doChangePassword(currentPassword, newPassword, keyFileContents, kdfTier)
+  )
 }
 
 async function doChangePassword(
   currentPassword: string,
   newPassword: string,
-  keyFileContents?: Uint8Array
+  keyFileContents?: Uint8Array,
+  kdfTier?: number
 ): Promise<{ mnemonic: string }> {
-  requireNewPasswordLength(newPassword)
+  // The same password means no new one is being chosen (a level change or a new recovery key), so
+  // a vault whose password predates the length rule keeps working; authentication alone decides.
+  if (newPassword !== currentPassword) requireNewPasswordLength(newPassword)
   if (!isVaultOpen() || !db || !masterKey || !currentMetadata || !currentVaultPath || !tempDbPath) {
     throw new Error('Vault is not open')
   }
@@ -640,17 +657,18 @@ async function doChangePassword(
     keyFileContents: currentHasKeyFile ? keyFileContents : undefined
   })
   if (!auth.valid) {
-    throw new Error('Current password is incorrect')
+    throw new Error('Incorrect password or key file')
   }
   memzero(auth.masterKey) // verified; the live masterKey is already in memory
 
-  // Step 2 — derive new key with a fresh salt, same tier
+  // Step 2 — derive new key with a fresh salt, at the requested tier or else the current one
+  const newTier = kdfTier ?? currentMetadata.kdfInput.kdfTier
   const kfHash = keyFileContents ? hashKeyFile(Buffer.from(keyFileContents)) : undefined
   const newSalt = Buffer.from(generateSalt())
   const newKdfInput: KdfInputV1 = {
     version: 1,
     salt: newSalt,
-    kdfTier: currentMetadata.kdfInput.kdfTier
+    kdfTier: newTier
   }
   const { params: newKdfParams } = getArgon2Params(newKdfInput)
   const newRawKey = deriveKey(newPassword, newSalt, newKdfParams, kfHash)
@@ -698,7 +716,7 @@ async function doChangePassword(
         containerBytes = writeContainer({
           masterKey: containerMasterKey,
           salt: newSalt,
-          kdfTier: currentMetadata.kdfInput.kdfTier,
+          kdfTier: newTier,
           recoveryBlob: newRecoveryBlob,
           dbBytes,
           existingVersionMin: currentMetadata.versionMin,

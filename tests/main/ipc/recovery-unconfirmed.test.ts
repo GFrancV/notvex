@@ -107,7 +107,8 @@ const ISSUERS = [
     fn: 'changePassword',
     args: ['pw', KF],
     path: VAULT
-  }
+  },
+  { channel: 'vault:change-kdf-level', fn: 'changePassword', args: [5, 'pw', KF], path: VAULT }
 ] as const
 
 describe.each(ISSUERS)('$channel', ({ channel, fn, args, path }) => {
@@ -147,11 +148,11 @@ describe('vault:regenerate-recovery-key', () => {
   })
 
   it('reports a wrong password and leaves the flag alone', async () => {
-    vi.mocked(vault.changePassword).mockRejectedValue(new Error('Current password is incorrect'))
+    vi.mocked(vault.changePassword).mockRejectedValue(new Error('Incorrect password or key file'))
 
     await expect(invoke('vault:regenerate-recovery-key', 'wrong')).resolves.toEqual({
       success: false,
-      error: 'Current password is incorrect'
+      error: 'Incorrect password or key file'
     })
     expect(prefs.markRecoveryUnconfirmed).not.toHaveBeenCalled()
     expect(prefs.clearRecoveryUnconfirmed).not.toHaveBeenCalled()

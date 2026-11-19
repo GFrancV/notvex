@@ -9,6 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipc = vi.hoisted(() => ({
   getHasKeyFile: vi.fn(),
+  getKdfLevel: vi.fn(),
+  changeKdfLevel: vi.fn(),
+  measureKdfLevel: vi.fn(() => new Promise(() => undefined)),
   generateKeyFile: vi.fn(),
   selectKeyFile: vi.fn(),
   configureKeyFile: vi.fn(),
@@ -17,7 +20,12 @@ const ipc = vi.hoisted(() => ({
 }))
 
 const prefsIpc = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }))
-const notvex = vi.hoisted(() => ({ vault: ipc, prefs: prefsIpc, platform: 'win32' }))
+const notvex = vi.hoisted(() => ({
+  vault: ipc,
+  prefs: prefsIpc,
+  shell: { openExternal: vi.fn() },
+  platform: 'win32'
+}))
 
 vi.mock('@/lib/ipc', () => ({ notvex }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -53,6 +61,7 @@ async function confirmWithPassword(submit: string): Promise<void> {
 
 beforeEach(() => {
   ipc.getHasKeyFile.mockResolvedValue({ success: true, data: false })
+  ipc.getKdfLevel.mockResolvedValue({ success: true, data: { id: 4, memoryMiB: 256, passes: 3 } })
   ipc.configureKeyFile.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
   ipc.removeKeyFile.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
 })
@@ -61,6 +70,179 @@ afterEach(() => {
   cleanup()
   vi.clearAllMocks()
   notvex.platform = 'win32'
+})
+
+describe('SecurityPanel: the encryption section', () => {
+  it('shows the vault level, including one outside the four, and offers to change it', async () => {
+    await renderPanel()
+
+    expect(screen.getByText('Encryption')).toBeTruthy()
+    expect(screen.getByText('Current level')).toBeTruthy()
+    expect(screen.getByText('256 MiB')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Change…' })).toBeTruthy()
+    cleanup()
+
+    ipc.getKdfLevel.mockResolvedValue({ success: true, data: { id: 10, memoryMiB: 32, passes: 2 } })
+    await renderPanel()
+
+    expect(screen.getByText('32 MiB, 2 passes')).toBeTruthy()
+  })
+
+  it('keeps Continue disabled until a level different from the current one is chosen', async () => {
+    ipc.getKdfLevel.mockResolvedValue({ success: true, data: { id: 10, memoryMiB: 32, passes: 2 } })
+    await renderPanel()
+
+    await click('Change…')
+    const next = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement
+    expect(next.disabled).toBe(true)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: /^128 MiB/ }))
+    })
+
+    expect(next.disabled).toBe(false)
+  })
+
+  it('starts a level change with the current level chosen and Continue disabled', async () => {
+    await renderPanel()
+
+    await click('Change…')
+
+    const checked = screen
+      .getAllByRole('radio')
+      .filter((radio) => radio.getAttribute('aria-checked') === 'true')
+    expect(checked).toEqual([screen.getByRole('radio', { name: /^256 MiB/ })])
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
+  })
+
+  it('disables Continue again when the current level is chosen back', async () => {
+    await renderPanel()
+    await click('Change…')
+    const next = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: /^128 MiB/ }))
+    })
+    expect(next.disabled).toBe(false)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: /^256 MiB/ }))
+    })
+    expect(next.disabled).toBe(true)
+  })
+
+  it('asks for the password with a warning before changing the level, and sends the chosen level', async () => {
+    ipc.changeKdfLevel.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+    await renderPanel()
+    await click('Change…')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: /^128 MiB/ }))
+    })
+
+    await click('Continue')
+
+    expect(screen.getByText(/Keep Notvex open/)).toBeTruthy()
+    expect(screen.getByText('256 MiB')).toBeTruthy()
+    expect(screen.getByText('128 MiB')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Current password'), {
+      target: { value: 'my password 123' }
+    })
+    await click('Change level')
+
+    expect(ipc.changeKdfLevel).toHaveBeenCalledExactlyOnceWith(5, 'my password 123', undefined)
+  })
+
+  it('locks the dialog, shows the new recovery key with a note on older copies, and shows the new level after confirming it', async () => {
+    ipc.changeKdfLevel.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+    ipc.getKdfLevel
+      .mockResolvedValueOnce({ success: true, data: { id: 4, memoryMiB: 256, passes: 3 } })
+      .mockResolvedValue({ success: true, data: { id: 5, memoryMiB: 128, passes: 3 } })
+    await renderPanel()
+    await click('Change…')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: /^128 MiB/ }))
+    })
+    await click('Continue')
+    fireEvent.change(screen.getByLabelText('Current password'), {
+      target: { value: 'my password 123' }
+    })
+
+    await click('Change level')
+
+    expect(onLockChange).toHaveBeenCalledWith(true)
+    expect(screen.getByText(/twelve/)).toBeTruthy()
+    expect(screen.getByText(/older copy/i)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Recovery key saved somewhere safe'))
+    await click('Done')
+
+    expect(ipc.confirmRecoverySaved).toHaveBeenCalledOnce()
+    expect(onLockChange).toHaveBeenLastCalledWith(false)
+    expect(screen.getByText('128 MiB')).toBeTruthy()
+  })
+
+  it('shows the error and stays on the confirmation when the change fails', async () => {
+    ipc.changeKdfLevel.mockResolvedValue({
+      success: false,
+      error: "Couldn't change the level: Incorrect password or key file"
+    })
+    await renderPanel()
+    await click('Change…')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: /^128 MiB/ }))
+    })
+    await click('Continue')
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'wrong one' } })
+
+    await click('Change level')
+
+    expect(
+      screen.getByText("Couldn't change the level: Incorrect password or key file")
+    ).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Change level' }) as HTMLButtonElement).disabled
+    ).toBe(false)
+  })
+
+  describe('on a vault with a key file', () => {
+    async function reachConfirmWithPassword(): Promise<void> {
+      ipc.getHasKeyFile.mockResolvedValue({ success: true, data: true })
+      ipc.changeKdfLevel.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+      await renderPanel()
+      await click('Change…')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('radio', { name: /^128 MiB/ }))
+      })
+      await click('Continue')
+      fireEvent.change(screen.getByLabelText('Current password'), {
+        target: { value: 'my password 123' }
+      })
+    }
+
+    it('asks for the key file and sends nothing until one is chosen', async () => {
+      await reachConfirmWithPassword()
+
+      expect(screen.getByText('Key file')).toBeTruthy()
+      await click('Change level')
+
+      expect(screen.getByText('Choose your key file')).toBeTruthy()
+      expect(ipc.changeKdfLevel).not.toHaveBeenCalled()
+    })
+
+    it('sends the chosen key file with the level and password', async () => {
+      ipc.selectKeyFile.mockResolvedValue({
+        success: true,
+        data: { contents: KEY, filename: 'vault.nvxkey', sizeBytes: 3 }
+      })
+      await reachConfirmWithPassword()
+
+      await click('Browse')
+      await click('Change level')
+
+      expect(ipc.changeKdfLevel).toHaveBeenCalledExactlyOnceWith(5, 'my password 123', KEY)
+    })
+  })
 })
 
 describe('SecurityPanel: the key file row', () => {
@@ -209,7 +391,13 @@ describe('SecurityPanel: the privacy section', () => {
     await renderPanel()
 
     const headings = screen.getAllByRole('heading').map((h) => h.textContent)
-    expect(headings).toEqual(['Auto-lock', 'Clipboard', 'Authentication', 'Always-on protections'])
+    expect(headings).toEqual([
+      'Auto-lock',
+      'Clipboard',
+      'Authentication',
+      'Encryption',
+      'Always-on protections'
+    ])
     expect(document.querySelectorAll('[data-slot="separator"]')).toHaveLength(headings.length - 1)
   })
 })
