@@ -24,7 +24,7 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 
 // Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
 vi.stubGlobal(

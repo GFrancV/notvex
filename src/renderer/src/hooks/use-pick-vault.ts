@@ -1,10 +1,14 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 
 import { toast } from 'sonner'
 
 import { notvex } from '@/lib/ipc'
 import { vaultFolderAndName } from '@/lib/utils'
 import { showVaultFileProblem } from '@/lib/vault-file-problem'
+
+// One refusal at a time, and it goes away with the screen that raised it: its "Open it" action
+// points at that screen, and the toast never times out.
+const ALREADY_A_VAULT_TOAST_ID = 'already-a-vault'
 
 interface UsePickVaultReturn {
   pickExistingVault: () => Promise<string | null>
@@ -13,6 +17,8 @@ interface UsePickVaultReturn {
 }
 
 export function usePickVault(): UsePickVaultReturn {
+  useEffect(() => () => void toast.dismiss(ALREADY_A_VAULT_TOAST_ID), [])
+
   const pickExistingVault = useCallback(async (): Promise<string | null> => {
     const chooseFileRes = await notvex.vault.chooseFile('existing')
     if (!chooseFileRes.success || !chooseFileRes.data) return null
@@ -39,6 +45,7 @@ export function usePickVault(): UsePickVaultReturn {
       const hasVaultRes = await notvex.vault.hasVault(path)
       if (hasVaultRes.success && hasVaultRes.data === 'usable') {
         toast.error('That file is already a Notvex vault', {
+          id: ALREADY_A_VAULT_TOAST_ID,
           description: vaultFolderAndName(path),
           duration: Infinity,
           closeButton: true,

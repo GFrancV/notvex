@@ -18,7 +18,7 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 
 const { toast } = await import('sonner')
 const { notvex } = await import('@/lib/ipc')

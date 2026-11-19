@@ -20,7 +20,7 @@ vi.mock('@/lib/ipc', () => ({
     vault: { switchTo, hasVault, chooseFile, close }
   }
 }))
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 
 const { VaultSwitcher } = await import('@/components/VaultSwitcher')
 const { usePrefsStore } = await import('@/store/prefs.store')

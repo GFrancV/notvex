@@ -8,7 +8,7 @@ const ipc = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/ipc', () => ({ notvex: { vault: ipc } }))
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 
 const { usePickVault } = await import('@/hooks/use-pick-vault')
 const { toast } = await import('sonner')
@@ -111,5 +111,31 @@ describe('usePickVault.pickNewVault', () => {
     expect(onOpenExisting).not.toHaveBeenCalled()
     options.action.onClick()
     expect(onOpenExisting).toHaveBeenCalledExactlyOnceWith('/vaults/a.nvx')
+  })
+
+  it('takes the refusal away when the screen that raised it goes away', async () => {
+    ipc.chooseFile.mockResolvedValue({ success: true, data: '/vaults/a.nvx' })
+    ipc.hasVault.mockResolvedValue({ success: true, data: 'usable' })
+    const { result, unmount } = renderHook(() => usePickVault())
+    await result.current.pickNewVault(vi.fn())
+
+    const options = vi.mocked(toast.error).mock.calls[0][1] as { id: string }
+    expect(toast.dismiss).not.toHaveBeenCalled()
+    unmount()
+    expect(toast.dismiss).toHaveBeenCalledExactlyOnceWith(options.id)
+  })
+
+  it('shows one refusal at a time', async () => {
+    ipc.chooseFile.mockResolvedValue({ success: true, data: '/vaults/a.nvx' })
+    ipc.hasVault.mockResolvedValue({ success: true, data: 'usable' })
+    const { result } = renderHook(() => usePickVault())
+    await result.current.pickNewVault(vi.fn())
+    await result.current.pickNewVault(vi.fn())
+
+    const [first, second] = vi
+      .mocked(toast.error)
+      .mock.calls.map((c) => (c[1] as { id: string }).id)
+    expect(first).toBeTruthy()
+    expect(second).toBe(first)
   })
 })
