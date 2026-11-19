@@ -39,6 +39,9 @@ const api: NotvexAPI = {
     create: (filePath, pw, kdfLevelId) =>
       ipcRenderer.invoke('vault:create', filePath, pw, kdfLevelId),
     measureKdfLevel: (kdfLevelId) => ipcRenderer.invoke('kdf:measure', kdfLevelId),
+    getKdfLevel: () => ipcRenderer.invoke('vault:get-kdf-level'),
+    changeKdfLevel: (kdfLevelId, pw, keyFileContents) =>
+      ipcRenderer.invoke('vault:change-kdf-level', kdfLevelId, pw, keyFileContents),
     open: (filePath, pw, keyFileContents) =>
       ipcRenderer.invoke('vault:open', filePath, pw, keyFileContents),
     openWithRecovery: (filePath, m, keyFileContents) =>

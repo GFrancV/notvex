@@ -1,4 +1,4 @@
-import type { KdfMeasurement } from './kdf-levels'
+import type { KdfLevel, KdfMeasurement } from './kdf-levels'
 
 export interface Note {
   id: string
@@ -201,6 +201,12 @@ export interface NotvexAPI {
       kdfLevelId: number
     ): Promise<IpcResult<CreateVaultResult>>
     measureKdfLevel(kdfLevelId: number): Promise<IpcResult<KdfMeasurement>>
+    getKdfLevel(): Promise<IpcResult<KdfLevel>>
+    changeKdfLevel(
+      kdfLevelId: number,
+      password: string,
+      keyFileContents?: Uint8Array
+    ): Promise<IpcResult<ChangePasswordResult>>
     open(
       filePath: string,
       password: string,

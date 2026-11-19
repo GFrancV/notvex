@@ -51,7 +51,11 @@ vi.mock('@main/vault/container', () => ({
   shouldWarnOpeningInDevBuild: vi.fn(() => false)
 }))
 
-vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0, measureKdfLevel: vi.fn() }))
+vi.mock('@main/vault/crypto', () => ({
+  KEY_FILE_MAX_BYTES: 0,
+  measureKdfLevel: vi.fn(),
+  readKeyFileContents: (c: Uint8Array) => c
+}))
 
 // Mirrors runMigrations: a declined schema gate surfaces as SCHEMA_MIGRATION_CANCELLED.
 vi.mock('@main/vault/vault', () => ({
@@ -63,6 +67,7 @@ vi.mock('@main/vault/vault', () => ({
   openVaultWithRecovery: vi.fn(async () => 1),
   rotateVaultCredentials: vi.fn(),
   changePassword: vi.fn(),
+  getKdfLevelFromOpenVault: vi.fn(),
   syncContainer: vi.fn(),
   openVault: vi.fn(
     async (
