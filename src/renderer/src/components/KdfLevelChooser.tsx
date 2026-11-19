@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { ChevronDownIcon, ExternalLinkIcon, TriangleAlertIcon } from 'lucide-react'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
@@ -17,14 +18,15 @@ import { notvex } from '@/lib/ipc'
 import { KEY_DERIVATION_DOCS_URL } from '@/lib/links'
 import {
   DEFAULT_KDF_LEVEL_ID,
+  isKdfLevelId,
   KDF_LEVELS,
   type KdfLevel,
   type KdfMeasurement
 } from '@shared/kdf-levels'
 
-// The 128 MiB level sits between two described ones, so it carries only its unlock time.
 const HINTS: Readonly<Record<number, string>> = {
   7: 'Least memory, fastest unlock',
+  5: 'More memory than the lowest level, still quick to unlock',
   4: 'Balances unlock time and resistance to guessing on most computers',
   2: 'Most memory, slowest unlock'
 }
@@ -33,7 +35,32 @@ const HINTS: Readonly<Record<number, string>> = {
 type Measured = Readonly<Partial<Record<number, KdfMeasurement>>>
 
 function levelLabel(level: KdfLevel): string {
-  return `${level.memoryMiB} MiB${level.id === DEFAULT_KDF_LEVEL_ID ? ' (recommended)' : ''}`
+  return `${level.memoryMiB} MiB`
+}
+
+// State of this vault, so it is filled and outweighs the advice next to it. The space keeps the
+// accessible name readable, as in RecommendedBadge.
+function CurrentBadge(): ReactNode {
+  return (
+    <>
+      {' '}
+      <Badge variant="secondary">Current</Badge>
+    </>
+  )
+}
+
+// Advice rather than state, so it stays an outline that doesn't compete with the level itself.
+// The space keeps the accessible name "256 MiB Recommended": the flex layout hides it from sight.
+function RecommendedBadge({ level }: { level: KdfLevel }): ReactNode {
+  if (level.id !== DEFAULT_KDF_LEVEL_ID) return null
+  return (
+    <>
+      {' '}
+      <Badge variant="outline" className="text-muted-foreground">
+        Recommended
+      </Badge>
+    </>
+  )
 }
 
 function seconds(ms: number): string {
@@ -98,9 +125,16 @@ interface KdfLevelPickerProps {
   onChange: (levelId: number) => void
   // The first measurement waits until the picker is shown; a failed one is retried the next time.
   shown?: boolean
+  // The level a vault already has, marked as current. One outside the four can't be chosen again.
+  current?: KdfLevel
 }
 
-export function KdfLevelPicker({ value, onChange, shown = true }: KdfLevelPickerProps): ReactNode {
+export function KdfLevelPicker({
+  value,
+  onChange,
+  shown = true,
+  current
+}: KdfLevelPickerProps): ReactNode {
   const [measured, setMeasured] = useState<Measured>({})
   const [busy, setBusy] = useState(false)
   // Read out by screen readers only: the cards already show each result.
@@ -202,8 +236,12 @@ export function KdfLevelPicker({ value, onChange, shown = true }: KdfLevelPicker
             <FieldLabel key={level.id} htmlFor={`kdf-level-${level.id}`}>
               <Field orientation="horizontal">
                 <FieldContent>
-                  <FieldTitle>{levelLabel(level)}</FieldTitle>
-                  {HINTS[level.id] && <FieldDescription>{HINTS[level.id]}</FieldDescription>}
+                  <FieldTitle>
+                    {levelLabel(level)}
+                    <RecommendedBadge level={level} />
+                    {level.id === current?.id && <CurrentBadge />}
+                  </FieldTitle>
+                  <FieldDescription>{HINTS[level.id]}</FieldDescription>
                   {unavailable && (
                     <FieldDescription className="text-destructive">
                       Not enough memory on this computer to use this level
@@ -224,6 +262,23 @@ export function KdfLevelPicker({ value, onChange, shown = true }: KdfLevelPicker
             </FieldLabel>
           )
         })}
+        {current && !isKdfLevelId(current.id) && (
+          <FieldLabel htmlFor={`kdf-level-${current.id}`}>
+            <Field orientation="horizontal">
+              <FieldContent>
+                <FieldTitle>
+                  Other: {current.memoryMiB} MiB, {current.passes} passes
+                  <CurrentBadge />
+                </FieldTitle>
+                <FieldDescription>
+                  Set when this vault was created. Not offered for new changes, so it can&apos;t be
+                  chosen again after switching.
+                </FieldDescription>
+              </FieldContent>
+              <RadioGroupItem value={String(current.id)} id={`kdf-level-${current.id}`} disabled />
+            </Field>
+          </FieldLabel>
+        )}
       </RadioGroup>
       <div className="flex flex-wrap items-center gap-3">
         <Button
@@ -276,8 +331,9 @@ export function KdfLevelChooser({ value, onChange }: KdfLevelChooserProps): Reac
       <CollapsibleTrigger asChild>
         <Button variant="ghost" className="group w-full justify-start">
           Key derivation{' '}
-          <span className="text-muted-foreground ml-auto font-normal">
+          <span className="text-muted-foreground ml-auto flex items-center gap-2 font-normal">
             {selected && levelLabel(selected)}
+            {selected && <RecommendedBadge level={selected} />}
           </span>
           <ChevronDownIcon className="transition-transform duration-300 group-data-[state=open]:rotate-180" />
         </Button>

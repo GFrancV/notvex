@@ -10,7 +10,7 @@ const openExternal = vi.fn()
 const measureKdfLevel = vi.fn()
 vi.mock('@/lib/ipc', () => ({ notvex: { shell: { openExternal }, vault: { measureKdfLevel } } }))
 
-const { KdfLevelChooser } = await import('@/components/KdfLevelChooser')
+const { KdfLevelChooser, KdfLevelPicker } = await import('@/components/KdfLevelChooser')
 
 // A measurement that never answers, unless a test says otherwise.
 beforeEach(() => {
@@ -39,6 +39,13 @@ function spinning(level: RegExp): boolean {
   return card?.querySelector('.animate-spin') != null
 }
 
+// The badges on a level's card, as "text:variant", in the order they appear.
+function marksOf(radio: HTMLElement): string[] {
+  return [...(radio.closest('label')?.querySelectorAll('[data-slot="badge"]') ?? [])].map(
+    (badge) => `${badge.textContent}:${badge.getAttribute('data-variant')}`
+  )
+}
+
 // Presses "Measure all levels" once it is offered: it waits while the opening measurement runs.
 async function measureAll(): Promise<void> {
   const button = screen.getByRole('button', { name: 'Measure all levels' }) as HTMLButtonElement
@@ -53,15 +60,14 @@ describe('KdfLevelChooser', () => {
     const trigger = screen.getByRole('button', { name: /Key derivation/ })
 
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    expect(trigger.textContent).toContain('256 MiB (recommended)')
+    expect(trigger.textContent).toContain('256 MiB')
+    expect(trigger.textContent).toContain('Recommended')
   })
 
   it('names the section by its title and the chosen level, as separate words', () => {
     renderChooser()
 
-    expect(
-      screen.getByRole('button', { name: 'Key derivation 256 MiB (recommended)' })
-    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Key derivation 256 MiB Recommended' })).toBeTruthy()
   })
 
   it('opens onto the four levels, the chosen one checked, and a link to the documentation', () => {
@@ -69,7 +75,7 @@ describe('KdfLevelChooser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Key derivation/ }))
 
-    const names = [/^64 MiB/, /^128 MiB/, /^256 MiB \(recommended\)/, /^512 MiB/]
+    const names = [/^64 MiB/, /^128 MiB/, /^256 MiB/, /^512 MiB/]
     expect(screen.getAllByRole('radio')).toHaveLength(4)
     const checked = names.map(
       (name) => screen.getByRole('radio', { name }).getAttribute('aria-checked') === 'true'
@@ -88,6 +94,43 @@ describe('KdfLevelChooser', () => {
     expect(openExternal).toHaveBeenCalledExactlyOnceWith(
       'https://notvex.vercel.app/docs/security-practices#key-derivation'
     )
+  })
+
+  it('hides the levels again when the section is closed, keeping them mounted', () => {
+    renderChooser()
+    const trigger = screen.getByRole('button', { name: /Key derivation/ })
+    fireEvent.click(trigger)
+    const calls = measureKdfLevel.mock.calls.length
+
+    fireEvent.click(trigger)
+
+    const content = document.querySelector('[data-slot="collapsible-content"]') as HTMLElement
+    expect(content.hidden).toBe(true)
+    expect(screen.getAllByRole('radio', { hidden: true })).toHaveLength(4)
+    expect(measureKdfLevel).toHaveBeenCalledTimes(calls)
+  })
+
+  it('marks the recommended level with an outline badge instead of parentheses', () => {
+    renderChooser()
+    const trigger = screen.getByRole('button', { name: /Key derivation/ })
+
+    fireEvent.click(trigger)
+
+    expect(screen.getAllByRole('radio').map(marksOf)).toEqual([[], [], ['Recommended:outline'], []])
+    expect(trigger.querySelector('[data-slot="badge"]')?.textContent).toBe('Recommended')
+    expect(document.body.textContent).not.toContain('(recommended')
+  })
+
+  it('gives every level a description, including 128 MiB', () => {
+    renderChooser()
+
+    fireEvent.click(screen.getByRole('button', { name: /Key derivation/ }))
+
+    const described = screen
+      .getAllByRole('radio')
+      .map((radio) => radio.closest('label')?.querySelector('[data-slot="field-description"]'))
+    expect(described).toHaveLength(4)
+    expect(described.every((d) => d?.textContent)).toBe(true)
   })
 
   it('measures 64 MiB once on opening and extrapolates the other estimates by memory', async () => {
@@ -312,5 +355,40 @@ describe('KdfLevelChooser', () => {
       )
     )
     expect(onChange).toHaveBeenCalledExactlyOnceWith(4)
+  })
+})
+
+describe('KdfLevelPicker with a current level', () => {
+  it('marks the current level with a filled badge next to the recommended one', () => {
+    render(
+      createElement(KdfLevelPicker, {
+        value: 5,
+        onChange: vi.fn(),
+        current: { id: 4, memoryMiB: 256, passes: 3 }
+      })
+    )
+
+    const radios = screen.getAllByRole('radio')
+    expect(radios.map(marksOf)).toEqual([[], [], ['Recommended:outline', 'Current:secondary'], []])
+    expect(screen.getByRole('radio', { name: /^256 MiB/ }).hasAttribute('disabled')).toBe(false)
+    expect(document.body.textContent).not.toContain('(current')
+  })
+
+  it('marks a legacy current level as Other with a filled Current badge', () => {
+    render(
+      createElement(KdfLevelPicker, {
+        value: 10,
+        onChange: vi.fn(),
+        current: { id: 10, memoryMiB: 32, passes: 2 }
+      })
+    )
+
+    const legacy = screen.getByRole('radio', { name: /^Other: 32 MiB, 2 passes/ })
+    expect(marksOf(legacy)).toEqual(['Current:secondary'])
+    expect(legacy.hasAttribute('disabled')).toBe(true)
+    expect(legacy.getAttribute('aria-checked')).toBe('true')
+    expect(screen.getAllByRole('radio')).toHaveLength(5)
+    expect(screen.getByText(/can't be chosen again/)).toBeTruthy()
+    expect(document.body.textContent).not.toContain('(current')
   })
 })
