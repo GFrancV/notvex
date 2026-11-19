@@ -230,6 +230,7 @@ export function Setup(): ReactNode {
             <Button
               variant="link"
               className="text-muted-foreground h-auto p-0 text-xs font-normal"
+              disabled={loading}
               onClick={pendingNewVaultPath ? handleBackToUnlock : () => setStep('location')}
             >
               {pendingNewVaultPath ? '← Back to unlock' : '← Back'}
