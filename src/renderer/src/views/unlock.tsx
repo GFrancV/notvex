@@ -274,7 +274,8 @@ export function Unlock(): ReactNode {
 
   const handleCreateNew = async (): Promise<void> => {
     const path = await pickNewVault((existing) => void showVault(existing))
-    // Setup mounts on the password step with this path; its "Back to unlock" returns here
+    // Setup mounts on the password step with this path; its "Back to unlock" returns to Unlock, or
+    // to Setup's start screen when there is no known vault to show
     if (path) setPendingNewVaultPath(path)
   }
 
