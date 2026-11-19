@@ -40,7 +40,7 @@ export function Unlock(): ReactNode {
   } = useVaultStore()
   const pendingOpenVaultPath = useVaultStore((s) => s.pendingOpenVaultPath)
 
-  const { pickExistingVault, pickNewVault } = usePickVault()
+  const { pickExistingVault, pickNewVault, dismissRefusal } = usePickVault()
 
   // Prefs already loaded by App.tsx before Unlock mounts — reads are synchronous
   const lastOpenedVaultPath = usePrefsStore((s) => s.recentVaults[0]?.path ?? null)
@@ -171,56 +171,67 @@ export function Unlock(): ReactNode {
     if (countdown > 0) return
     setError('')
     setLoading(true)
-    const res = await notvex.vault.open(
-      vaultPath,
-      password,
-      keyFileContentsRef.current ?? undefined
-    )
-    setLoading(false)
-    if (!res.success) {
-      // User declined the vault-format update prompt, or the dev-build
-      // warning — neither is a credential failure, so return to an idle
-      // unlock form instead of showing an error.
-      if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
-      setError(res.error)
-      focusInput(true)
-      await refreshThrottleStatus()
-      return
+    dismissRefusal()
+    // Kept until the session is loaded: the selector must stay off while main has the vault open
+    try {
+      const res = await notvex.vault.open(
+        vaultPath,
+        password,
+        keyFileContentsRef.current ?? undefined
+      )
+      if (!res.success) {
+        // User declined the vault-format update prompt, or the dev-build
+        // warning — neither is a credential failure, so return to an idle
+        // unlock form instead of showing an error.
+        if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED')
+          return
+        setError(res.error)
+        focusInput(true)
+        await refreshThrottleStatus()
+        return
+      }
+      if (res.data === null) {
+        setError('Incorrect password or key file.')
+        focusInput(true)
+        await refreshThrottleStatus()
+        return
+      }
+      setVaultVersion(res.data)
+      await afterUnlock()
+    } finally {
+      setLoading(false)
     }
-    if (res.data === null) {
-      setError('Incorrect password or key file.')
-      focusInput(true)
-      await refreshThrottleStatus()
-      return
-    }
-    setVaultVersion(res.data)
-    await afterUnlock()
   }
 
   const handleRecoveryUnlock = async (): Promise<void> => {
     if (!vaultPath) return
     setError('')
     setLoading(true)
-    const res = await notvex.vault.openWithRecovery(
-      vaultPath,
-      mnemonic.trim(),
-      recoveryKeyFileContentsRef.current ?? undefined
-    )
-    setLoading(false)
-    if (!res.success) {
-      // A declined prompt, not a credential failure — see handleUnlockVault.
-      if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED') return
-      setError(res.error)
-      focusInput()
-      return
+    dismissRefusal()
+    try {
+      const res = await notvex.vault.openWithRecovery(
+        vaultPath,
+        mnemonic.trim(),
+        recoveryKeyFileContentsRef.current ?? undefined
+      )
+      if (!res.success) {
+        // A declined prompt, not a credential failure — see handleUnlockVault.
+        if (res.error === 'MIGRATION_CANCELLED' || res.error === 'DEV_BUILD_WARNING_CANCELLED')
+          return
+        setError(res.error)
+        focusInput()
+        return
+      }
+      if (res.data === null) {
+        setError('Invalid recovery key or key file.')
+        focusInput()
+        return
+      }
+      setVaultVersion(res.data)
+      await afterUnlock(true)
+    } finally {
+      setLoading(false)
     }
-    if (res.data === null) {
-      setError('Invalid recovery key or key file.')
-      focusInput()
-      return
-    }
-    setVaultVersion(res.data)
-    await afterUnlock(true)
   }
 
   const handleRetry = async (): Promise<void> => {

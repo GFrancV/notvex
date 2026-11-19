@@ -14,6 +14,7 @@ interface UsePickVaultReturn {
   pickExistingVault: () => Promise<string | null>
   // The vault is handed to onOpenExisting when the user picks "Open it" on the refusal toast
   pickNewVault: (onOpenExisting: (path: string) => void) => Promise<string | null>
+  dismissRefusal: () => void
 }
 
 export function usePickVault(): UsePickVaultReturn {
@@ -60,5 +61,7 @@ export function usePickVault(): UsePickVaultReturn {
     []
   )
 
-  return { pickExistingVault, pickNewVault }
+  const dismissRefusal = useCallback(() => void toast.dismiss(ALREADY_A_VAULT_TOAST_ID), [])
+
+  return { pickExistingVault, pickNewVault, dismissRefusal }
 }

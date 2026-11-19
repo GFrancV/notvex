@@ -129,6 +129,42 @@ describe('Unlock vault selector', () => {
     expect(selector.disabled).toBe(true)
   })
 
+  it('keeps the selector off until the vault has finished unlocking', async () => {
+    vi.mocked(notvex.vault.open).mockResolvedValue({ success: true, data: { maj: 1, min: 0 } })
+    useVaultStore.setState({ refreshAll: () => new Promise(() => {}) })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    fireEvent.change(await screen.findByLabelText('Master password'), {
+      target: { value: 'pw' }
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unlock' }))
+    })
+
+    expect(notvex.vault.open).toHaveBeenCalledOnce()
+    const selector = screen.getByRole('button', { name: /main\.nvx/ }) as HTMLButtonElement
+    expect(selector.disabled).toBe(true)
+  })
+
+  it('takes a leftover "already a vault" error away when unlocking starts', async () => {
+    vi.mocked(notvex.vault.open).mockReturnValue(new Promise(() => {}))
+    vi.mocked(notvex.vault.chooseFile).mockResolvedValue({ success: true, data: OTHER })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    fireEvent.change(await screen.findByLabelText('Master password'), {
+      target: { value: 'pw' }
+    })
+    fireEvent.keyDown(screen.getByRole('button', { name: /main\.nvx/ }), { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Create new vault…/ }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    vi.mocked(toast.dismiss).mockClear()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unlock' }))
+    })
+
+    expect(toast.dismiss).toHaveBeenCalled()
+  })
+
   it('goes to the first-run screen when there is no vault to show', async () => {
     usePrefsStore.setState({ recentVaults: [] })
 
