@@ -130,7 +130,11 @@ export function Unlock(): ReactNode {
         setPendingOpenVaultPath(null)
       }
 
-      if (!vaultPath) return
+      // Nothing to unlock and no selector to pick from: start over from Setup
+      if (!vaultPath) {
+        setStatus('uninitialized')
+        return
+      }
 
       const fileRes = await notvex.vault.hasVault(vaultPath)
       if (fileRes.success && fileRes.data !== 'usable') {
@@ -299,7 +303,11 @@ export function Unlock(): ReactNode {
           <div className="mx-auto mb-5 text-center">
             <VaultMenu
               trigger={
-                <Button variant="outline" className="text-muted-foreground mx-auto text-xs">
+                <Button
+                  variant="outline"
+                  className="text-muted-foreground mx-auto text-xs"
+                  disabled={loading}
+                >
                   <FolderOpenIcon />
 
                   <Tooltip>

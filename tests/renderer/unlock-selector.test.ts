@@ -114,6 +114,53 @@ describe('Unlock vault selector', () => {
     expect(screen.getByRole('button', { name: /Remove .*main\.nvx/ })).toBeTruthy()
   })
 
+  it('keeps the selector off while the vault is being unlocked', async () => {
+    vi.mocked(notvex.vault.open).mockReturnValue(new Promise(() => {}))
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    fireEvent.change(await screen.findByLabelText('Master password'), {
+      target: { value: 'pw' }
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unlock' }))
+    })
+
+    const selector = screen.getByRole('button', { name: /main\.nvx/ }) as HTMLButtonElement
+    expect(selector.disabled).toBe(true)
+  })
+
+  it('goes to the first-run screen when there is no vault to show', async () => {
+    usePrefsStore.setState({ recentVaults: [] })
+
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+
+    await waitFor(() => expect(useVaultStore.getState().status).toBe('uninitialized'))
+  })
+
+  it('hands focus to the current vault when the only recent one is removed', async () => {
+    const OUTSIDE = '/elsewhere/outside.nvx'
+    useVaultStore.setState({ pendingOpenVaultPath: OUTSIDE })
+    usePrefsStore.setState({ recentVaults: [{ path: OTHER, lastOpenedAt: 2 }] })
+    vi.mocked(notvex.prefs.removeRecentVault).mockImplementation(async () => {
+      vi.mocked(notvex.prefs.get).mockResolvedValue({
+        success: true,
+        data: { recentVaults: [] } as never
+      })
+      return { success: true, data: null }
+    })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByLabelText('Master password')
+    fireEvent.keyDown(screen.getByRole('button', { name: /outside\.nvx/ }), { key: 'Enter' })
+
+    const other = await screen.findByRole('menuitem', { name: /other\.nvx/ })
+    act(() => other.focus())
+    fireEvent.keyDown(other, { key: 'Delete' })
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /outside\.nvx/ }))
+    )
+  })
+
   it('shows the unlock form of the picked vault with the password focused', async () => {
     await openSelector()
 
