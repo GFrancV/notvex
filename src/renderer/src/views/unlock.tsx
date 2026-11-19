@@ -107,6 +107,7 @@ export function Unlock(): ReactNode {
       setUnopenable(null)
       setRetryFailed(false)
       setError('')
+      setMode('password')
       setPassword('')
       setMnemonic('')
       keyFileContentsRef.current = null

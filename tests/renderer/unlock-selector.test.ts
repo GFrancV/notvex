@@ -27,7 +27,7 @@ vi.mock('@/lib/ipc', () => ({
   }
 }))
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
 
 // Radix positions tooltips with ResizeObserver, which jsdom doesn't implement.
 vi.stubGlobal(
@@ -95,6 +95,25 @@ describe('Unlock vault selector', () => {
     expect(screen.getByRole('button', { name: /Remove .*gone\.nvx/ })).toBeTruthy()
   })
 
+  it('lists the vault on screen as current, first and without ×, when it is not in recents', async () => {
+    const OUTSIDE = '/elsewhere/outside.nvx'
+    useVaultStore.setState({ pendingOpenVaultPath: OUTSIDE })
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    await screen.findByLabelText('Master password')
+    fireEvent.keyDown(screen.getByRole('button', { name: /outside\.nvx/ }), { key: 'Enter' })
+    await screen.findByRole('menuitem', { name: /gone\.nvx.*Not found/ })
+
+    const items = screen.getAllByRole('menuitem')
+    expect(items.map((item) => item.textContent).slice(0, 2)).toEqual([
+      'elsewhere • outside.nvx',
+      'vaults • main.nvx'
+    ])
+    expect(items[0].getAttribute('aria-label')).toBe('elsewhere • outside.nvx, current vault')
+    expect(items[0].querySelector('.lucide-check')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /Remove .*outside\.nvx/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Remove .*main\.nvx/ })).toBeTruthy()
+  })
+
   it('shows the unlock form of the picked vault with the password focused', async () => {
     await openSelector()
 
@@ -108,6 +127,18 @@ describe('Unlock vault selector', () => {
     )
     expect(notvex.vault.hasVault).toHaveBeenCalledWith(OTHER)
     expect(notvex.vault.switchTo).not.toHaveBeenCalled()
+  })
+
+  it('asks for the password, not the recovery key, when another vault is picked', async () => {
+    render(createElement(Unlock), { wrapper: TooltipProvider })
+    fireEvent.click(await screen.findByRole('button', { name: /Use recovery key/ }))
+    await screen.findByLabelText('Recovery phrase')
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /main\.nvx/ }), { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: /other\.nvx/ }))
+
+    expect(await screen.findByLabelText('Master password')).toBeTruthy()
+    expect(screen.queryByLabelText('Recovery phrase')).toBeNull()
   })
 
   it('removes another vault from the list and keeps the selector open', async () => {

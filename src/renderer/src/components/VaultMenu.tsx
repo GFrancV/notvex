@@ -50,6 +50,12 @@ export function VaultMenu({
   const { load: loadPrefs } = usePrefsStore()
   const recentVaults = usePrefsStore((s) => s.recentVaults)
 
+  // The vault on screen may not be in recents (opened from a file, or from "Open existing vault…")
+  const listed =
+    currentPath && !recentVaults.some((v) => isSamePath(currentPath, v.path))
+      ? [{ path: currentPath }, ...recentVaults]
+      : recentVaults
+
   const [open, setOpen] = useState(false)
   const [problems, setProblems] = useState<Record<string, VaultFileProblem>>({})
 
@@ -107,7 +113,7 @@ export function VaultMenu({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DropdownMenuLabel>Recent vaults</DropdownMenuLabel>
-        {recentVaults.map((vault) => {
+        {listed.map((vault) => {
           const isCurrent = isSamePath(currentPath, vault.path)
           return (
             <Tooltip key={vault.path}>
