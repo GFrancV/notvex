@@ -125,6 +125,21 @@ describe('usePickVault.pickNewVault', () => {
     expect(toast.dismiss).toHaveBeenCalledExactlyOnceWith(options.id)
   })
 
+  it('takes a refusal away once another file is chosen for the new vault', async () => {
+    ipc.chooseFile.mockResolvedValueOnce({ success: true, data: '/vaults/a.nvx' })
+    ipc.hasVault.mockResolvedValueOnce({ success: true, data: 'usable' })
+    const { result } = renderHook(() => usePickVault())
+    await result.current.pickNewVault(vi.fn())
+    const options = vi.mocked(toast.error).mock.calls[0][1] as { id: string }
+    expect(toast.dismiss).not.toHaveBeenCalled()
+
+    ipc.chooseFile.mockResolvedValueOnce({ success: true, data: '/vaults/new.nvx' })
+    ipc.hasVault.mockResolvedValueOnce({ success: true, data: 'missing' })
+    expect(await result.current.pickNewVault(vi.fn())).toBe('/vaults/new.nvx')
+
+    expect(toast.dismiss).toHaveBeenCalledExactlyOnceWith(options.id)
+  })
+
   it('shows one refusal at a time', async () => {
     ipc.chooseFile.mockResolvedValue({ success: true, data: '/vaults/a.nvx' })
     ipc.hasVault.mockResolvedValue({ success: true, data: 'usable' })

@@ -53,6 +53,8 @@ export function usePickVault(): UsePickVaultReturn {
         })
         return null
       }
+      // A refusal left over from an earlier pick would offer to leave this one mid-create
+      toast.dismiss(ALREADY_A_VAULT_TOAST_ID)
       return path
     },
     []
