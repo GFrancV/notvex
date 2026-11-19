@@ -93,13 +93,14 @@ function TimeSlot({ measuring, failed, time }: TimeSlotProps): ReactNode {
   )
 }
 
-interface KdfLevelChooserProps {
+interface KdfLevelPickerProps {
   value: number
   onChange: (levelId: number) => void
+  // The first measurement waits until the picker is shown; a failed one is retried the next time.
+  shown?: boolean
 }
 
-export function KdfLevelChooser({ value, onChange }: KdfLevelChooserProps): ReactNode {
-  const selected = KDF_LEVELS.find((l) => l.id === value)
+export function KdfLevelPicker({ value, onChange, shown = true }: KdfLevelPickerProps): ReactNode {
   const [measured, setMeasured] = useState<Measured>({})
   const [busy, setBusy] = useState(false)
   // Read out by screen readers only: the cards already show each result.
@@ -119,12 +120,11 @@ export function KdfLevelChooser({ value, onChange }: KdfLevelChooserProps): Reac
     }
   }, [])
 
-  const handleOpenChange = (open: boolean): void => {
-    if (!open || measuring.current) return
+  useEffect(() => {
+    if (!shown || measuring.current) return
     measuring.current = true
     setMeasuringId(BASE_LEVEL.id)
-    // A failed measurement is tried again the next time the section opens.
-    const retryOnNextOpen = (): void => {
+    const retryWhenShownAgain = (): void => {
       measuring.current = false
     }
     void notvex.vault
@@ -133,11 +133,11 @@ export function KdfLevelChooser({ value, onChange }: KdfLevelChooserProps): Reac
         if (res.success) {
           const measurement = res.data
           setMeasured((m) => ({ ...m, [BASE_LEVEL.id]: measurement }))
-        } else retryOnNextOpen()
+        } else retryWhenShownAgain()
       })
-      .catch(retryOnNextOpen)
+      .catch(retryWhenShownAgain)
       .finally(() => setMeasuringId((id) => (id === BASE_LEVEL.id ? null : id)))
-  }
+  }, [shown])
 
   // One level at a time, so each card's spinner and the status follow the level in turn.
   // Main runs derivations back to back anyway, so timings stay accurate either way.
@@ -183,7 +183,96 @@ export function KdfLevelChooser({ value, onChange }: KdfLevelChooserProps): Reac
   }
 
   return (
-    <Collapsible onOpenChange={handleOpenChange}>
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-xs">
+        Higher levels make offline password guessing slower, and take longer to open on slower
+        computers. Pick one the slowest computer you&apos;ll use can open. Each level uses 3 passes.
+        The time on each level is how long unlocking takes on this computer; ~ marks an estimate.
+      </p>
+      <RadioGroup
+        value={String(value)}
+        onValueChange={(id) => onChange(Number(id))}
+        disabled={busy}
+        aria-label="Key derivation level"
+      >
+        {KDF_LEVELS.map((level) => {
+          const time = unlockTime(level, measured)
+          const unavailable = measured[level.id]?.status === 'unavailable'
+          return (
+            <FieldLabel key={level.id} htmlFor={`kdf-level-${level.id}`}>
+              <Field orientation="horizontal">
+                <FieldContent>
+                  <FieldTitle>{levelLabel(level)}</FieldTitle>
+                  {HINTS[level.id] && <FieldDescription>{HINTS[level.id]}</FieldDescription>}
+                  {unavailable && (
+                    <FieldDescription className="text-destructive">
+                      Not enough memory on this computer to use this level
+                    </FieldDescription>
+                  )}
+                </FieldContent>
+                <TimeSlot
+                  measuring={measuringId === level.id}
+                  failed={failedIds.includes(level.id)}
+                  time={time}
+                />
+                <RadioGroupItem
+                  value={String(level.id)}
+                  id={`kdf-level-${level.id}`}
+                  disabled={unavailable}
+                />
+              </Field>
+            </FieldLabel>
+          )
+        })}
+      </RadioGroup>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy || measuringId !== null}
+          onClick={() => void handleMeasureAll()}
+        >
+          {busy ? (
+            <>
+              <Spinner aria-hidden />
+              Measuring…
+            </>
+          ) : outcome === 'failed' ? (
+            'Measure again'
+          ) : (
+            'Measure all levels'
+          )}
+        </Button>
+        <p role="status" aria-atomic="true" className="sr-only">
+          {status}
+        </p>
+        {outcome === 'done' && <p className="text-muted-foreground text-xs">Measured all levels</p>}
+      </div>
+      <Button
+        variant="link"
+        className="h-auto gap-1.5 p-0 text-xs font-normal"
+        onClick={() => void notvex.shell.openExternal(KEY_DERIVATION_DOCS_URL)}
+        aria-label="How to choose a level (opens in your browser)"
+      >
+        How to choose a level
+        <ExternalLinkIcon className="size-3" aria-hidden />
+      </Button>
+    </div>
+  )
+}
+
+interface KdfLevelChooserProps {
+  value: number
+  onChange: (levelId: number) => void
+}
+
+// The picker stays mounted while closed, so what was measured survives closing the section.
+export function KdfLevelChooser({ value, onChange }: KdfLevelChooserProps): ReactNode {
+  const [open, setOpen] = useState(false)
+  const selected = KDF_LEVELS.find((l) => l.id === value)
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <Button variant="ghost" className="group w-full justify-start">
           Key derivation{' '}
@@ -193,83 +282,8 @@ export function KdfLevelChooser({ value, onChange }: KdfLevelChooserProps): Reac
           <ChevronDownIcon className="transition-transform duration-300 group-data-[state=open]:rotate-180" />
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="space-y-3 px-3 py-4">
-        <p className="text-muted-foreground text-xs">
-          Higher levels make offline password guessing slower, and take longer to open on slower
-          computers. Pick one the slowest computer you&apos;ll use can open. Each level uses 3
-          passes. The time on each level is how long unlocking takes on this computer; ~ marks an
-          estimate.
-        </p>
-        <RadioGroup
-          value={String(value)}
-          onValueChange={(id) => onChange(Number(id))}
-          disabled={busy}
-          aria-label="Key derivation level"
-        >
-          {KDF_LEVELS.map((level) => {
-            const time = unlockTime(level, measured)
-            const unavailable = measured[level.id]?.status === 'unavailable'
-            return (
-              <FieldLabel key={level.id} htmlFor={`kdf-level-${level.id}`}>
-                <Field orientation="horizontal">
-                  <FieldContent>
-                    <FieldTitle>{levelLabel(level)}</FieldTitle>
-                    {HINTS[level.id] && <FieldDescription>{HINTS[level.id]}</FieldDescription>}
-                    {unavailable && (
-                      <FieldDescription className="text-destructive">
-                        Not enough memory on this computer to use this level
-                      </FieldDescription>
-                    )}
-                  </FieldContent>
-                  <TimeSlot
-                    measuring={measuringId === level.id}
-                    failed={failedIds.includes(level.id)}
-                    time={time}
-                  />
-                  <RadioGroupItem
-                    value={String(level.id)}
-                    id={`kdf-level-${level.id}`}
-                    disabled={unavailable}
-                  />
-                </Field>
-              </FieldLabel>
-            )
-          })}
-        </RadioGroup>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy || measuringId !== null}
-            onClick={() => void handleMeasureAll()}
-          >
-            {busy ? (
-              <>
-                <Spinner aria-hidden />
-                Measuring…
-              </>
-            ) : outcome === 'failed' ? (
-              'Measure again'
-            ) : (
-              'Measure all levels'
-            )}
-          </Button>
-          <p role="status" aria-atomic="true" className="sr-only">
-            {status}
-          </p>
-          {outcome === 'done' && (
-            <p className="text-muted-foreground text-xs">Measured all levels</p>
-          )}
-        </div>
-        <Button
-          variant="link"
-          className="h-auto gap-1.5 p-0 text-xs font-normal"
-          onClick={() => void notvex.shell.openExternal(KEY_DERIVATION_DOCS_URL)}
-          aria-label="How to choose a level (opens in your browser)"
-        >
-          How to choose a level
-          <ExternalLinkIcon className="size-3" aria-hidden />
-        </Button>
+      <CollapsibleContent forceMount hidden={!open} className="px-3 py-4">
+        <KdfLevelPicker value={value} onChange={onChange} shown={open} />
       </CollapsibleContent>
     </Collapsible>
   )
