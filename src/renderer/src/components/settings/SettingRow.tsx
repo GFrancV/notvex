@@ -67,17 +67,28 @@ export function SettingsSection({
 
 export function SettingRow({
   label,
+  badge,
   description,
   children
 }: {
   label: string
+  badge?: ReactNode
   description?: ReactNode
   children: ReactNode
 }): ReactNode {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="text-sm">{label}</p>
+        {/* A passed badge slot (even an empty one) reserves the badge's height, so the row doesn't
+            move when the badge appears. */}
+        {badge === undefined ? (
+          <p className="text-sm">{label}</p>
+        ) : (
+          <div className="flex min-h-5.5 items-center gap-2">
+            <p className="text-sm">{label}</p>
+            {badge}
+          </div>
+        )}
         {description && <div className="text-muted-foreground text-xs">{description}</div>}
       </div>
       <div className="mt-0.5 shrink-0">{children}</div>

@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import { ShieldCheckIcon, ShieldOffIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -235,21 +234,8 @@ export function SecurityPanel({
 
         <SettingRow
           label="Key file"
-          description={
-            <div className="space-y-1">
-              <p>
-                A second factor: with one set, you need both your password and the file to unlock.
-              </p>
-              <span className="flex items-center gap-1.5">
-                {hasKeyFile ? (
-                  <ShieldCheckIcon className="text-primary size-3.5" />
-                ) : (
-                  <ShieldOffIcon className="size-3.5" />
-                )}
-                {hasKeyFile ? 'Configured' : 'Not configured'}
-              </span>
-            </div>
-          }
+          badge={hasKeyFile ? <Badge variant="secondary">Configured</Badge> : null}
+          description="A second factor: with one set, you need both your password and the file to unlock."
         >
           {hasKeyFile ? (
             <Button
@@ -288,18 +274,8 @@ export function SecurityPanel({
       <SettingsSection title="Encryption">
         <SettingRow
           label="Key derivation"
-          description={
-            <div className="space-y-1">
-              <p>
-                How much memory and time Argon2id spends on each password guess, including an
-                attacker&apos;s.
-              </p>
-              <span className="flex items-center gap-1.5">
-                Current level
-                {kdfLevel && <Badge variant="secondary">{describeKdfLevel(kdfLevel)}</Badge>}
-              </span>
-            </div>
-          }
+          badge={kdfLevel && <Badge variant="secondary">{describeKdfLevel(kdfLevel)}</Badge>}
+          description="How much memory and time Argon2id spends on each password guess, including an attacker's."
         >
           <Button
             variant="secondary"
