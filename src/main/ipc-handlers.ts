@@ -379,7 +379,11 @@ export async function lockAndRecycle(
 }
 
 export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<void> {
-  if (!isVaultOpen()) return
+  if (!isVaultOpen()) {
+    // Nothing to close yet, but vault:create applies this lock once the vault exists
+    if (isCreating) lockPendingDuringCreate = true
+    return
+  }
   const { recycled } = await lockAndRecycle(win)
   if (!recycled && win && !win.isDestroyed()) win.webContents.send('vault:auto-locked')
 }
@@ -463,6 +467,8 @@ let isUnlocking = false
 // createVault() only reports the vault open once it returns, so until then a reload would find it
 // closed, skip the confirmation and drop the recovery phrase the page is about to show.
 let isCreating = false
+// A hard lock that arrived while isCreating was set.
+let lockPendingDuringCreate = false
 
 // Bumped when the renderer is replaced while its window stays alive (reload,
 // crash). An unlock started under an older renderer has nobody left to show
@@ -658,12 +664,19 @@ export function registerIpcHandlers(
       const result = await createVault(filePath, password, !app.isPackaged, kdfLevelId)
       markIssuedRecoveryKey(filePath)
       recordVaultUsedNonFatal('vault:create', filePath)
+      if (lockPendingDuringCreate) {
+        await lockAndRecycle(liveWin())
+        return fail(
+          "Couldn't show the recovery key: the vault was locked while it was created. Unlock it to get a new one"
+        )
+      }
       touchActivity()
       return ok(result)
     } catch (e) {
       return fail(e)
     } finally {
       isCreating = false
+      lockPendingDuringCreate = false
     }
   })
 
