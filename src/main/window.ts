@@ -86,7 +86,7 @@ export function createWindow(takePendingVault: () => PendingVault | null): Brows
   powerMonitor.on('user-did-resign-active', lockOnSuspend)
 
   win.on('minimize', () => {
-    // Minimizing is a soft lock: it waits while a new recovery key is still on screen.
+    // Minimizing is a soft lock: it waits while a rotation runs or a new recovery key is still on screen.
     if (getPref('lockOnMinimize') && isVaultOpen() && !isRecoveryConfirmPending()) {
       void lockVaultAndNotify(win)
     }
