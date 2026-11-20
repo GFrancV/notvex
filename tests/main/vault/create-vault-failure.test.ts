@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -40,6 +40,7 @@ const PASSWORD = 'correct horse battery staple'
 function expectNothingLeftBehind(vaultPath: string): void {
   expect(existsSync(vaultPath)).toBe(false)
   expect(existsSync(vaultPath + '.tmp')).toBe(false)
+  expect(existsSync(vaultPath + '.lock')).toBe(false)
 
   const tempDbs = vi.mocked(makeTempDbPath).mock.results.map((r) => r.value as string)
   expect(tempDbs.length).toBeGreaterThan(0)
@@ -56,6 +57,12 @@ function expectNothingLeftBehind(vaultPath: string): void {
   }
 
   expect(isVaultOpen()).toBe(false)
+}
+
+// A non-empty folder at the chosen path: the .tmp is written, the rename over it fails.
+function occupyWithFolder(vaultPath: string): void {
+  mkdirSync(vaultPath)
+  writeFileSync(join(vaultPath, 'keep.txt'), 'x')
 }
 
 describe('createVault() failing after the key derivation', () => {
@@ -78,7 +85,16 @@ describe('createVault() failing after the key derivation', () => {
   })
 
   it("the destination folder can't be written: nothing is left behind and no vault is open", async () => {
-    const vaultPath = join(vaultDir, 'missing-folder', 'test.nvx')
+    const drive = join(vaultDir, 'drive')
+    mkdirSync(drive)
+    const vaultPath = join(drive, 'test.nvx')
+    // The drive goes away once the container is packed, right before it is written
+    const realWriteContainer = vi.mocked(writeContainer).getMockImplementation()!
+    vi.mocked(writeContainer).mockImplementationOnce((opts) => {
+      const bytes = realWriteContainer(opts)
+      rmSync(drive, { recursive: true })
+      return bytes
+    })
 
     await expect(createVault(vaultPath, PASSWORD)).rejects.toThrow(/ENOENT/)
     expect(allocSecure).toHaveBeenCalled()
@@ -87,24 +103,24 @@ describe('createVault() failing after the key derivation', () => {
   }, 60_000)
 
   it('releasing the memory lock fails during the cleanup: the rest still runs and the original error is shown', async () => {
-    const vaultPath = join(vaultDir, 'missing-folder', 'test.nvx')
+    const vaultPath = join(vaultDir, 'test.nvx')
+    occupyWithFolder(vaultPath)
     // The buffer is zeroed first, as freeSecure does; the unlock is what throws.
     vi.mocked(freeSecure).mockImplementationOnce((buf) => {
       buf.fill(0)
       throw new Error('simulated unlock failure')
     })
 
-    await expect(createVault(vaultPath, PASSWORD)).rejects.toThrow(/ENOENT/)
+    await expect(createVault(vaultPath, PASSWORD)).rejects.toMatchObject({ syscall: 'rename' })
     expect(freeSecure).toHaveBeenCalled()
 
+    rmSync(vaultPath, { recursive: true })
     expectNothingLeftBehind(vaultPath)
   }, 60_000)
 
   it("the destination can't be replaced: the partial .tmp next to it is removed", async () => {
-    // A non-empty folder at the chosen path: the .tmp is written, the rename over it fails.
     const vaultPath = join(vaultDir, 'test.nvx')
-    mkdirSync(vaultPath)
-    writeFileSync(join(vaultPath, 'keep.txt'), 'x')
+    occupyWithFolder(vaultPath)
 
     // Failing in the rename proves the .tmp was written first
     await expect(createVault(vaultPath, PASSWORD)).rejects.toMatchObject({ syscall: 'rename' })
@@ -151,5 +167,51 @@ describe('createVault() failing after the key derivation', () => {
     await expect(createVault(vaultPath, PASSWORD)).rejects.toThrow('simulated packing failure')
 
     expectNothingLeftBehind(vaultPath)
+  }, 60_000)
+})
+
+describe('createVault() and the vault lock', () => {
+  let vaultDir: string
+
+  beforeEach(() => {
+    vaultDir = mkdtempSync(join(tmpdir(), 'notvex-test-'))
+    vi.mocked(deriveKey).mockClear()
+  })
+
+  afterEach(async () => {
+    try {
+      await closeVault()
+    } catch {
+      /* ignore */
+    }
+    rmSync(vaultDir, { recursive: true, force: true })
+  })
+
+  it('another process holds the lock on that path: no key is derived and its lock is untouched', async () => {
+    const vaultPath = join(vaultDir, 'test.nvx')
+    // A live PID (this process) marks the lock as held by another Notvex session
+    const otherLock = JSON.stringify({ pid: process.pid, openedAt: 0 })
+    writeFileSync(vaultPath + '.lock', otherLock)
+
+    await expect(createVault(vaultPath, PASSWORD)).rejects.toThrow(
+      'already open in another Notvex window'
+    )
+
+    expect(deriveKey).not.toHaveBeenCalled()
+    expect(readFileSync(vaultPath + '.lock', 'utf-8')).toBe(otherLock)
+    expect(existsSync(vaultPath)).toBe(false)
+    expect(isVaultOpen()).toBe(false)
+  })
+
+  it('a created vault holds the lock until it is closed', async () => {
+    const vaultPath = join(vaultDir, 'test.nvx')
+
+    await createVault(vaultPath, PASSWORD)
+
+    const lock = JSON.parse(readFileSync(vaultPath + '.lock', 'utf-8')) as { pid: number }
+    expect(lock.pid).toBe(process.pid)
+
+    await closeVault()
+    expect(existsSync(vaultPath + '.lock')).toBe(false)
   }, 60_000)
 })

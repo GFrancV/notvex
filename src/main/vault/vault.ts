@@ -336,6 +336,9 @@ export async function createVault(
     throw new Error('A vault already exists at this location.')
   }
 
+  // Claimed before the derivation, so another process creating or opening this path fails fast
+  acquireLock(filePath)
+
   const salt = Buffer.from(generateSalt())
   const kdfInput: KdfInputV1 = { version: 1, salt, kdfTier: tier }
   const { params: kdfParams } = getArgon2Params(kdfInput)
@@ -343,6 +346,7 @@ export async function createVault(
   try {
     rawKey = deriveKey(password, salt, kdfParams)
   } catch {
+    releaseLock()
     throw new Error("Couldn't create the vault: this computer doesn't have enough memory for it")
   }
 
@@ -404,6 +408,7 @@ export async function createVault(
     tempDbPath = tmp
     return { mnemonic }
   } catch (err) {
+    releaseLock()
     memzero(rawKey)
     if (sessionKey) freeSecureOrWipe(sessionKey)
     if (database) {
