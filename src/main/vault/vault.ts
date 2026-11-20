@@ -336,6 +336,9 @@ export async function createVault(
     throw new Error('A vault already exists at this location.')
   }
 
+  // Claimed before the derivation, so another process creating or opening this path fails fast
+  acquireLock(filePath)
+
   const salt = Buffer.from(generateSalt())
   const kdfInput: KdfInputV1 = { version: 1, salt, kdfTier: tier }
   const { params: kdfParams } = getArgon2Params(kdfInput)
@@ -343,63 +346,87 @@ export async function createVault(
   try {
     rawKey = deriveKey(password, salt, kdfParams)
   } catch {
+    releaseLock()
     throw new Error("Couldn't create the vault: this computer doesn't have enough memory for it")
   }
 
   // Build the DB in a temp file
   const tmp = makeTempDbPath()
-  const database = await openDatabase(tmp)
-  await applyKey(database, rawKey)
-  await runMigrations(database)
-
-  await dbRun(
-    database,
-    'INSERT INTO vault_meta (id, version, created_at, has_key_file) VALUES (1, 1, ?, 0)',
-    [Date.now()]
-  )
-
-  const mnemonic = generateMnemonic()
-  const mnemonicKey = mnemonicToMasterKey(mnemonic)
-  const wrapKey = deriveRecoveryWrapKey(mnemonicKey, undefined)
-  memzero(mnemonicKey)
-  const { ciphertext: recCt, nonce: recNonce } = encryptBytes(rawKey, wrapKey)
-  memzero(wrapKey)
-  const recoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
-
-  // Close DB to flush all pages to the temp file, then pack the .nvx container
-  await closeDatabase(database)
-  const dbBytes = readFileSync(tmp)
-
-  const containerMasterKey = Buffer.from(rawKey)
-  let containerBytes: Buffer
+  let database: sqlite3.Database | null = null
+  let sessionKey: Buffer | null = null
   try {
-    containerBytes = writeContainer({
-      masterKey: containerMasterKey,
-      salt,
-      kdfTier: tier,
-      recoveryBlob,
-      dbBytes,
-      devBuild
-    })
-  } finally {
-    memzero(containerMasterKey)
+    database = await openDatabase(tmp)
+    await applyKey(database, rawKey)
+    await runMigrations(database)
+
+    await dbRun(
+      database,
+      'INSERT INTO vault_meta (id, version, created_at, has_key_file) VALUES (1, 1, ?, 0)',
+      [Date.now()]
+    )
+
+    const mnemonic = generateMnemonic()
+    const mnemonicKey = mnemonicToMasterKey(mnemonic)
+    const wrapKey = deriveRecoveryWrapKey(mnemonicKey, undefined)
+    memzero(mnemonicKey)
+    const { ciphertext: recCt, nonce: recNonce } = encryptBytes(rawKey, wrapKey)
+    memzero(wrapKey)
+    const recoveryBlob = Buffer.concat([Buffer.from(recNonce), Buffer.from(recCt)])
+
+    // Close DB to flush all pages to the temp file, then pack the .nvx container
+    await closeDatabase(database)
+    database = null
+    const dbBytes = readFileSync(tmp)
+
+    const containerMasterKey = Buffer.from(rawKey)
+    let containerBytes: Buffer
+    try {
+      containerBytes = writeContainer({
+        masterKey: containerMasterKey,
+        salt,
+        kdfTier: tier,
+        recoveryBlob,
+        dbBytes,
+        devBuild
+      })
+    } finally {
+      memzero(containerMasterKey)
+    }
+    const metadata = readContainer(containerBytes)
+
+    // Everything that can fail runs before the write, so a failure never leaves a .nvx behind
+    database = await openDatabase(tmp)
+    await applyKey(database, rawKey)
+    sessionKey = storeKey(rawKey) // zeros rawKey
+    atomicWrite(filePath, containerBytes)
+
+    db = database
+    masterKey = sessionKey
+    currentVaultPath = filePath
+    currentMetadata = metadata
+    currentHasKeyFile = false
+    tempDbPath = tmp
+    return { mnemonic }
+  } catch (err) {
+    releaseLock()
+    memzero(rawKey)
+    if (sessionKey) freeSecureOrWipe(sessionKey)
+    if (database) {
+      try {
+        await closeDatabase(database)
+      } catch {
+        /* ignore */
+      }
+    }
+    for (const leftover of [tmp, filePath + '.tmp']) {
+      try {
+        unlinkSync(leftover)
+      } catch {
+        /* ignore */
+      }
+    }
+    throw err
   }
-  atomicWrite(filePath, containerBytes)
-
-  // Reopen the temp DB for the active session
-  const reopened = await openDatabase(tmp)
-  await applyKey(reopened, rawKey)
-
-  db = reopened
-  masterKey = storeKey(rawKey) // zeros rawKey
-  currentVaultPath = filePath
-  currentHasKeyFile = false
-  tempDbPath = tmp
-
-  // Rebuild currentMetadata from the written file for consistency
-  currentMetadata = readContainer(readFileSync(filePath))
-
-  return { mnemonic }
 }
 
 export async function openVault(
