@@ -51,7 +51,7 @@ export function SecurityPanel({
   )
 
   const [subpage, setSubpage] = useState<Subpage>(null)
-  const [hasKeyFile, setHasKeyFile] = useState(false)
+  const [hasKeyFile, setHasKeyFile] = useState<boolean | null>(null)
   const [kdfLevel, setKdfLevel] = useState<KdfLevel | null>(null)
 
   // The row button is gone while its subpage is open, so focus would land on the dialog root on the
@@ -90,7 +90,7 @@ export function SecurityPanel({
 
   useEffect(() => {
     void notvex.vault.getHasKeyFile().then((r) => {
-      setHasKeyFile(r.success ? r.data : false)
+      if (r.success) setHasKeyFile(r.data)
     })
     loadKdfLevel()
   }, [])
@@ -237,7 +237,7 @@ export function SecurityPanel({
           badge={hasKeyFile ? <Badge variant="secondary">Configured</Badge> : null}
           description="A second factor: with one set, you need both your password and the file to unlock."
         >
-          {hasKeyFile ? (
+          {hasKeyFile === null ? null : hasKeyFile ? (
             <Button
               variant="destructive"
               size="sm"

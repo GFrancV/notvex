@@ -275,6 +275,49 @@ describe('SecurityPanel: the key file row', () => {
     expect(screen.queryByRole('button', { name: 'Remove…' })).toBeNull()
   })
 
+  it('shows neither a badge nor key file buttons while the state is pending', async () => {
+    ipc.getHasKeyFile.mockReturnValue(new Promise(() => undefined))
+    await renderPanel()
+
+    expect(screen.getByText('Key file').parentElement?.textContent).toBe('Key file')
+    expect(screen.getByText(/A second factor/)).toBeTruthy()
+    for (const name of ['Generate…', 'Use existing…', 'Remove…']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+  })
+
+  it('shows Configured and Remove… without ever showing Generate… or Use existing… once the state arrives with a key file', async () => {
+    let answer: (r: { success: true; data: boolean }) => void = () => undefined
+    ipc.getHasKeyFile.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const addButtonSeen = vi.fn()
+    // Mutation records outlive the nodes they add, so a button that is added and removed within
+    // one update is still seen.
+    const watcher = new MutationObserver((records) => {
+      for (const node of records.flatMap((r) => [...r.addedNodes])) {
+        if (/Generate…|Use existing…/.test(node.textContent ?? '')) addButtonSeen()
+      }
+    })
+    watcher.observe(document.body, { childList: true, subtree: true })
+    await renderPanel()
+
+    await act(async () => answer({ success: true, data: true }))
+    watcher.disconnect()
+
+    expect(screen.getByText('Configured')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove…' })).toBeTruthy()
+    expect(addButtonSeen).not.toHaveBeenCalled()
+  })
+
+  it('leaves the key file row empty, without falling back to "Not configured", when the state cannot be read', async () => {
+    ipc.getHasKeyFile.mockResolvedValue({ success: false, error: 'No vault is open' })
+    await renderPanel()
+
+    expect(screen.getByText('Key file').parentElement?.textContent).toBe('Key file')
+    for (const name of ['Generate…', 'Use existing…', 'Remove…']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+  })
+
   it('adds an existing file and hands focus back to that button on the way out', async () => {
     ipc.selectKeyFile.mockResolvedValue({
       success: true,
