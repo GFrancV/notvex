@@ -73,11 +73,20 @@ afterEach(() => {
 })
 
 describe('SecurityPanel: the encryption section', () => {
+  it('shows the key derivation level as a badge on its label, without "Current level"', async () => {
+    await renderPanel()
+
+    expect(screen.getByText('Key derivation').parentElement?.textContent).toBe(
+      'Key derivation256 MiB'
+    )
+    expect(screen.getByText(/How much memory and time/).textContent).not.toContain('256 MiB')
+    expect(screen.queryByText('Current level')).toBeNull()
+  })
+
   it('shows the vault level, including one outside the four, and offers to change it', async () => {
     await renderPanel()
 
     expect(screen.getByText('Encryption')).toBeTruthy()
-    expect(screen.getByText('Current level')).toBeTruthy()
     expect(screen.getByText('256 MiB')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Change…' })).toBeTruthy()
     cleanup()
@@ -246,6 +255,69 @@ describe('SecurityPanel: the encryption section', () => {
 })
 
 describe('SecurityPanel: the key file row', () => {
+  it('shows a Configured badge on the key file label and offers Remove… when the vault has a key file', async () => {
+    ipc.getHasKeyFile.mockResolvedValue({ success: true, data: true })
+    await renderPanel()
+
+    const labelLine = screen.getByText('Key file').parentElement
+    expect(labelLine?.textContent).toContain('Configured')
+    expect(screen.getAllByText('Configured')).toHaveLength(1)
+    expect(screen.getByText(/A second factor/).textContent).not.toContain('Configured')
+    expect(screen.getByRole('button', { name: 'Remove…' })).toBeTruthy()
+  })
+
+  it('shows no badge on the key file label and offers Generate… and Use existing… when the vault has none', async () => {
+    await renderPanel()
+
+    expect(screen.getByText('Key file').parentElement?.textContent).toBe('Key file')
+    expect(screen.getByRole('button', { name: 'Generate…' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use existing…' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Remove…' })).toBeNull()
+  })
+
+  it('shows neither a badge nor key file buttons while the state is pending', async () => {
+    ipc.getHasKeyFile.mockReturnValue(new Promise(() => undefined))
+    await renderPanel()
+
+    expect(screen.getByText('Key file').parentElement?.textContent).toBe('Key file')
+    expect(screen.getByText(/A second factor/)).toBeTruthy()
+    for (const name of ['Generate…', 'Use existing…', 'Remove…']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+  })
+
+  it('shows Configured and Remove… without ever showing Generate… or Use existing… once the state arrives with a key file', async () => {
+    let answer: (r: { success: true; data: boolean }) => void = () => undefined
+    ipc.getHasKeyFile.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const addButtonSeen = vi.fn()
+    // Mutation records outlive the nodes they add, so a button that is added and removed within
+    // one update is still seen.
+    const watcher = new MutationObserver((records) => {
+      for (const node of records.flatMap((r) => [...r.addedNodes])) {
+        if (/Generate…|Use existing…/.test(node.textContent ?? '')) addButtonSeen()
+      }
+    })
+    watcher.observe(document.body, { childList: true, subtree: true })
+    await renderPanel()
+
+    await act(async () => answer({ success: true, data: true }))
+    watcher.disconnect()
+
+    expect(screen.getByText('Configured')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove…' })).toBeTruthy()
+    expect(addButtonSeen).not.toHaveBeenCalled()
+  })
+
+  it('leaves the key file row empty, without falling back to "Not configured", when the state cannot be read', async () => {
+    ipc.getHasKeyFile.mockResolvedValue({ success: false, error: 'No vault is open' })
+    await renderPanel()
+
+    expect(screen.getByText('Key file').parentElement?.textContent).toBe('Key file')
+    for (const name of ['Generate…', 'Use existing…', 'Remove…']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+  })
+
   it('adds an existing file and hands focus back to that button on the way out', async () => {
     ipc.selectKeyFile.mockResolvedValue({
       success: true,
@@ -289,7 +361,7 @@ describe('SecurityPanel: the key file row', () => {
     await click('Browse')
     await confirmWithPassword('Remove')
 
-    expect(screen.getByText('Not configured')).toBeTruthy()
+    expect(screen.queryByText('Configured')).toBeNull()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Generate…' }))
   })
 
