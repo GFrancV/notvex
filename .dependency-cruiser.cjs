@@ -4,7 +4,7 @@ module.exports = {
     {
       name: 'renderer-no-vault-crypto',
       comment:
-        'CLAUDE.md: the renderer never imports crypto/vault/db modules or the crypto libraries directly. All crypto and DB operations go through IPC -> ipc-handlers.ts -> vault/db modules.',
+        'CLAUDE.md: the renderer never imports crypto/vault/db modules or the crypto libraries directly. All crypto and DB operations go through IPC -> the main-process handlers (ipc-handlers.ts, <feature>/ipc.ts) -> vault/db modules.',
       severity: 'error',
       from: { path: '^src/renderer' },
       to: {
@@ -37,6 +37,14 @@ module.exports = {
       }
     },
     {
+      name: 'features-no-vault-session',
+      comment:
+        'ipc-handlers.ts holds the vault session state. Modules in a src/main folder get what they need from it as parameters, so none of them can read or change that state directly.',
+      severity: 'error',
+      from: { path: '^src/main/[^/]+/' },
+      to: { path: '^src/main/ipc-handlers\\.ts$' }
+    },
+    {
       name: 'no-circular',
       comment: 'Circular imports make the IPC/vault boundary harder to reason about.',
       severity: 'warn',
@@ -47,6 +55,8 @@ module.exports = {
   options: {
     doNotFollow: { path: 'node_modules' },
     tsPreCompilationDeps: true,
+    // Without it @main/* and @shared/* stay unresolved, and no rule matches an aliased import.
+    tsConfig: { fileName: 'tsconfig.node.json' },
     enhancedResolveOptions: {
       exportsFields: ['exports'],
       conditionNames: ['import', 'require', 'node', 'default']
