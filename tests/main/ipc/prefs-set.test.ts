@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // prefs:set is a trust boundary: the renderer may send any value, so the handler must refuse
 // anything outside a pref's shape before it reaches prefs.json.

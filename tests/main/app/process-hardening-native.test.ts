@@ -2,7 +2,7 @@ import koffi from 'koffi'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 
 import { appendError } from '@main/error-log'
-import { hardenProcess } from '@main/process-hardening'
+import { hardenProcess } from '@main/security/process-hardening'
 
 vi.mock('@main/error-log', () => ({ appendError: vi.fn() }))
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { appendError } from '@main/error-log'
-import { hardenProcess } from '@main/process-hardening'
+import { hardenProcess } from '@main/security/process-hardening'
 
 const native = vi.hoisted(() => vi.fn<(...args: unknown[]) => number>(() => 0))
 const func = vi.hoisted(() => vi.fn<(signature: string) => typeof native>(() => native))

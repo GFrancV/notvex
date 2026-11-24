@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 import { PRESET_COLORS } from '@shared/types'
 
 // The main process is the trust boundary for tag names and colors: the renderer's maxLength and

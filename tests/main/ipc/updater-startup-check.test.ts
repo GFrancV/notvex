@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The startup check is the app's only automatic network request, so the opt-out must hold in
 // main no matter what the renderer calls; the manual check stays available either way. Dev

@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // A target that can't be opened must come back as its case, with the current vault still open.
 // The close-and-recycle path of a usable target is covered in renderer-recycle.test.ts.

@@ -15,7 +15,7 @@ import {
 } from './ipc-handlers'
 import { getPref } from './prefs'
 import { initAutoUpdater } from './updater'
-import { devRendererUrl, rendererIndexPath } from './url-guard'
+import { devRendererUrl, rendererIndexPath } from './security/url-guard'
 import { isVaultOpen } from './vault/vault'
 
 const CRASH_RELOAD_GUARD_MS = 30_000

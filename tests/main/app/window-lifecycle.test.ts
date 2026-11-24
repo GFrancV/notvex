@@ -393,7 +393,7 @@ describe('createWindow: dev server url (issue #57)', () => {
   })
 
   it('ignores ELECTRON_RENDERER_URL in a packaged build', async () => {
-    const { rendererIndexPath } = await import('@main/url-guard')
+    const { rendererIndexPath } = await import('@main/security/url-guard')
     vi.stubEnv('ELECTRON_RENDERER_URL', 'https://attacker.example/')
 
     const win = createWindow(() => null)
@@ -405,7 +405,7 @@ describe('createWindow: dev server url (issue #57)', () => {
   })
 
   it('loads the built renderer in a dev build with no dev server', async () => {
-    const { rendererIndexPath } = await import('@main/url-guard')
+    const { rendererIndexPath } = await import('@main/security/url-guard')
     app.isPackaged = false
 
     const win = createWindow(() => null)

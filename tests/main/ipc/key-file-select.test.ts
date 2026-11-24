@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import type { Mock } from 'vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The renderer shows these handlers' errors in a toast, so it must never carry the file path.
 // Only what importing ipc-handlers.ts and these handlers touch is mocked.

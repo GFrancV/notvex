@@ -80,7 +80,7 @@ import {
   downloadUpdate,
   snoozeUpdate
 } from './updater'
-import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
+import { isSafeExternalUrl, isTrustedFrame } from './security/url-guard'
 import {
   createVaultBackup,
   ensureVaultBackupDir,

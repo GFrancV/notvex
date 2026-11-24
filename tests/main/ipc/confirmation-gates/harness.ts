@@ -2,7 +2,7 @@ import type { BrowserWindow, WebContents } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The gates in ipc-handlers.ts park vault:open on a module-level resolver until the renderer
 // answers; these cover the cancel paths that unwedge it. Only what vault:open touches up to the

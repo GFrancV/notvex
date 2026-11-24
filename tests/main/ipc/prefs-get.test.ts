@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // prefs.json is hand-editable, so a network-share path in it must never reach the file system,
 // while recent vaults whose file can't be used are kept for the user to see. The real prefs module

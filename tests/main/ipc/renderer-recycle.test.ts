@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // A lock must leave no renderer heap behind: once the vault has closed, the window's renderer
 // process is killed and reloaded into a fresh one, unless a failed pack still has to be shown.

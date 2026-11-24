@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The real prefs module is used, so what the handler writes to prefs.json is what is asserted.
 

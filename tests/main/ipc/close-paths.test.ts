@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type { Note } from '@shared/types'
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 import { clearClipboardIfOurs } from '@main/clipboard-guard'
 import { promoteVaultToTop } from '@main/prefs'
 import { closeVault, createVault, isVaultOpen, openVault } from '@main/vault/vault'

@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ImportRead } from '@main/db/queries'
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // Export and import are the only handlers that write or read user-chosen files, and the only
 // ones that put decrypted note content on disk. Only what importing ipc-handlers.ts and these

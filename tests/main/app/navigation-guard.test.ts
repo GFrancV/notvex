@@ -29,7 +29,7 @@ describe('installNavigationGuard', () => {
     app = electron.app as unknown as EventEmitter
     app.removeAllListeners()
     openExternal = vi.mocked(electron.shell.openExternal)
-    const { installNavigationGuard } = await import('@main/navigation-guard')
+    const { installNavigationGuard } = await import('@main/security/navigation-guard')
     installNavigationGuard()
   })
 

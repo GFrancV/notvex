@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { recordVaultUsed } from '@main/prefs'
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 import { closeVault, isVaultOpen } from '@main/vault/vault'
 
 // prefs.json is written after the vault change already happened, so a failed write must not

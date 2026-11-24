@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // Every handler must check the calling frame's URL (isTrustedFrame()) and refuse before doing
 // anything.

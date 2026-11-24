@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The renderer is untrusted input to the log: whatever it sends is validated, cut down and
 // rate-limited here, before the allowlist in error-log.ts ever sees it.

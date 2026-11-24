@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // clipboard:write is a trust boundary: the renderer picks the text and whether it is a secret,
 // never anything else, so the handler refuses any other shape before it reaches the clipboard.

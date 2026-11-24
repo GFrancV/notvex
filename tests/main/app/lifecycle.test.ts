@@ -58,7 +58,7 @@ vi.mock('@main/prefs', () => ({
   scrubLegacyPrefs: vi.fn()
 }))
 
-vi.mock('@main/permission-guard', () => ({
+vi.mock('@main/security/permission-guard', () => ({
   installPermissionGuard: vi.fn()
 }))
 
@@ -72,7 +72,7 @@ vi.mock('@main/crash-handlers', () => ({
 }))
 
 // The real one would make the test worker itself non-dumpable on Linux.
-vi.mock('@main/process-hardening', () => ({
+vi.mock('@main/security/process-hardening', () => ({
   hardenProcess: vi.fn(() => true)
 }))
 
@@ -80,7 +80,7 @@ vi.mock('@main/clipboard-guard', () => ({
   clearClipboardIfOurs: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('@main/navigation-guard', () => ({
+vi.mock('@main/security/navigation-guard', () => ({
   installNavigationGuard: vi.fn()
 }))
 
@@ -271,7 +271,9 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   // The renderer can request a permission while its page is still loading.
   it('installs the permission guard once, before the first window', async () => {
     await startApp()
-    const guard = vi.mocked((await import('@main/permission-guard')).installPermissionGuard)
+    const guard = vi.mocked(
+      (await import('@main/security/permission-guard')).installPermissionGuard
+    )
     expect(guard).toHaveBeenCalledOnce()
     expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
       createWindow.mock.invocationCallOrder[0]!
@@ -302,7 +304,9 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   // the guard must be in place before ready, not just before the first window.
   it('installs the navigation guard once, before ready', async () => {
     await startApp()
-    const guard = vi.mocked((await import('@main/navigation-guard')).installNavigationGuard)
+    const guard = vi.mocked(
+      (await import('@main/security/navigation-guard')).installNavigationGuard
+    )
     expect(guard).toHaveBeenCalledOnce()
     expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(app.whenReady).mock.invocationCallOrder[0]!
@@ -466,7 +470,7 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
   })
 
   it('a packaged build hardens the process before taking the single-instance lock', async () => {
-    const { hardenProcess } = await import('@main/process-hardening')
+    const { hardenProcess } = await import('@main/security/process-hardening')
     await launchWith('', true)
 
     expect(hardenProcess).toHaveBeenCalledOnce()
@@ -476,7 +480,7 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
   })
 
   it('a packaged build traced at start exits before taking the single-instance lock', async () => {
-    const { hardenProcess } = await import('@main/process-hardening')
+    const { hardenProcess } = await import('@main/security/process-hardening')
     vi.mocked(hardenProcess).mockReturnValueOnce(false)
     await launchWith('', true)
 
@@ -487,7 +491,7 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
   })
 
   it('a dev build leaves the process attachable', async () => {
-    const { hardenProcess } = await import('@main/process-hardening')
+    const { hardenProcess } = await import('@main/security/process-hardening')
     await launchWith('', false)
 
     expect(hardenProcess).not.toHaveBeenCalled()

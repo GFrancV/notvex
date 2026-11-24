@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // A new recovery key is shown once and the old one is already invalid, so main records it as
 // unconfirmed before handing it out: a lock, quit or crash before the user confirms must leave a

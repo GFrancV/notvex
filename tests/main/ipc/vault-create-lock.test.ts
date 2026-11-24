@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // A hard lock (suspend, lock screen, app resigning active) that arrives while a vault is being
 // created has nothing to close yet. It must still apply once creation finishes, before the
