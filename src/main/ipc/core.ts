@@ -2,10 +2,11 @@ import type { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from 'electron'
 import { readSync } from 'fs'
 
+import type { IpcResult } from '@shared/types'
 import { isTrustedFrame } from '../security/url-guard'
 import { isVaultOpen } from '../vault/vault'
 
-export type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
+export type { IpcResult }
 
 export function ok<T>(data: T): IpcResult<T> {
   return { success: true, data }
