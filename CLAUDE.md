@@ -44,7 +44,10 @@ The project uses electron-vite with three separate build targets. Directories ar
 - `ipc-handlers.ts` — Defines all IPC handlers; the only communication bridge to the renderer
 - `vault/` — All cryptographic operations and vault orchestration (KDF, memory locking, BIP39 recovery, key container, backups)
 - `db/` — SQLite/SQLCipher queries and schema migrations
-- Remaining top-level modules are single-purpose main-process services (prefs, updater, file opening, clipboard, renderer/URL guards)
+- `log/` — Redacted console logging, the allowlist-only error log file, and crash handlers
+- `security/` — Process hardening and the navigation, permission and URL guards
+- `prefs/`, `updater/`, `clipboard/`, `notes/` — One folder per main-process service: preferences, auto-update and release notes, clipboard writes with auto-clear, Markdown import/export
+- Remaining top-level modules are app-lifecycle pieces (menu, file opening, the pending vault, renderer drain on lock, last dialog folder)
 
 **`src/preload/index.ts`** — Exposes `window.notvex` API surface to the renderer via `contextBridge`. Any new IPC channel must be declared here.
 
