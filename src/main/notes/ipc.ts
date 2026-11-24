@@ -25,11 +25,11 @@ import { memzero } from '../vault/crypto'
 import { getDb, getMasterKey, withVaultLock } from '../vault/vault'
 import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './markdown-io'
 
-// The caller must memzero the result once written.
 // Exported files are plaintext: on Linux and macOS the default 0644 would let other local
 // accounts read them. Applies when a file is created; Windows ignores it.
 const EXPORT_MODE = 0o600
 
+// The caller must memzero the result once written.
 function toMarkdownBytes(note: Note): Buffer {
   const tags = note.tags.map((t) => t.name)
   return Buffer.from(serializeNote({ ...note, tags }), 'utf8')
