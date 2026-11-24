@@ -43,7 +43,7 @@ vi.mock('@main/ipc-handlers', () => ({
 }))
 
 vi.mock('@main/log/error-log', () => ({ appendError: vi.fn() }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => false) }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => false) }))
 vi.mock('@main/updater/updater', () => ({ initAutoUpdater: vi.fn() }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 
@@ -101,14 +101,14 @@ describe('createWindow: lock on minimize', () => {
     vi.clearAllMocks()
     const electron = await import('electron')
     ;(electron.powerMonitor as unknown as EventEmitter).removeAllListeners()
-    const { getPref } = await import('@main/prefs')
+    const { getPref } = await import('@main/prefs/prefs')
     const { isVaultOpen } = await import('@main/vault/vault')
     vi.mocked(getPref).mockReturnValue(true)
     vi.mocked(isVaultOpen).mockReturnValue(true)
   })
 
   afterEach(async () => {
-    const { getPref } = await import('@main/prefs')
+    const { getPref } = await import('@main/prefs/prefs')
     const { isVaultOpen } = await import('@main/vault/vault')
     const { isRecoveryConfirmPending } = await import('@main/ipc-handlers')
     vi.mocked(getPref).mockReturnValue(false)

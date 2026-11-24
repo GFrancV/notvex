@@ -38,7 +38,7 @@ vi.mock('@main/ipc-handlers', () => ({
   registerIpcHandlers: vi.fn()
 }))
 vi.mock('@main/log/error-log', () => ({ appendError: vi.fn() }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => false) }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => false) }))
 vi.mock('@main/updater/updater', () => ({ initAutoUpdater: vi.fn() }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 

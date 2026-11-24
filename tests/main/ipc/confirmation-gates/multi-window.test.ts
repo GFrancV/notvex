@@ -8,7 +8,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
   let ipc: typeof import('@main/ipc-handlers')
   let container: typeof import('@main/vault/container')
   let vault: typeof import('@main/vault/vault')
-  let prefs: typeof import('@main/prefs')
+  let prefs: typeof import('@main/prefs/prefs')
 
   beforeEach(async () => {
     ;({ ipc, container, vault, prefs } = await loadIpcModules())

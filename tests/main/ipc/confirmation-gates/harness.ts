@@ -36,7 +36,7 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn()
 }))
 
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   recordVaultUsed: vi.fn()
 }))
@@ -163,7 +163,7 @@ type Modules = {
   ipc: typeof import('@main/ipc-handlers')
   container: typeof import('@main/vault/container')
   vault: typeof import('@main/vault/vault')
-  prefs: typeof import('@main/prefs')
+  prefs: typeof import('@main/prefs/prefs')
 }
 
 // A fresh ipc-handlers module, with no window registered and the mocks back to their defaults.
@@ -176,7 +176,7 @@ export async function loadIpcModules(): Promise<Modules> {
   const vault = await import('@main/vault/vault')
   vi.mocked(vault.isVaultOpen).mockReturnValue(false)
   vi.mocked(vault.closeVault).mockClear()
-  const prefs = await import('@main/prefs')
+  const prefs = await import('@main/prefs/prefs')
   vi.mocked(prefs.getPref).mockReturnValue(0)
   const ipc = await import('@main/ipc-handlers')
   return { ipc, container, vault, prefs }

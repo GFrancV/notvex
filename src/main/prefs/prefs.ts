@@ -4,7 +4,7 @@ import { isAbsolute, join } from 'path'
 
 import type { NoteSort, Prefs, RecentVault } from '@shared/types'
 
-import { logError } from './log/log'
+import { logError } from '../log/log'
 
 const DEFAULTS: Prefs = {
   recentVaults: [],

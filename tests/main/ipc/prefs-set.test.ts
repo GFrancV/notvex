@@ -23,8 +23,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', async (importOriginal) => {
-  const { isPrefKey, isValidPref } = await importOriginal<typeof import('@main/prefs')>()
+vi.mock('@main/prefs/prefs', async (importOriginal) => {
+  const { isPrefKey, isValidPref } = await importOriginal<typeof import('@main/prefs/prefs')>()
   return { isPrefKey, isValidPref, getPref: vi.fn(() => 0), setPref: vi.fn() }
 })
 vi.mock('@main/vault/backups', () => ({}))
@@ -50,7 +50,7 @@ beforeEach(async () => {
   handlers.clear()
   vi.resetModules()
   vi.clearAllMocks()
-  setPref = vi.mocked((await import('@main/prefs')).setPref)
+  setPref = vi.mocked((await import('@main/prefs/prefs')).setPref)
   ipc = await import('@main/ipc-handlers')
   ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
 })

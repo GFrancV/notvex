@@ -13,7 +13,7 @@ import {
   registerIpcHandlers,
   takeRecycleMark
 } from './ipc-handlers'
-import { getPref } from './prefs'
+import { getPref } from './prefs/prefs'
 import { initAutoUpdater } from './updater/updater'
 import { devRendererUrl, rendererIndexPath } from './security/url-guard'
 import { isVaultOpen } from './vault/vault'

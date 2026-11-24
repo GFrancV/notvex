@@ -23,10 +23,10 @@ vi.mock('fs', () => ({
   copyFileSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
-vi.mock('@main/prefs', async (importOriginal) => ({
+vi.mock('@main/prefs/prefs', async (importOriginal) => ({
   getPref: vi.fn(() => 0),
   getCurrentVaultPath: vi.fn(() => null),
-  isLocalVaultPath: (await importOriginal<typeof import('@main/prefs')>()).isLocalVaultPath
+  isLocalVaultPath: (await importOriginal<typeof import('@main/prefs/prefs')>()).isLocalVaultPath
 }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({
@@ -40,7 +40,7 @@ vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { getCurrentVaultPath } = await import('@main/prefs')
+const { getCurrentVaultPath } = await import('@main/prefs/prefs')
 const { vaultFileStatus } = await import('@main/vault/container')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }

@@ -73,7 +73,7 @@ import {
   recordVaultUsed,
   removeRecentVault,
   setPref
-} from './prefs'
+} from './prefs/prefs'
 import {
   clearUpdateSilences,
   dismissUpdateForSession,

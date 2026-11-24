@@ -32,7 +32,7 @@ vi.mock('fs', () => ({
   readSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => 0) }))
 vi.mock('@main/log/log', () => ({ logError: vi.fn() }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))

@@ -15,7 +15,7 @@ class ClipboardItem {
 }
 
 vi.mock('electron', () => ({ clipboard, ClipboardItem }))
-vi.mock('@main/prefs', () => ({ getPrefs: () => prefs }))
+vi.mock('@main/prefs/prefs', () => ({ getPrefs: () => prefs }))
 
 describe('scheduleClipboardClear', () => {
   let scheduleClipboardClear: typeof import('@main/clipboard-guard').scheduleClipboardClear

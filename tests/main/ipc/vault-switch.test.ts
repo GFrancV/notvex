@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: (channel: string, fn: Handler): void => void handlers.set(channel, fn) }
 }))
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   promoteVaultToTop: vi.fn()
 }))
@@ -40,7 +40,7 @@ vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefi
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
 const { vaultFileStatus } = await import('@main/vault/container')
 const { closeVault } = await import('@main/vault/vault')
-const { promoteVaultToTop } = await import('@main/prefs')
+const { promoteVaultToTop } = await import('@main/prefs/prefs')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 

@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { Note } from '@shared/types'
 import { rendererIndexPath } from '@main/security/url-guard'
 import { clearClipboardIfOurs } from '@main/clipboard-guard'
-import { promoteVaultToTop } from '@main/prefs'
+import { promoteVaultToTop } from '@main/prefs/prefs'
 import { closeVault, createVault, isVaultOpen, openVault } from '@main/vault/vault'
 
 // Drives each close path through the real IPC handlers and vault module: an edit followed by
@@ -33,7 +33,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getCurrentVaultPath: vi.fn(),
   getPref: vi.fn(() => 0),
   getPrefs: vi.fn(),

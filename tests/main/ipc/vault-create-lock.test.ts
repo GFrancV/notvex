@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   recordVaultUsed: vi.fn(),
   markRecoveryUnconfirmed: vi.fn(),
@@ -74,7 +74,7 @@ describe('hard lock during vault creation', () => {
   let ipc: typeof import('@main/ipc-handlers')
   let pending: typeof import('@main/pending-vault')
   let vaultMod: typeof import('@main/vault/vault')
-  let prefs: typeof import('@main/prefs')
+  let prefs: typeof import('@main/prefs/prefs')
   let kill: ReturnType<typeof vi.spyOn>
 
   beforeEach(async () => {
@@ -86,7 +86,7 @@ describe('hard lock during vault creation', () => {
     ipc = await import('@main/ipc-handlers')
     pending = await import('@main/pending-vault')
     vaultMod = await import('@main/vault/vault')
-    prefs = await import('@main/prefs')
+    prefs = await import('@main/prefs/prefs')
     kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     ipc.registerIpcHandlers(win as never, () => null)
   })

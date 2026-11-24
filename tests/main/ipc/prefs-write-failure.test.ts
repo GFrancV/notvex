@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { recordVaultUsed } from '@main/prefs'
+import { recordVaultUsed } from '@main/prefs/prefs'
 import { rendererIndexPath } from '@main/security/url-guard'
 import { closeVault, isVaultOpen } from '@main/vault/vault'
 
@@ -32,7 +32,7 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(() => false)
 }))
 
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   markRecoveryUnconfirmed: vi.fn(),
   recordVaultUsed: vi.fn()

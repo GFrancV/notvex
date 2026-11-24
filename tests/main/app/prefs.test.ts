@@ -25,7 +25,7 @@ const {
   recordVaultUsed,
   scrubLegacyPrefs,
   setPrefs
-} = await import('@main/prefs')
+} = await import('@main/prefs/prefs')
 
 const PREFS_PATH = join('/user-data', 'prefs.json')
 const TMP_PATH = `${PREFS_PATH}.tmp`

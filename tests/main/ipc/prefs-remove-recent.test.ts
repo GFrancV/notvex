@@ -35,7 +35,7 @@ vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
 const { writeFileSync } = await import('fs')
-const { removeRecentVault } = await import('@main/prefs')
+const { removeRecentVault } = await import('@main/prefs/prefs')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }
 

@@ -23,7 +23,7 @@ vi.mock('fs', () => ({
   copyFileSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => 0) }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))

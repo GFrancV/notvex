@@ -10,7 +10,7 @@ const netFetch = vi.hoisted(() => vi.fn())
 const prefs = vi.hoisted(() => ({ getPref: vi.fn(), setPref: vi.fn() }))
 
 vi.mock('electron', () => ({ app: { isPackaged: true }, net: { fetch: netFetch } }))
-vi.mock('@main/prefs', () => prefs)
+vi.mock('@main/prefs/prefs', () => prefs)
 
 vi.mock('electron-updater', async () => {
   const { EventEmitter } = await import('node:events')

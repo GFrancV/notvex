@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   recordVaultUsed: vi.fn(),
   markRecoveryUnconfirmed: vi.fn(),
@@ -64,7 +64,7 @@ function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
 }
 
 let ipc: typeof import('@main/ipc-handlers')
-let prefs: typeof import('@main/prefs')
+let prefs: typeof import('@main/prefs/prefs')
 let vault: typeof import('@main/vault/vault')
 
 const win = {
@@ -76,7 +76,7 @@ async function load(): Promise<void> {
   handlers.clear()
   vi.resetModules()
   vi.clearAllMocks()
-  prefs = await import('@main/prefs')
+  prefs = await import('@main/prefs/prefs')
   vault = await import('@main/vault/vault')
   ipc = await import('@main/ipc-handlers')
   ipc.registerIpcHandlers(win as never, () => null)
