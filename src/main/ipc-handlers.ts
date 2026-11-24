@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto'
-import type { BrowserWindow, IpcMainInvokeEvent, WebContents } from 'electron'
-import { app, dialog, ipcMain, shell } from 'electron'
+import type { BrowserWindow, WebContents } from 'electron'
+import { app, dialog, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import {
   closeSync,
@@ -9,7 +9,6 @@ import {
   fstatSync,
   openSync,
   readFileSync,
-  readSync,
   writeFileSync
 } from 'fs'
 import { release } from 'node:os'
@@ -23,6 +22,7 @@ import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
 import { appendError, clearLog, ensureLogDir, readLogTail } from './log/error-log'
 import { logError } from './log/log'
+import { fail, handle, type IpcResult, ok, readFully, requireVault } from './ipc/core'
 import { setPendingVault } from './pending-vault'
 import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './notes/markdown-io'
 import type { SchemaMigrationGate } from './db/migrations'
@@ -80,7 +80,7 @@ import {
   downloadUpdate,
   snoozeUpdate
 } from './updater/updater'
-import { isSafeExternalUrl, isTrustedFrame } from './security/url-guard'
+import { isSafeExternalUrl } from './security/url-guard'
 import {
   createVaultBackup,
   ensureVaultBackupDir,
@@ -109,34 +109,6 @@ import {
   syncContainer,
   withVaultLock
 } from './vault/vault'
-
-// ─── IPC envelope helper ─────────────────────────────────────────────────────
-
-type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
-
-function ok<T>(data: T): IpcResult<T> {
-  return { success: true, data }
-}
-
-function fail(error: unknown): IpcResult<never> {
-  return { success: false, error: error instanceof Error ? error.message : String(error) }
-}
-
-// Every handler registers through this so a call from any frame other than the
-// app's own page is refused before it runs. ipcMain.handle has no
-// middleware, and a guard line per handler is easy to forget on a new channel.
-function handle(
-  channel: string,
-  fn: (event: IpcMainInvokeEvent, ...args: never[]) => unknown
-): void {
-  ipcMain.handle(channel, (event, ...args: unknown[]) =>
-    isTrustedFrame(event) ? fn(event, ...(args as never[])) : fail('Untrusted sender')
-  )
-}
-
-function requireVault(): void {
-  if (!isVaultOpen()) throw new Error('Vault is locked')
-}
 
 // Set while a new recovery key may still be on screen, so the soft locks (inactivity, minimize)
 // wait for the user to confirm it. Memory only and dropped on any close: the prefs flag is what
@@ -222,17 +194,6 @@ function decodeUtf8(raw: Uint8Array): string | null {
   } catch {
     return null
   }
-}
-
-// A short read is not EOF; stopping early would silently drop bytes.
-function readFully(fd: number, buf: Uint8Array): number {
-  let length = 0
-  while (length < buf.length) {
-    const n = readSync(fd, buf, length, buf.length - length, length)
-    if (n === 0) break
-    length += n
-  }
-  return length
 }
 
 // Checked and read through one descriptor, so the file that was checked is the file that is read.
