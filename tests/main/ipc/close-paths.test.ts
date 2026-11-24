@@ -6,9 +6,9 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type { Note } from '@shared/types'
-import { rendererIndexPath } from '@main/url-guard'
-import { clearClipboardIfOurs } from '@main/clipboard-guard'
-import { promoteVaultToTop } from '@main/prefs'
+import { rendererIndexPath } from '@main/security/url-guard'
+import { clearClipboardIfOurs } from '@main/clipboard/clipboard-guard'
+import { promoteVaultToTop } from '@main/prefs/prefs'
 import { closeVault, createVault, isVaultOpen, openVault } from '@main/vault/vault'
 
 // Drives each close path through the real IPC handlers and vault module: an edit followed by
@@ -33,7 +33,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getCurrentVaultPath: vi.fn(),
   getPref: vi.fn(() => 0),
   getPrefs: vi.fn(),
@@ -42,7 +42,9 @@ vi.mock('@main/prefs', () => ({
   setPref: vi.fn()
 }))
 vi.mock('@main/vault/backups', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 // Real Argon2id at the cheapest tier: the KDF cost is not what's under test.

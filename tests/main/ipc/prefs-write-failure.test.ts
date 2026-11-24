@@ -3,8 +3,8 @@ import { pathToFileURL } from 'node:url'
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { recordVaultUsed } from '@main/prefs'
-import { rendererIndexPath } from '@main/url-guard'
+import { recordVaultUsed } from '@main/prefs/prefs'
+import { rendererIndexPath } from '@main/security/url-guard'
 import { closeVault, isVaultOpen } from '@main/vault/vault'
 
 // prefs.json is written after the vault change already happened, so a failed write must not
@@ -32,7 +32,7 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(() => false)
 }))
 
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   markRecoveryUnconfirmed: vi.fn(),
   recordVaultUsed: vi.fn()
@@ -62,7 +62,9 @@ vi.mock('@main/vault/vault', () => ({
 }))
 
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 const PATH = 'C:\\Users\\someone\\vaults\\v.nvx'

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { appendError } from '@main/error-log'
-import { hardenProcess } from '@main/process-hardening'
+import { appendError } from '@main/log/error-log'
+import { hardenProcess } from '@main/security/process-hardening'
 
 const native = vi.hoisted(() => vi.fn<(...args: unknown[]) => number>(() => 0))
 const func = vi.hoisted(() => vi.fn<(signature: string) => typeof native>(() => native))
@@ -10,7 +10,7 @@ const readdir = vi.hoisted(() => vi.fn<(path: string) => string[]>(() => ['1']))
 const readFile = vi.hoisted(() => vi.fn<(path: string) => string>(() => 'TracerPid:\t0\n'))
 
 vi.mock('koffi', () => ({ default: { load } }))
-vi.mock('@main/error-log', () => ({ appendError: vi.fn() }))
+vi.mock('@main/log/error-log', () => ({ appendError: vi.fn() }))
 vi.mock('fs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('fs')>()),
   readdirSync: readdir,

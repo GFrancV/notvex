@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 import { PRESET_COLORS } from '@shared/types'
 
 // The main process is the trust boundary for tag names and colors: the renderer's maxLength and
@@ -26,7 +26,7 @@ vi.mock('fs', () => ({
   copyFileSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => 0) }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
@@ -41,7 +41,7 @@ vi.mock('@main/db/queries', () => ({
   listTags: vi.fn(async () => []),
   updateTag: vi.fn(async () => undefined)
 }))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')

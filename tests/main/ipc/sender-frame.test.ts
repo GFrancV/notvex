@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // Every handler must check the calling frame's URL (isTrustedFrame()) and refuse before doing
 // anything.
@@ -23,13 +23,13 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => 0) }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const APP_URL = pathToFileURL(rendererIndexPath).href

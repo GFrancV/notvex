@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 
 import { lockAndRecycle } from './ipc-handlers'
 import { setPendingVault } from './pending-vault'
-import { samePath } from './prefs'
+import { samePath } from './prefs/prefs'
 import { isValidNotvexFile } from './vault/container'
 import { getVaultPath, isVaultOpen } from './vault/vault'
 

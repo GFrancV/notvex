@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import type { Mock } from 'vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The renderer shows these handlers' errors in a toast, so it must never carry the file path.
 // Only what importing ipc-handlers.ts and these handlers touch is mocked.
@@ -35,14 +35,14 @@ vi.mock('fs', async (importOriginal) => {
     writeFileSync: vi.fn()
   }
 })
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
-vi.mock('@main/log', () => ({ logError: vi.fn() }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/log/log', () => ({ logError: vi.fn() }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 4, memzero: vi.fn() }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => true) }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')

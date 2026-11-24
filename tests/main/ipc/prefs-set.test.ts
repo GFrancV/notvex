@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // prefs:set is a trust boundary: the renderer may send any value, so the handler must refuse
 // anything outside a pref's shape before it reaches prefs.json.
@@ -23,8 +23,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', async (importOriginal) => {
-  const { isPrefKey, isValidPref } = await importOriginal<typeof import('@main/prefs')>()
+vi.mock('@main/prefs/prefs', async (importOriginal) => {
+  const { isPrefKey, isValidPref } = await importOriginal<typeof import('@main/prefs/prefs')>()
   return { isPrefKey, isValidPref, getPref: vi.fn(() => 0), setPref: vi.fn() }
 })
 vi.mock('@main/vault/backups', () => ({}))
@@ -32,7 +32,7 @@ vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
@@ -50,7 +50,7 @@ beforeEach(async () => {
   handlers.clear()
   vi.resetModules()
   vi.clearAllMocks()
-  setPref = vi.mocked((await import('@main/prefs')).setPref)
+  setPref = vi.mocked((await import('@main/prefs/prefs')).setPref)
   ipc = await import('@main/ipc-handlers')
   ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
 })

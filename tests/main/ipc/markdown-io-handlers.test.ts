@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ImportRead } from '@main/db/queries'
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // Export and import are the only handlers that write or read user-chosen files, and the only
 // ones that put decrypted note content on disk. Only what importing ipc-handlers.ts and these
@@ -32,8 +32,8 @@ vi.mock('fs', () => ({
   readSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
-vi.mock('@main/log', () => ({ logError: vi.fn() }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/log/log', () => ({ logError: vi.fn() }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({
@@ -63,14 +63,14 @@ vi.mock('@main/db/queries', () => ({
   importNotes: vi.fn(),
   listNotes: vi.fn()
 }))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
 const { getNote, getNoteTitle, importNotes, listNotes } = await import('@main/db/queries')
 const { isVaultOpen } = await import('@main/vault/vault')
 const { memzero } = await import('@main/vault/crypto')
-const { logError } = await import('@main/log')
+const { logError } = await import('@main/log/log')
 const { dialog } = await import('electron')
 const { closeSync, fstatSync, openSync, readSync, writeFileSync } = await import('fs')
 

@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // clipboard:write is a trust boundary: the renderer picks the text and whether it is a secret,
 // never anything else, so the handler refuses any other shape before it reaches the clipboard.
@@ -23,13 +23,13 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
+vi.mock('@main/prefs/prefs', () => ({ getPref: vi.fn(() => 0) }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ writeClipboard: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({ writeClipboard: vi.fn(async () => undefined) }))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
@@ -50,7 +50,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   isVaultOpen = vi.mocked((await import('@main/vault/vault')).isVaultOpen)
   isVaultOpen.mockReturnValue(true)
-  writeClipboard = vi.mocked((await import('@main/clipboard-guard')).writeClipboard)
+  writeClipboard = vi.mocked((await import('@main/clipboard/clipboard-guard')).writeClipboard)
   ipc = await import('@main/ipc-handlers')
   ipc.registerIpcHandlers({ isDestroyed: () => false } as never, () => null)
 })

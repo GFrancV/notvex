@@ -18,13 +18,13 @@ import { basename, dirname, join } from 'node:path'
 import { isKdfLevelId, type KdfMeasurement } from '@shared/kdf-levels'
 import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
 import type { PendingVault } from '@shared/types'
-import { clearClipboardIfOurs, writeClipboard } from './clipboard-guard'
+import { clearClipboardIfOurs, writeClipboard } from './clipboard/clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
-import { appendError, clearLog, ensureLogDir, readLogTail } from './error-log'
-import { logError } from './log'
+import { appendError, clearLog, ensureLogDir, readLogTail } from './log/error-log'
+import { logError } from './log/log'
 import { setPendingVault } from './pending-vault'
-import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './markdown-io'
+import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './notes/markdown-io'
 import type { SchemaMigrationGate } from './db/migrations'
 import type {
   CreateNoteInput,
@@ -73,14 +73,14 @@ import {
   recordVaultUsed,
   removeRecentVault,
   setPref
-} from './prefs'
+} from './prefs/prefs'
 import {
   clearUpdateSilences,
   dismissUpdateForSession,
   downloadUpdate,
   snoozeUpdate
-} from './updater'
-import { isSafeExternalUrl, isTrustedFrame } from './url-guard'
+} from './updater/updater'
+import { isSafeExternalUrl, isTrustedFrame } from './security/url-guard'
 import {
   createVaultBackup,
   ensureVaultBackupDir,

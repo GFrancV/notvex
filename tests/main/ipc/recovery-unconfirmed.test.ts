@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // A new recovery key is shown once and the old one is already invalid, so main records it as
 // unconfirmed before handing it out: a lock, quit or crash before the user confirms must leave a
@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   recordVaultUsed: vi.fn(),
   markRecoveryUnconfirmed: vi.fn(),
@@ -52,7 +52,7 @@ vi.mock('@main/vault/vault', () => ({
   rotateVaultCredentials: vi.fn()
 }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn() }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn() }))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn() }))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
@@ -64,7 +64,7 @@ function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
 }
 
 let ipc: typeof import('@main/ipc-handlers')
-let prefs: typeof import('@main/prefs')
+let prefs: typeof import('@main/prefs/prefs')
 let vault: typeof import('@main/vault/vault')
 
 const win = {
@@ -76,7 +76,7 @@ async function load(): Promise<void> {
   handlers.clear()
   vi.resetModules()
   vi.clearAllMocks()
-  prefs = await import('@main/prefs')
+  prefs = await import('@main/prefs/prefs')
   vault = await import('@main/vault/vault')
   ipc = await import('@main/ipc-handlers')
   ipc.registerIpcHandlers(win as never, () => null)

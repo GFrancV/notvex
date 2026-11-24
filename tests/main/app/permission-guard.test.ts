@@ -30,7 +30,7 @@ describe('installPermissionGuard', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    const { installPermissionGuard } = await import('@main/permission-guard')
+    const { installPermissionGuard } = await import('@main/security/permission-guard')
     installPermissionGuard()
     expect(defaultSession.setPermissionRequestHandler).toHaveBeenCalledOnce()
     expect(defaultSession.setPermissionCheckHandler).toHaveBeenCalledOnce()

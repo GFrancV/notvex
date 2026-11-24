@@ -20,7 +20,7 @@ vi.mock('electron', () => ({
 }))
 
 const { appendError, clearLog, formatEntry, logDir, readLogTail, toErrorLike } =
-  await import('@main/error-log')
+  await import('@main/log/error-log')
 
 const logFile = (): string => join(logDir(), 'notvex.log')
 

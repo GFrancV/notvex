@@ -2,7 +2,7 @@ import type { BrowserWindow, WebContents } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The gates in ipc-handlers.ts park vault:open on a module-level resolver until the renderer
 // answers; these cover the cancel paths that unwedge it. Only what vault:open touches up to the
@@ -36,7 +36,7 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn()
 }))
 
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   recordVaultUsed: vi.fn()
 }))
@@ -86,7 +86,9 @@ vi.mock('@main/vault/vault', () => ({
 }))
 
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({
   FLUSH_ACK_TIMEOUT_MS: 200,
   drainRenderer: vi.fn(async () => undefined)
@@ -163,7 +165,7 @@ type Modules = {
   ipc: typeof import('@main/ipc-handlers')
   container: typeof import('@main/vault/container')
   vault: typeof import('@main/vault/vault')
-  prefs: typeof import('@main/prefs')
+  prefs: typeof import('@main/prefs/prefs')
 }
 
 // A fresh ipc-handlers module, with no window registered and the mocks back to their defaults.
@@ -176,7 +178,7 @@ export async function loadIpcModules(): Promise<Modules> {
   const vault = await import('@main/vault/vault')
   vi.mocked(vault.isVaultOpen).mockReturnValue(false)
   vi.mocked(vault.closeVault).mockClear()
-  const prefs = await import('@main/prefs')
+  const prefs = await import('@main/prefs/prefs')
   vi.mocked(prefs.getPref).mockReturnValue(0)
   const ipc = await import('@main/ipc-handlers')
   return { ipc, container, vault, prefs }

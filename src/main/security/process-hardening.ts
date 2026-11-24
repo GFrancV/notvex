@@ -10,7 +10,7 @@
 import { readdirSync, readFileSync } from 'fs'
 import koffi from 'koffi'
 
-import { appendError } from './error-log'
+import { appendError } from '../log/error-log'
 
 type NativeFn = (...args: unknown[]) => number
 

@@ -3,7 +3,7 @@ import { basename } from 'node:path'
 import type sqlite3 from '@journeyapps/sqlcipher'
 import { type ImportResult, type NoteCounts, PRESET_COLORS, TAG_NAME_MAX } from '@shared/types'
 
-import type { MarkdownNote } from '../markdown-io'
+import type { MarkdownNote } from '../notes/markdown-io'
 import { decryptField, encryptField } from '../vault/crypto'
 
 // ─── Promise wrappers ───────────────────────────────────────────────────────

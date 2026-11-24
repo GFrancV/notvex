@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from '@main/markdown-io'
+import {
+  dedupeName,
+  parseMarkdownFile,
+  serializeNote,
+  toSafeFilename
+} from '@main/notes/markdown-io'
 
 describe('toSafeFilename', () => {
   it('keeps an ordinary title unchanged', () => {

@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // The startup check is the app's only automatic network request, so the opt-out must hold in
 // main no matter what the renderer calls; the manual check stays available either way. Dev
@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: { checkForUpdates } }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn((key: string) =>
     key === 'checkUpdatesOnStartup' ? state.checkUpdatesOnStartup : 0
   ),
@@ -41,7 +41,7 @@ vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 0 }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
@@ -116,7 +116,7 @@ describe('updater:check-now', () => {
   })
 
   it('returns a failure result instead of throwing when clearing the snooze fails', async () => {
-    const { setPref } = await import('@main/prefs')
+    const { setPref } = await import('@main/prefs/prefs')
     vi.mocked(setPref).mockImplementationOnce(() => {
       throw new Error('EPERM')
     })
@@ -127,7 +127,7 @@ describe('updater:check-now', () => {
 // The version comes from the renderer; main must not trust its shape.
 describe('updater:snooze and updater:dismiss', () => {
   it('snoozes a version through prefs', async () => {
-    const { setPref } = await import('@main/prefs')
+    const { setPref } = await import('@main/prefs/prefs')
     await expect(invoke('updater:snooze', '9.9.9')).resolves.toEqual({ success: true, data: null })
     expect(setPref).toHaveBeenCalledWith(
       'updateSnooze',
@@ -142,7 +142,7 @@ describe('updater:snooze and updater:dismiss', () => {
     ['updater:dismiss', ''],
     ['updater:dismiss', { version: '9.9.9' }]
   ])('%s rejects the version %j', async (channel, version) => {
-    const { setPref } = await import('@main/prefs')
+    const { setPref } = await import('@main/prefs/prefs')
     await expect(invoke(channel, version)).resolves.toEqual({
       success: false,
       error: 'Invalid version'

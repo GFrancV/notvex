@@ -3,7 +3,7 @@ import { join } from 'path'
 
 import type { PendingVault } from '@shared/types'
 
-import { appendError } from './error-log'
+import { appendError } from './log/error-log'
 import {
   cancelPendingConfirmations,
   closeVaultDrained,
@@ -13,9 +13,9 @@ import {
   registerIpcHandlers,
   takeRecycleMark
 } from './ipc-handlers'
-import { getPref } from './prefs'
-import { initAutoUpdater } from './updater'
-import { devRendererUrl, rendererIndexPath } from './url-guard'
+import { getPref } from './prefs/prefs'
+import { initAutoUpdater } from './updater/updater'
+import { devRendererUrl, rendererIndexPath } from './security/url-guard'
 import { isVaultOpen } from './vault/vault'
 
 const CRASH_RELOAD_GUARD_MS = 30_000

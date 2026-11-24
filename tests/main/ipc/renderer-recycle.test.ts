@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // A lock must leave no renderer heap behind: once the vault has closed, the window's renderer
 // process is killed and reloaded into a fresh one, unless a failed pack still has to be shown.
@@ -28,7 +28,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   promoteVaultToTop: vi.fn(),
   samePath: (a: string, b: string) => a === b
@@ -54,11 +54,13 @@ vi.mock('@main/vault/vault', () => ({
   })
 }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/error-log', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@main/error-log')>()),
+vi.mock('@main/log/error-log', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@main/log/error-log')>()),
   appendError: vi.fn()
 }))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 const APP_URL = pathToFileURL(rendererIndexPath).href
@@ -136,7 +138,7 @@ describe('renderer recycle on lock', () => {
 
   // A failed kill (EPERM) reloads in the same process, keeping the old heap, so it must be logged
   it('reloads straight away and logs the code when the kill fails', async () => {
-    const { appendError } = await import('@main/error-log')
+    const { appendError } = await import('@main/log/error-log')
     kill.mockImplementationOnce(() => {
       throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
     })

@@ -22,15 +22,15 @@ vi.mock('@main/vault/vault', () => ({
   })
 }))
 
-vi.mock('@main/clipboard-guard', () => ({
+vi.mock('@main/clipboard/clipboard-guard', () => ({
   clearClipboardIfOurs: vi.fn(() => {
     calls.push('clearClipboardIfOurs')
     return Promise.resolve()
   })
 }))
 
-vi.mock('@main/error-log', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@main/error-log')>()
+vi.mock('@main/log/error-log', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@main/log/error-log')>()
   return {
     toErrorLike: real.toErrorLike,
     appendError: vi.fn(() => calls.push('appendError'))
@@ -52,10 +52,10 @@ async function install(): Promise<{
     processListeners[event] = fn
     return process
   }) as typeof process.on)
-  const { installCrashHandlers } = await import('@main/crash-handlers')
+  const { installCrashHandlers } = await import('@main/log/crash-handlers')
   installCrashHandlers()
   const { app } = await import('electron')
-  const { appendError } = await import('@main/error-log')
+  const { appendError } = await import('@main/log/error-log')
   const { closeVault } = await import('@main/vault/vault')
   return {
     app: app as unknown as EventEmitter & { exit: ReturnType<typeof vi.fn> },
@@ -86,7 +86,7 @@ describe.each(['uncaughtException', 'unhandledRejection'])('%s', (event) => {
 
     expect(calls).toEqual(['appendError', 'closeVault', 'clearClipboardIfOurs', 'exit'])
     // The process is going away, so the recovery key's 30 s clear won't run.
-    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    const { clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard')
     expect(clearClipboardIfOurs).toHaveBeenCalledWith('quit')
     expect(appendError).toHaveBeenCalledWith('main', expect.objectContaining({ name: 'TypeError' }))
     expect(app.exit).toHaveBeenCalledWith(1)

@@ -76,7 +76,7 @@ export default defineConfig(
   },
   {
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/main/clipboard-guard.ts'],
+    ignores: ['src/main/clipboard/clipboard-guard.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -95,7 +95,7 @@ export default defineConfig(
   {
     // Main-process errors can carry the vault path; log.ts is the one place that redacts them.
     files: ['src/main/**/*.ts'],
-    ignores: ['src/main/log.ts'],
+    ignores: ['src/main/log/log.ts'],
     rules: { 'no-console': 'error' }
   },
   eslintConfigPrettier

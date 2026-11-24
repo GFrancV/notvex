@@ -54,11 +54,11 @@ vi.mock('@main/vault/container', () => ({
 }))
 
 // The real one reads and rewrites prefs.json in userData.
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   scrubLegacyPrefs: vi.fn()
 }))
 
-vi.mock('@main/permission-guard', () => ({
+vi.mock('@main/security/permission-guard', () => ({
   installPermissionGuard: vi.fn()
 }))
 
@@ -67,20 +67,20 @@ vi.mock('@main/app-menu', () => ({
 }))
 
 // A real uncaughtException listener would swallow the test worker's own failures.
-vi.mock('@main/crash-handlers', () => ({
+vi.mock('@main/log/crash-handlers', () => ({
   installCrashHandlers: vi.fn()
 }))
 
 // The real one would make the test worker itself non-dumpable on Linux.
-vi.mock('@main/process-hardening', () => ({
+vi.mock('@main/security/process-hardening', () => ({
   hardenProcess: vi.fn(() => true)
 }))
 
-vi.mock('@main/clipboard-guard', () => ({
+vi.mock('@main/clipboard/clipboard-guard', () => ({
   clearClipboardIfOurs: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('@main/navigation-guard', () => ({
+vi.mock('@main/security/navigation-guard', () => ({
   installNavigationGuard: vi.fn()
 }))
 
@@ -151,7 +151,7 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
   })
 
   it('installs the crash handlers once, before the app is ready', async () => {
-    const { installCrashHandlers } = await import('@main/crash-handlers')
+    const { installCrashHandlers } = await import('@main/log/crash-handlers')
     expect(installCrashHandlers).toHaveBeenCalledTimes(1)
   })
 
@@ -164,7 +164,7 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
   // The clear timer dies with the process, so what Notvex copied just before quitting
   // must be cleared on the way out.
   it('before-quit clears the clipboard before the app quits', async () => {
-    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    const { clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard')
     app.emit('before-quit', { preventDefault: vi.fn() })
     await vi.waitFor(() => expect(quit).toHaveBeenCalled())
     expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('quit')
@@ -271,7 +271,9 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   // The renderer can request a permission while its page is still loading.
   it('installs the permission guard once, before the first window', async () => {
     await startApp()
-    const guard = vi.mocked((await import('@main/permission-guard')).installPermissionGuard)
+    const guard = vi.mocked(
+      (await import('@main/security/permission-guard')).installPermissionGuard
+    )
     expect(guard).toHaveBeenCalledOnce()
     expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
       createWindow.mock.invocationCallOrder[0]!
@@ -291,7 +293,7 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   // The rewritten file is what the first window's unlock screen reads.
   it('scrubs legacy prefs once, before the first window', async () => {
     await startApp()
-    const scrub = vi.mocked((await import('@main/prefs')).scrubLegacyPrefs)
+    const scrub = vi.mocked((await import('@main/prefs/prefs')).scrubLegacyPrefs)
     expect(scrub).toHaveBeenCalledOnce()
     expect(scrub.mock.invocationCallOrder[0]).toBeLessThan(
       createWindow.mock.invocationCallOrder[0]!
@@ -302,7 +304,9 @@ describe('lifecycle: .nvx opened while the app has no window (issue #49)', () =>
   // the guard must be in place before ready, not just before the first window.
   it('installs the navigation guard once, before ready', async () => {
     await startApp()
-    const guard = vi.mocked((await import('@main/navigation-guard')).installNavigationGuard)
+    const guard = vi.mocked(
+      (await import('@main/security/navigation-guard')).installNavigationGuard
+    )
     expect(guard).toHaveBeenCalledOnce()
     expect(guard.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(app.whenReady).mock.invocationCallOrder[0]!
@@ -466,7 +470,7 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
   })
 
   it('a packaged build hardens the process before taking the single-instance lock', async () => {
-    const { hardenProcess } = await import('@main/process-hardening')
+    const { hardenProcess } = await import('@main/security/process-hardening')
     await launchWith('', true)
 
     expect(hardenProcess).toHaveBeenCalledOnce()
@@ -476,7 +480,7 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
   })
 
   it('a packaged build traced at start exits before taking the single-instance lock', async () => {
-    const { hardenProcess } = await import('@main/process-hardening')
+    const { hardenProcess } = await import('@main/security/process-hardening')
     vi.mocked(hardenProcess).mockReturnValueOnce(false)
     await launchWith('', true)
 
@@ -487,7 +491,7 @@ describe('lifecycle: Chromium switches that bypass the renderer boundary', () =>
   })
 
   it('a dev build leaves the process attachable', async () => {
-    const { hardenProcess } = await import('@main/process-hardening')
+    const { hardenProcess } = await import('@main/security/process-hardening')
     await launchWith('', false)
 
     expect(hardenProcess).not.toHaveBeenCalled()

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-import { logError } from '@main/log'
+import { logError } from '@main/log/log'
 
 const SECRET_PATH = join(tmpdir(), 'alice', 'Private Notes', 'diary.nvx')
 

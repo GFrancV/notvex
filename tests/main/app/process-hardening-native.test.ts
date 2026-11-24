@@ -1,10 +1,10 @@
 import koffi from 'koffi'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 
-import { appendError } from '@main/error-log'
-import { hardenProcess } from '@main/process-hardening'
+import { appendError } from '@main/log/error-log'
+import { hardenProcess } from '@main/security/process-hardening'
 
-vi.mock('@main/error-log', () => ({ appendError: vi.fn() }))
+vi.mock('@main/log/error-log', () => ({ appendError: vi.fn() }))
 
 const PR_GET_DUMPABLE = 3
 const PR_SET_DUMPABLE = 4

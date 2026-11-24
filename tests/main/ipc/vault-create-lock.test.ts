@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { rendererIndexPath } from '@main/url-guard'
+import { rendererIndexPath } from '@main/security/url-guard'
 
 // A hard lock (suspend, lock screen, app resigning active) that arrives while a vault is being
 // created has nothing to close yet. It must still apply once creation finishes, before the
@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: {} }))
-vi.mock('@main/prefs', () => ({
+vi.mock('@main/prefs/prefs', () => ({
   getPref: vi.fn(() => 0),
   recordVaultUsed: vi.fn(),
   markRecoveryUnconfirmed: vi.fn(),
@@ -50,11 +50,13 @@ vi.mock('@main/vault/vault', () => ({
   createVault: vi.fn()
 }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/error-log', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@main/error-log')>()),
+vi.mock('@main/log/error-log', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@main/log/error-log')>()),
   appendError: vi.fn()
 }))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }
@@ -74,7 +76,7 @@ describe('hard lock during vault creation', () => {
   let ipc: typeof import('@main/ipc-handlers')
   let pending: typeof import('@main/pending-vault')
   let vaultMod: typeof import('@main/vault/vault')
-  let prefs: typeof import('@main/prefs')
+  let prefs: typeof import('@main/prefs/prefs')
   let kill: ReturnType<typeof vi.spyOn>
 
   beforeEach(async () => {
@@ -86,7 +88,7 @@ describe('hard lock during vault creation', () => {
     ipc = await import('@main/ipc-handlers')
     pending = await import('@main/pending-vault')
     vaultMod = await import('@main/vault/vault')
-    prefs = await import('@main/prefs')
+    prefs = await import('@main/prefs/prefs')
     kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     ipc.registerIpcHandlers(win as never, () => null)
   })

@@ -1,8 +1,8 @@
 import { app } from 'electron'
 
-import { clearClipboardIfOurs } from './clipboard-guard'
+import { clearClipboardIfOurs } from '../clipboard/clipboard-guard'
 import { appendError, toErrorLike } from './error-log'
-import { closeVault } from './vault/vault'
+import { closeVault } from '../vault/vault'
 
 // closeVault() runs under withVaultLock; if the crash happened while the lock was held it never
 // settles. Exiting releases the sodium.malloc'd key anyway, so the wait is bounded.
