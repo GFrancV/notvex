@@ -34,7 +34,7 @@ vi.mock('@main/vault/vault', () => ({
   withVaultLock: vi.fn(<T>(fn: () => Promise<T>) => fn())
 }))
 vi.mock('@main/db/queries', () => ({ duplicateNote: vi.fn() }))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')

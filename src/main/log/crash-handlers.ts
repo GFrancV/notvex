@@ -1,6 +1,6 @@
 import { app } from 'electron'
 
-import { clearClipboardIfOurs } from '../clipboard-guard'
+import { clearClipboardIfOurs } from '../clipboard/clipboard-guard'
 import { appendError, toErrorLike } from './error-log'
 import { closeVault } from '../vault/vault'
 

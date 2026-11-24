@@ -62,7 +62,9 @@ vi.mock('@main/vault/vault', () => ({
 }))
 
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 const PATH = 'C:\\Users\\someone\\vaults\\v.nvx'

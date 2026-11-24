@@ -37,7 +37,7 @@ describe('clipboard bans', { timeout: 30_000 }, () => {
 
   it('allows it in clipboard-guard.ts, the one writer', async () => {
     const code = "import { clipboard } from 'electron'\n\nexport const c = clipboard\n"
-    expect(await ruleIds(code, 'src/main/clipboard-guard.ts')).not.toContain(
+    expect(await ruleIds(code, 'src/main/clipboard/clipboard-guard.ts')).not.toContain(
       'no-restricted-imports'
     )
   })

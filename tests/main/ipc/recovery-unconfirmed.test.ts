@@ -52,7 +52,7 @@ vi.mock('@main/vault/vault', () => ({
   rotateVaultCredentials: vi.fn()
 }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn() }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn() }))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn() }))
 
 const senderFrame = { url: pathToFileURL(rendererIndexPath).href }

@@ -34,7 +34,9 @@ vi.mock('@main/vault/vault', () => ({
   closeVault: vi.fn(async () => ({ packFailed: false }))
 }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')

@@ -42,7 +42,7 @@ vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 4, memzero: vi.fn() }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => true) }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')

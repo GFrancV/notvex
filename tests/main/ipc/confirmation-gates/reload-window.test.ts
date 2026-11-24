@@ -170,7 +170,7 @@ describe('app:reload-window', () => {
       error: 'disk full'
     })
     expect(fake.crash).not.toHaveBeenCalled()
-    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    const { clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard')
     expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('lock')
   })
 })

@@ -86,7 +86,9 @@ vi.mock('@main/vault/vault', () => ({
 }))
 
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({
   FLUSH_ACK_TIMEOUT_MS: 200,
   drainRenderer: vi.fn(async () => undefined)

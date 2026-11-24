@@ -76,7 +76,7 @@ vi.mock('@main/security/process-hardening', () => ({
   hardenProcess: vi.fn(() => true)
 }))
 
-vi.mock('@main/clipboard-guard', () => ({
+vi.mock('@main/clipboard/clipboard-guard', () => ({
   clearClipboardIfOurs: vi.fn().mockResolvedValue(undefined)
 }))
 
@@ -164,7 +164,7 @@ describe('lifecycle: before-quit / window-all-closed (issue #18)', () => {
   // The clear timer dies with the process, so what Notvex copied just before quitting
   // must be cleared on the way out.
   it('before-quit clears the clipboard before the app quits', async () => {
-    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    const { clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard')
     app.emit('before-quit', { preventDefault: vi.fn() })
     await vi.waitFor(() => expect(quit).toHaveBeenCalled())
     expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('quit')

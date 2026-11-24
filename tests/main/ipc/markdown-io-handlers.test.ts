@@ -63,7 +63,7 @@ vi.mock('@main/db/queries', () => ({
   importNotes: vi.fn(),
   listNotes: vi.fn()
 }))
-vi.mock('@main/clipboard-guard', () => ({}))
+vi.mock('@main/clipboard/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')

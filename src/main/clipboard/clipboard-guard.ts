@@ -1,7 +1,7 @@
 import { clipboard, ClipboardItem } from 'electron'
 
-import { logError } from './log/log'
-import { getPrefs } from './prefs/prefs'
+import { logError } from '../log/log'
+import { getPrefs } from '../prefs/prefs'
 
 // The recovery key grants full access, so it is cleared even when the user turned the
 // auto-clear off.

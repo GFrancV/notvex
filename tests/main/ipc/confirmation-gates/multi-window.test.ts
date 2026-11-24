@@ -62,7 +62,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
       })
       expect(second.crash).toHaveBeenCalledOnce()
       expect(first.crash).not.toHaveBeenCalled()
-      const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+      const { clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard')
       expect(clearClipboardIfOurs).toHaveBeenCalledExactlyOnceWith('lock')
     }
   )
@@ -74,7 +74,7 @@ describe('registerIpcHandlers across windows (macOS activate, issue #36)', () =>
 
     await invoke('vault:rotate-credentials', 'new pw')
 
-    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    const { clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard')
     expect(clearClipboardIfOurs).not.toHaveBeenCalled()
   })
 

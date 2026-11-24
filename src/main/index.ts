@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 
 import { installAppMenu } from './app-menu'
-import { clearClipboardIfOurs } from './clipboard-guard'
+import { clearClipboardIfOurs } from './clipboard/clipboard-guard'
 import { installCrashHandlers } from './log/crash-handlers'
 import { extractNvxArgv, resolveOpenFilePath, setValidatedPending } from './file-opener'
 import { closeVaultDrained, stopAutoLockTimer } from './ipc-handlers'

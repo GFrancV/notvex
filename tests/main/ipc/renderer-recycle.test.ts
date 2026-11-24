@@ -58,7 +58,9 @@ vi.mock('@main/log/error-log', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@main/log/error-log')>()),
   appendError: vi.fn()
 }))
-vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
+vi.mock('@main/clipboard/clipboard-guard', () => ({
+  clearClipboardIfOurs: vi.fn(async () => undefined)
+}))
 vi.mock('@main/drain-renderer', () => ({ drainRenderer: vi.fn(async () => undefined) }))
 
 const APP_URL = pathToFileURL(rendererIndexPath).href

@@ -76,7 +76,7 @@ export default defineConfig(
   },
   {
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/main/clipboard-guard.ts'],
+    ignores: ['src/main/clipboard/clipboard-guard.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

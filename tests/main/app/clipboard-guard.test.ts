@@ -18,14 +18,14 @@ vi.mock('electron', () => ({ clipboard, ClipboardItem }))
 vi.mock('@main/prefs/prefs', () => ({ getPrefs: () => prefs }))
 
 describe('scheduleClipboardClear', () => {
-  let scheduleClipboardClear: typeof import('@main/clipboard-guard').scheduleClipboardClear
+  let scheduleClipboardClear: typeof import('@main/clipboard/clipboard-guard').scheduleClipboardClear
 
   beforeEach(async () => {
     vi.useFakeTimers()
     vi.resetModules()
     clipboard.readText.mockReset()
     clipboard.clear.mockReset()
-    ;({ scheduleClipboardClear } = await import('@main/clipboard-guard'))
+    ;({ scheduleClipboardClear } = await import('@main/clipboard/clipboard-guard'))
   })
 
   afterEach(() => {
@@ -78,8 +78,8 @@ describe('scheduleClipboardClear', () => {
 const RAW_FORMAT = (name: string): string => `electron application/osclipboard;format="${name}"`
 
 describe('writeClipboard', () => {
-  let writeClipboard: typeof import('@main/clipboard-guard').writeClipboard
-  let clearClipboardIfOurs: typeof import('@main/clipboard-guard').clearClipboardIfOurs
+  let writeClipboard: typeof import('@main/clipboard/clipboard-guard').writeClipboard
+  let clearClipboardIfOurs: typeof import('@main/clipboard/clipboard-guard').clearClipboardIfOurs
 
   beforeEach(async () => {
     vi.useFakeTimers()
@@ -89,7 +89,7 @@ describe('writeClipboard', () => {
     clipboard.write.mockReset().mockResolvedValue(undefined)
     prefs.clipboardClearSeconds = 10
     prefs.clearClipboardOnLock = true
-    ;({ writeClipboard, clearClipboardIfOurs } = await import('@main/clipboard-guard'))
+    ;({ writeClipboard, clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard'))
   })
 
   it('keeps the 30 s clear when the same secret is copied again as plain text', async () => {

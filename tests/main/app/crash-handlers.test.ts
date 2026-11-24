@@ -22,7 +22,7 @@ vi.mock('@main/vault/vault', () => ({
   })
 }))
 
-vi.mock('@main/clipboard-guard', () => ({
+vi.mock('@main/clipboard/clipboard-guard', () => ({
   clearClipboardIfOurs: vi.fn(() => {
     calls.push('clearClipboardIfOurs')
     return Promise.resolve()
@@ -86,7 +86,7 @@ describe.each(['uncaughtException', 'unhandledRejection'])('%s', (event) => {
 
     expect(calls).toEqual(['appendError', 'closeVault', 'clearClipboardIfOurs', 'exit'])
     // The process is going away, so the recovery key's 30 s clear won't run.
-    const { clearClipboardIfOurs } = await import('@main/clipboard-guard')
+    const { clearClipboardIfOurs } = await import('@main/clipboard/clipboard-guard')
     expect(clearClipboardIfOurs).toHaveBeenCalledWith('quit')
     expect(appendError).toHaveBeenCalledWith('main', expect.objectContaining({ name: 'TypeError' }))
     expect(app.exit).toHaveBeenCalledWith(1)
