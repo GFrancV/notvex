@@ -18,7 +18,7 @@ import {
   type ImportRead,
   type Note
 } from '@main/db/queries'
-import type { MarkdownNote } from '@main/markdown-io'
+import type { MarkdownNote } from '@main/notes/markdown-io'
 import { initSodium } from '@main/vault/crypto'
 import { PRESET_COLORS } from '@shared/types'
 

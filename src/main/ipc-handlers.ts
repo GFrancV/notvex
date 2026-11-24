@@ -24,7 +24,7 @@ import { drainRenderer } from './drain-renderer'
 import { appendError, clearLog, ensureLogDir, readLogTail } from './log/error-log'
 import { logError } from './log/log'
 import { setPendingVault } from './pending-vault'
-import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './markdown-io'
+import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './notes/markdown-io'
 import type { SchemaMigrationGate } from './db/migrations'
 import type {
   CreateNoteInput,
