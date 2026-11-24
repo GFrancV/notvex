@@ -14,6 +14,7 @@ interface PrefsStore {
   clearClipboardOnLock: boolean
   noteSort: NoteSort
   checkUpdatesOnStartup: boolean
+  privacyMode: boolean
   recentVaults: RecentVault[]
   load: () => Promise<void>
   setPref: <K extends SettingKey>(key: K, value: Prefs[K]) => Promise<void>
@@ -28,6 +29,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
   clearClipboardOnLock: true,
   noteSort: { field: 'updatedAt', direction: 'desc' },
   checkUpdatesOnStartup: true,
+  privacyMode: false,
   recentVaults: [],
 
   load: async () => {

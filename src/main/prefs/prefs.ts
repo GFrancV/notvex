@@ -16,6 +16,7 @@ const DEFAULTS: Prefs = {
   clearClipboardOnLock: true,
   noteSort: { field: 'updatedAt', direction: 'desc' },
   checkUpdatesOnStartup: true,
+  privacyMode: false,
   updateSnooze: null
 }
 
@@ -64,6 +65,7 @@ const PREFS_VALIDATORS = {
   allowScreenCapture: (v: unknown) => typeof v === 'boolean',
   lockOnMinimize: (v: unknown) => typeof v === 'boolean',
   checkUpdatesOnStartup: (v: unknown) => typeof v === 'boolean',
+  privacyMode: (v: unknown) => typeof v === 'boolean',
   clearClipboardOnLock: (v: unknown) => typeof v === 'boolean',
   clipboardClearSeconds: (v: unknown) =>
     typeof v === 'number' && [0, 10, 30, 60, 120, 300].includes(v),
