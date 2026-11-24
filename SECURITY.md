@@ -52,7 +52,8 @@ Please include:
   leaks in comparisons)
 - Database encryption issues in `src/main/db/` or the SQLCipher integration
 - IPC boundary issues that let the renderer read/derive secrets it shouldn't
-  (`src/main/ipc-handlers.ts`, `src/preload/`) — e.g. the master key or
+  (`src/main/ipc-handlers.ts`, `src/main/ipc/core.ts`, the `ipc.ts` in each
+  `src/main` feature folder, `src/preload/`) — e.g. the master key or
   decrypted note content leaking outside the main process
 - Recovery key (BIP39) or key-file handling flaws
 - Ways to bypass vault lock, `setContentProtection`, or auto-lock behavior

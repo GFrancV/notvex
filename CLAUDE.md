@@ -41,12 +41,14 @@ The project uses electron-vite with three separate build targets. Directories ar
 **`src/main/`** — Electron main process (Node.js backend)
 - `index.ts` — Entry point: app lifecycle (single-instance lock, `.nvx` file association), delegates window creation to `window.ts`
 - `window.ts` — Creates the `BrowserWindow` (`contextIsolation`/`nodeIntegration` config lives here), applies `setContentProtection`, triggers vault lock on suspend/lock-screen/blur/minimize
-- `ipc-handlers.ts` — Defines all IPC handlers; the only communication bridge to the renderer
+- `ipc-handlers.ts` — Vault IPC handlers and the vault session state (unlock/create flags, renderer generation, confirmation gates, timers); `registerIpcHandlers` is the single entry point and also registers every feature's handlers
+- `ipc/core.ts` — What every handler module shares: `handle()` (refuses calls from any frame but the app's own page), the `ok`/`fail` envelope, `requireVault` and `readFully`
+- `<feature>/ipc.ts` — That feature's IPC handlers (`notes/`, `tags/`, `prefs/`, `updater/`, `log/`, `clipboard/`, `security/`). They never import `ipc-handlers.ts` (`features-no-vault-session` in `pnpm depcruise`); what they need from the vault session comes in as parameters
 - `vault/` — All cryptographic operations and vault orchestration (KDF, memory locking, BIP39 recovery, key container, backups)
 - `db/` — SQLite/SQLCipher queries and schema migrations
 - `log/` — Redacted console logging, the allowlist-only error log file, and crash handlers
 - `security/` — Process hardening and the navigation, permission and URL guards
-- `prefs/`, `updater/`, `clipboard/`, `notes/` — One folder per main-process service: preferences, auto-update and release notes, clipboard writes with auto-clear, Markdown import/export
+- `prefs/`, `updater/`, `clipboard/`, `notes/`, `tags/` — One folder per main-process service: preferences, auto-update and release notes, clipboard writes with auto-clear, Markdown import/export, tag and note-tag IPC
 - Remaining top-level modules are app-lifecycle pieces (menu, file opening, the pending vault, renderer drain on lock, last dialog folder)
 
 **`src/preload/index.ts`** — Exposes `window.notvex` API surface to the renderer via `contextBridge`. Any new IPC channel must be declared here.
@@ -66,7 +68,7 @@ The project uses electron-vite with three separate build targets. Directories ar
 ### IPC Pattern
 
 All renderer↔main communication goes through IPC:
-1. Define handler in `src/main/ipc-handlers.ts`
+1. Define the handler in its feature folder's `ipc.ts` through `handle()` from `src/main/ipc/core.ts`; vault handlers go in `src/main/ipc-handlers.ts`
 2. Expose channel in `src/preload/index.ts` via `contextBridge`
 3. Call from renderer via `src/renderer/src/lib/ipc.ts`
 
@@ -212,7 +214,7 @@ through Tailwind classes using the tokens above.
 ### Crypto and vault
 - The renderer **never** imports or calls crypto functions directly
 - The renderer **never** imports `@journeyapps/sqlcipher`, `libsodium-wrappers-sumo`, or any vault module
-- All crypto and DB operations go through IPC → `ipc-handlers.ts` → vault/db modules
+- All crypto and DB operations go through IPC → the main-process handlers (`ipc-handlers.ts`, `<feature>/ipc.ts`) → vault/db modules
 - The master key lives only in the main process memory (`sodium.malloc`), never in the renderer
 
 ### Memory
@@ -234,7 +236,7 @@ through Tailwind classes using the tokens above.
 
 ## Adding New Features — checklist
 
-1. **IPC first:** define the handler in `ipc-handlers.ts` and expose it in `preload/index.ts` before touching the renderer
+1. **IPC first:** define the handler in its feature's `ipc.ts` (vault: `ipc-handlers.ts`) and expose it in `preload/index.ts` before touching the renderer
 2. **Types in `shared/types.ts`:** any type used across processes goes there
 3. **Check `components/ui/`** before building any UI element (see UI Rules above)
 4. **Use semantic color tokens** — no hardcoded colors (see UI Rules above)
