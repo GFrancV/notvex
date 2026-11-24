@@ -45,7 +45,7 @@ import {
   downloadUpdate,
   snoozeUpdate
 } from './updater/updater'
-import { isSafeExternalUrl } from './security/url-guard'
+import { registerSecurityHandlers } from './security/ipc'
 import {
   createVaultBackup,
   ensureVaultBackupDir,
@@ -1087,15 +1087,7 @@ export function registerIpcHandlers(
 
   registerClipboardHandlers()
 
-  handle('shell:open-external', async (_e, url: string) => {
-    try {
-      if (!isSafeExternalUrl(url)) return fail('URL must start with http:// or https://')
-      await shell.openExternal(url)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerSecurityHandlers()
 
   // ── Error log ──────────────────────────────────────────────────────────────
 
