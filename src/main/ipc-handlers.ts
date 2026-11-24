@@ -15,7 +15,7 @@ import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { isKdfLevelId, type KdfMeasurement } from '@shared/kdf-levels'
-import { CURRENT_VERSION_MIN, Prefs } from '@shared/types'
+import { CURRENT_VERSION_MIN } from '@shared/types'
 import type { PendingVault } from '@shared/types'
 import { clearClipboardIfOurs, writeClipboard } from './clipboard/clipboard-guard'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
@@ -25,22 +25,18 @@ import { logError } from './log/log'
 import { fail, handle, type IpcResult, ok, readFully, requireVault } from './ipc/core'
 import { registerNotesHandlers } from './notes/ipc'
 import { setPendingVault } from './pending-vault'
+import { registerPrefsHandlers } from './prefs/ipc'
 import { registerTagsHandlers } from './tags/ipc'
 import type { SchemaMigrationGate } from './db/migrations'
 import {
   clearRecoveryUnconfirmed,
   getCurrentVaultPath,
   getPref,
-  getPrefs,
   isLocalVaultPath,
-  isPrefKey,
   isRecoveryUnconfirmed,
-  isValidPref,
   markRecoveryUnconfirmed,
   promoteVaultToTop,
-  recordVaultUsed,
-  removeRecentVault,
-  setPref
+  recordVaultUsed
 } from './prefs/prefs'
 import {
   clearUpdateSilences,
@@ -1089,39 +1085,7 @@ export function registerIpcHandlers(
   registerNotesHandlers({ requireWin, touchActivity })
   registerTagsHandlers({ touchActivity })
 
-  // ── Prefs ─────────────────────────────────────────────────────────────────
-
-  handle('prefs:get', () => {
-    try {
-      return ok(getPrefs())
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('prefs:set', (_e, key: keyof Prefs, value: Prefs[keyof Prefs]) => {
-    try {
-      if (!isPrefKey(key)) return fail(`Unknown preference key: ${key}`)
-      if (!isValidPref(key, value)) return fail(`Invalid value for preference: ${key}`)
-
-      setPref(key, value)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('prefs:remove-recent-vault', (_e, filePath: unknown) => {
-    try {
-      if (typeof filePath !== 'string' || filePath === '') {
-        return fail("Couldn't remove this vault from the list")
-      }
-      removeRecentVault(filePath)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerPrefsHandlers()
 
   // ── Clipboard ────────────────────────────────────────────────────────────
 
