@@ -42,7 +42,7 @@ vi.mock('@main/ipc-handlers', () => ({
   takeRecycleMark: vi.fn(() => false)
 }))
 
-vi.mock('@main/error-log', () => ({ appendError: vi.fn() }))
+vi.mock('@main/log/error-log', () => ({ appendError: vi.fn() }))
 vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => false) }))
 vi.mock('@main/updater', () => ({ initAutoUpdater: vi.fn() }))
 vi.mock('@main/vault/vault', () => ({ isVaultOpen: vi.fn(() => false) }))
@@ -270,7 +270,7 @@ describe('createWindow: renderer crash recovery', () => {
   })
 
   it('logs the crash reason and exit code', async () => {
-    const { appendError } = await import('@main/error-log')
+    const { appendError } = await import('@main/log/error-log')
     crash(createWindow(() => null))
 
     expect(appendError).toHaveBeenCalledExactlyOnceWith('render-process-gone', {
@@ -305,7 +305,7 @@ describe('createWindow: renderer crash recovery', () => {
   })
 
   it('logs but does not reload a second crash within 30 s', async () => {
-    const { appendError } = await import('@main/error-log')
+    const { appendError } = await import('@main/log/error-log')
     const win = createWindow(() => null)
 
     crash(win)
@@ -329,7 +329,7 @@ describe('createWindow: renderer crash recovery', () => {
   })
 
   it('reloads after a kill from a lock without logging it or using up the guard', async () => {
-    const { appendError } = await import('@main/error-log')
+    const { appendError } = await import('@main/log/error-log')
     const { cancelPendingConfirmations, takeRecycleMark } = await import('@main/ipc-handlers')
     const win = createWindow(() => null)
 
@@ -350,7 +350,7 @@ describe('createWindow: renderer crash recovery', () => {
 
   it('does not reload a window destroyed before a kill from a lock', async () => {
     const { takeRecycleMark } = await import('@main/ipc-handlers')
-    const { appendError } = await import('@main/error-log')
+    const { appendError } = await import('@main/log/error-log')
     const win = createWindow(() => null)
     vi.mocked(win.isDestroyed).mockReturnValue(true)
 

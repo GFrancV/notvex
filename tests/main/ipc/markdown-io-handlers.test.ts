@@ -33,7 +33,7 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn()
 }))
 vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
-vi.mock('@main/log', () => ({ logError: vi.fn() }))
+vi.mock('@main/log/log', () => ({ logError: vi.fn() }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({
@@ -70,7 +70,7 @@ const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handl
 const { getNote, getNoteTitle, importNotes, listNotes } = await import('@main/db/queries')
 const { isVaultOpen } = await import('@main/vault/vault')
 const { memzero } = await import('@main/vault/crypto')
-const { logError } = await import('@main/log')
+const { logError } = await import('@main/log/log')
 const { dialog } = await import('electron')
 const { closeSync, fstatSync, openSync, readSync, writeFileSync } = await import('fs')
 

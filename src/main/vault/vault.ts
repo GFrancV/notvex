@@ -11,7 +11,7 @@ import sqlcipher from '@journeyapps/sqlcipher'
 
 import { DEFAULT_KDF_LEVEL_ID, type KdfLevel } from '@shared/kdf-levels'
 import { CURRENT_VERSION_MIN, PASSWORD_MIN_LENGTH, type VaultVersion } from '@shared/types'
-import { logError } from '../log'
+import { logError } from '../log/log'
 import { runMigrations, type SchemaMigrationGate } from '../db/migrations'
 import { dbAll, dbGet, dbRun } from '../db/queries'
 import {

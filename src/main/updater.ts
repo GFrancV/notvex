@@ -3,7 +3,7 @@ import { autoUpdater } from 'electron-updater'
 
 import type { UpdateInfo } from '@shared/types'
 
-import { logError } from './log'
+import { logError } from './log/log'
 import { getPref, setPref } from './prefs'
 import { parseInAppBlock, type InAppNotes } from './release-notes'
 

@@ -50,8 +50,8 @@ vi.mock('@main/vault/vault', () => ({
   createVault: vi.fn()
 }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/error-log', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@main/error-log')>()),
+vi.mock('@main/log/error-log', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@main/log/error-log')>()),
   appendError: vi.fn()
 }))
 vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))

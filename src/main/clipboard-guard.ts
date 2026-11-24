@@ -1,6 +1,6 @@
 import { clipboard, ClipboardItem } from 'electron'
 
-import { logError } from './log'
+import { logError } from './log/log'
 import { getPrefs } from './prefs'
 
 // The recovery key grants full access, so it is cleared even when the user turned the

@@ -31,7 +31,7 @@ vi.mock('@main/vault/vault', () => ({}))
 vi.mock('@main/db/queries', () => ({}))
 vi.mock('@main/clipboard-guard', () => ({}))
 vi.mock('@main/drain-renderer', () => ({}))
-vi.mock('@main/error-log', () => ({
+vi.mock('@main/log/error-log', () => ({
   appendError: vi.fn(),
   clearLog: vi.fn(),
   ensureLogDir: vi.fn(() => '/user-data/logs'),
@@ -39,7 +39,7 @@ vi.mock('@main/error-log', () => ({
 }))
 
 const { registerIpcHandlers, stopAutoLockTimer } = await import('@main/ipc-handlers')
-const { appendError, clearLog, ensureLogDir, readLogTail } = await import('@main/error-log')
+const { appendError, clearLog, ensureLogDir, readLogTail } = await import('@main/log/error-log')
 const { shell } = await import('electron')
 
 const event = { senderFrame: { url: pathToFileURL(rendererIndexPath).href } }

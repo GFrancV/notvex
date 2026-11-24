@@ -29,8 +29,8 @@ vi.mock('@main/clipboard-guard', () => ({
   })
 }))
 
-vi.mock('@main/error-log', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@main/error-log')>()
+vi.mock('@main/log/error-log', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@main/log/error-log')>()
   return {
     toErrorLike: real.toErrorLike,
     appendError: vi.fn(() => calls.push('appendError'))
@@ -52,10 +52,10 @@ async function install(): Promise<{
     processListeners[event] = fn
     return process
   }) as typeof process.on)
-  const { installCrashHandlers } = await import('@main/crash-handlers')
+  const { installCrashHandlers } = await import('@main/log/crash-handlers')
   installCrashHandlers()
   const { app } = await import('electron')
-  const { appendError } = await import('@main/error-log')
+  const { appendError } = await import('@main/log/error-log')
   const { closeVault } = await import('@main/vault/vault')
   return {
     app: app as unknown as EventEmitter & { exit: ReturnType<typeof vi.fn> },

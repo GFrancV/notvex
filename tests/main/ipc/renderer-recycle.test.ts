@@ -54,8 +54,8 @@ vi.mock('@main/vault/vault', () => ({
   })
 }))
 vi.mock('@main/db/queries', () => ({}))
-vi.mock('@main/error-log', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@main/error-log')>()),
+vi.mock('@main/log/error-log', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@main/log/error-log')>()),
   appendError: vi.fn()
 }))
 vi.mock('@main/clipboard-guard', () => ({ clearClipboardIfOurs: vi.fn(async () => undefined) }))
@@ -136,7 +136,7 @@ describe('renderer recycle on lock', () => {
 
   // A failed kill (EPERM) reloads in the same process, keeping the old heap, so it must be logged
   it('reloads straight away and logs the code when the kill fails', async () => {
-    const { appendError } = await import('@main/error-log')
+    const { appendError } = await import('@main/log/error-log')
     kill.mockImplementationOnce(() => {
       throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
     })

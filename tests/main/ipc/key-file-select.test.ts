@@ -36,7 +36,7 @@ vi.mock('fs', async (importOriginal) => {
   }
 })
 vi.mock('@main/prefs', () => ({ getPref: vi.fn(() => 0) }))
-vi.mock('@main/log', () => ({ logError: vi.fn() }))
+vi.mock('@main/log/log', () => ({ logError: vi.fn() }))
 vi.mock('@main/vault/backups', () => ({}))
 vi.mock('@main/vault/container', () => ({}))
 vi.mock('@main/vault/crypto', () => ({ KEY_FILE_MAX_BYTES: 4, memzero: vi.fn() }))

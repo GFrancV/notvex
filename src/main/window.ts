@@ -3,7 +3,7 @@ import { join } from 'path'
 
 import type { PendingVault } from '@shared/types'
 
-import { appendError } from './error-log'
+import { appendError } from './log/error-log'
 import {
   cancelPendingConfirmations,
   closeVaultDrained,

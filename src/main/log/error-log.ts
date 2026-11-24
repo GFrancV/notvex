@@ -11,7 +11,7 @@ import {
 import { join } from 'node:path'
 
 import type { ErrorLike } from '@shared/error-stack'
-import { devRendererUrl } from './security/url-guard'
+import { devRendererUrl } from '../security/url-guard'
 
 // The log is plaintext and outlives the vault, so it is built from an allowlist: anything not
 // matched below is dropped or replaced, never escaped. Messages are never kept because they
