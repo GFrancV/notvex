@@ -11,7 +11,6 @@ import {
   readFileSync,
   writeFileSync
 } from 'fs'
-import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { isKdfLevelId, type KdfMeasurement } from '@shared/kdf-levels'
@@ -21,7 +20,8 @@ import { clearClipboardIfOurs } from './clipboard/clipboard-guard'
 import { registerClipboardHandlers } from './clipboard/ipc'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
-import { appendError, clearLog, ensureLogDir, readLogTail } from './log/error-log'
+import { appendError } from './log/error-log'
+import { registerLogHandlers } from './log/ipc'
 import { logError } from './log/log'
 import { fail, handle, type IpcResult, ok, readFully, requireVault } from './ipc/core'
 import { registerNotesHandlers } from './notes/ipc'
@@ -106,12 +106,6 @@ const VAULT_SYNC_INTERVAL_MS = 30_000
 // reload takes the page and that error with it. Nobody is racing a reload the user asked for.
 const RELOAD_DRAIN_TIMEOUT_MS = 2_000
 
-const LOG_STACK_MAX = 4 * 1024
-const LOG_RATE_LIMIT = 10
-const LOG_RATE_WINDOW_MS = 60_000
-const REPORT_LOG_LINES = 30
-
-let rendererErrorTimes: number[] = []
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
 let syncTimer: ReturnType<typeof setInterval> | null = null
@@ -1089,60 +1083,7 @@ export function registerIpcHandlers(
 
   registerSecurityHandlers()
 
-  // ── Error log ──────────────────────────────────────────────────────────────
-
-  // The renderer is untrusted here: an error loop must not fill the disk, so past the limit
-  // errors are dropped, and ok() because the renderer can do nothing useful with a refusal.
-  handle('log:error', (_e, payload: unknown) => {
-    try {
-      const { name, stack } = (
-        typeof payload === 'object' && payload !== null ? payload : {}
-      ) as Record<string, unknown>
-      if (typeof name !== 'string' || typeof stack !== 'string') {
-        return fail('Invalid error payload')
-      }
-      const now = Date.now()
-      rendererErrorTimes = rendererErrorTimes.filter((t) => now - t < LOG_RATE_WINDOW_MS)
-      if (rendererErrorTimes.length >= LOG_RATE_LIMIT) return ok(null)
-      rendererErrorTimes.push(now)
-      appendError('renderer', { name, stack: stack.slice(0, LOG_STACK_MAX) })
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // Returned as parts, not one text: the renderer drops log lines to fit the issue URL limit.
-  handle('log:build-report', () => {
-    try {
-      const environment = [
-        `**Version:** ${app.getVersion()}`,
-        `**Electron:** ${process.versions.electron ?? 'unknown'}`,
-        `**OS:** ${process.platform} ${release()} ${process.arch}`
-      ].join(' · ')
-      return ok({ environment, log: readLogTail(REPORT_LOG_LINES) })
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('log:open-folder', async () => {
-    try {
-      const result = await shell.openPath(ensureLogDir())
-      return result ? fail(result) : ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('log:clear', () => {
-    try {
-      clearLog()
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerLogHandlers()
 
   // ── Updater ────────────────────────────────────────────────────────────────
 
