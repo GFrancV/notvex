@@ -42,7 +42,7 @@ function fakeWindow(): {
 
 describe('initAutoUpdater across windows (issue #36)', () => {
   let autoUpdater: EventEmitter
-  let initAutoUpdater: typeof import('@main/updater').initAutoUpdater
+  let initAutoUpdater: typeof import('@main/updater/updater').initAutoUpdater
 
   beforeEach(async () => {
     vi.resetModules()
@@ -50,7 +50,7 @@ describe('initAutoUpdater across windows (issue #36)', () => {
       autoUpdater: EventEmitter
     })
     autoUpdater.removeAllListeners()
-    ;({ initAutoUpdater } = await import('@main/updater'))
+    ;({ initAutoUpdater } = await import('@main/updater/updater'))
   })
 
   it("turns off electron-updater's own console logger", () => {
@@ -90,7 +90,7 @@ describe('initAutoUpdater across windows (issue #36)', () => {
 
 describe('update-available payload', () => {
   let autoUpdater: EventEmitter
-  let initAutoUpdater: typeof import('@main/updater').initAutoUpdater
+  let initAutoUpdater: typeof import('@main/updater/updater').initAutoUpdater
 
   beforeEach(async () => {
     vi.resetModules()
@@ -99,7 +99,7 @@ describe('update-available payload', () => {
       autoUpdater: EventEmitter
     })
     autoUpdater.removeAllListeners()
-    ;({ initAutoUpdater } = await import('@main/updater'))
+    ;({ initAutoUpdater } = await import('@main/updater/updater'))
   })
 
   afterEach(() => {
@@ -224,13 +224,13 @@ describe('update-available payload', () => {
 })
 
 describe('remind me later and session dismissal', () => {
-  let updater: typeof import('@main/updater')
+  let updater: typeof import('@main/updater/updater')
 
   beforeEach(async () => {
     vi.resetModules()
     prefs.getPref.mockReset()
     prefs.setPref.mockReset()
-    updater = await import('@main/updater')
+    updater = await import('@main/updater/updater')
   })
 
   afterEach(() => {
@@ -341,7 +341,7 @@ describe('remind me later and session dismissal', () => {
 })
 
 describe('error messages', () => {
-  let updater: typeof import('@main/updater')
+  let updater: typeof import('@main/updater/updater')
   let autoUpdater: EventEmitter & { downloadUpdate?: () => Promise<unknown> }
 
   beforeEach(async () => {
@@ -350,7 +350,7 @@ describe('error messages', () => {
       autoUpdater: EventEmitter
     })
     autoUpdater.removeAllListeners()
-    updater = await import('@main/updater')
+    updater = await import('@main/updater/updater')
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 

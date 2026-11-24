@@ -79,7 +79,7 @@ import {
   dismissUpdateForSession,
   downloadUpdate,
   snoozeUpdate
-} from './updater'
+} from './updater/updater'
 import { isSafeExternalUrl, isTrustedFrame } from './security/url-guard'
 import {
   createVaultBackup,

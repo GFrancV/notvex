@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseInAppBlock } from '@main/release-notes'
+import { parseInAppBlock } from '@main/updater/release-notes'
 
 describe('parseInAppBlock', () => {
   it('returns the summary without the block delimiter lines', () => {
