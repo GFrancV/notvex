@@ -20,4 +20,8 @@ describe('no-console in src/main', { timeout: 30_000 }, () => {
   it('allows them in log.ts, the redacting helper', async () => {
     expect(await ruleIds('src/main/log/log.ts')).not.toContain('no-console')
   })
+
+  it("rejects them in the logger's sibling modules", async () => {
+    expect(await ruleIds('src/main/log/error-log.ts')).toContain('no-console')
+  })
 })
