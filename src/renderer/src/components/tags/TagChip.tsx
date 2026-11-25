@@ -2,7 +2,9 @@ import type { ReactNode } from 'react'
 
 import { XIcon } from 'lucide-react'
 
+import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import type { Tag } from '@shared/types'
+import { Masked } from '../Masked'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 interface TagChipProps {
@@ -11,6 +13,7 @@ interface TagChipProps {
 }
 
 export function TagChip({ tag, onRemove }: TagChipProps): ReactNode {
+  const { privacyMode } = usePrivacyMode()
   return (
     <span
       className="group inline-flex h-6.5 max-w-full min-w-0 items-center gap-1.5 rounded px-3 py-0.5 text-xs font-medium transition duration-300"
@@ -19,9 +22,13 @@ export function TagChip({ tag, onRemove }: TagChipProps): ReactNode {
       <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="truncate">{tag.name}</span>
+          <span className="truncate">
+            <Masked text={tag.name} />
+          </span>
         </TooltipTrigger>
-        <TooltipContent>{tag.name}</TooltipContent>
+        <TooltipContent>
+          <Masked text={tag.name} />
+        </TooltipContent>
       </Tooltip>
       {onRemove && (
         <Tooltip>
@@ -33,12 +40,14 @@ export function TagChip({ tag, onRemove }: TagChipProps): ReactNode {
                 onRemove()
               }}
               className="inline-flex h-3 w-0 shrink-0 items-center justify-center overflow-hidden transition-all duration-300 ease-in-out group-hover:w-3"
-              aria-label={`Remove tag ${tag.name}`}
+              aria-label={privacyMode ? 'Remove hidden tag' : `Remove tag ${tag.name}`}
             >
               <XIcon className="size-3 shrink-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
             </button>
           </TooltipTrigger>
-          <TooltipContent>Remove tag {tag.name}</TooltipContent>
+          <TooltipContent>
+            Remove tag <Masked text={tag.name} />
+          </TooltipContent>
         </Tooltip>
       )}
     </span>

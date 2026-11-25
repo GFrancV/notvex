@@ -22,9 +22,11 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { loadDebugInfo, openBugReport, openLogsFolder } from '@/lib/bug-report'
+import { opaqueValue } from '@/lib/opaque-value'
 import { requestReload } from '@/lib/reload-window'
 import { useUiStore } from '@/store/ui.store'
 import { useVaultStore } from '@/store/vault.store'
+import { Masked } from './Masked'
 import { Shortcut } from './Shortcut'
 import {
   CommandDialog,
@@ -38,19 +40,8 @@ import {
 } from './ui/command'
 
 const RECENT_NOTES = 8
-const ZERO_WIDTH_DIGITS = [0x200b, 0x200c, 0x200d, 0x2060].map((c) => String.fromCharCode(c))
-// Every note value ends in one of ZERO_WIDTH_DIGITS; this character is not one of them.
+// Note values are zero-width digits only (see opaqueValue); this character is not one of them.
 const CREATE_NOTE_VALUE = String.fromCharCode(0x2063)
-
-// cmdk keys items by `value`, so notes sharing a title would highlight together. Appending the
-// index written with zero-width digits (which cmdk doesn't trim and nobody types) keeps each value
-// unique while matching still runs on the title alone. Those characters are stripped from the title
-// first, or a pasted title ending in one could produce another note's value.
-function noteValue(title: string, index: number): string {
-  const base = [...title].filter((c) => !ZERO_WIDTH_DIGITS.includes(c)).join('')
-  const digits = index.toString(ZERO_WIDTH_DIGITS.length)
-  return base + [...digits].map((d) => ZERO_WIDTH_DIGITS[Number(d)]).join('')
-}
 
 export function CommandPalette(): JSX.Element | null {
   const { commandPaletteOpen, setCommandPaletteOpen } = useUiStore()
@@ -240,11 +231,14 @@ function PaletteContent(): ReactNode {
               {shownNotes.map((note, i) => (
                 <CommandItem
                   key={note.id}
-                  value={noteValue(note.title || 'Untitled', i)}
+                  value={opaqueValue(i)}
+                  keywords={[note.title || 'Untitled']}
                   onSelect={() => run(() => selectNote(note.id))}
                 >
                   <FileTextIcon />
-                  <span>{note.title || 'Untitled'}</span>
+                  <span>
+                    <Masked text={note.title || 'Untitled'} />
+                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>

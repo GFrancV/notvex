@@ -21,6 +21,7 @@ import { useVaultStore } from '@/store/vault.store'
 import type { Tag } from '@shared/types'
 import { AppLogo } from './AppLogo'
 import { HelpMenu } from './HelpMenu'
+import { PrivacyModeToggle } from './PrivacyModeToggle'
 import { SettingsDialog, type SettingsTab } from './settings-dialog'
 import { Shortcut } from './Shortcut'
 import { TagCreateModal } from './tags/TagCreateModal'
@@ -111,6 +112,7 @@ export function Sidebar(): React.ReactNode {
             {isDev && <Badge variant="secondary">Dev</Badge>}
           </span>
           <div className="flex items-center gap-1">
+            <PrivacyModeToggle />
             <HelpMenu onOpenAbout={() => setSettingsTab('about')} />
             <Button
               variant="ghost"

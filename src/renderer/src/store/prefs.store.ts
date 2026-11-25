@@ -45,6 +45,7 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
         clearClipboardOnLock: p.clearClipboardOnLock,
         noteSort: p.noteSort,
         checkUpdatesOnStartup: p.checkUpdatesOnStartup,
+        privacyMode: p.privacyMode,
         recentVaults: p.recentVaults
       })
     } else {
