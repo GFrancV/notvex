@@ -1,7 +1,6 @@
 import { randomBytes } from 'crypto'
-import type { BrowserWindow, IpcMainInvokeEvent, WebContents } from 'electron'
-import { app, dialog, ipcMain, shell } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import type { BrowserWindow, WebContents } from 'electron'
+import { app, dialog, shell } from 'electron'
 import {
   closeSync,
   constants,
@@ -9,78 +8,38 @@ import {
   fstatSync,
   openSync,
   readFileSync,
-  readSync,
   writeFileSync
 } from 'fs'
-import { release } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { isKdfLevelId, type KdfMeasurement } from '@shared/kdf-levels'
-import { CURRENT_VERSION_MIN, Prefs, TAG_NAME_MAX } from '@shared/types'
+import { CURRENT_VERSION_MIN } from '@shared/types'
 import type { PendingVault } from '@shared/types'
-import { clearClipboardIfOurs, writeClipboard } from './clipboard/clipboard-guard'
+import { clearClipboardIfOurs } from './clipboard/clipboard-guard'
+import { registerClipboardHandlers } from './clipboard/ipc'
 import { dialogDefaultPath, rememberDialogDir } from './dialog-dir'
 import { drainRenderer } from './drain-renderer'
-import { appendError, clearLog, ensureLogDir, readLogTail } from './log/error-log'
+import { appendError } from './log/error-log'
+import { registerLogHandlers } from './log/ipc'
 import { logError } from './log/log'
+import { fail, handle, type IpcResult, ok, readFully, requireVault } from './ipc/core'
+import { registerNotesHandlers } from './notes/ipc'
 import { setPendingVault } from './pending-vault'
-import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './notes/markdown-io'
+import { registerPrefsHandlers } from './prefs/ipc'
+import { registerTagsHandlers } from './tags/ipc'
 import type { SchemaMigrationGate } from './db/migrations'
-import type {
-  CreateNoteInput,
-  CreateTagInput,
-  ImportRead,
-  Note,
-  NoteFilter,
-  NotePatch,
-  TagPatch
-} from './db/queries'
-import {
-  addTagToNote,
-  createNote,
-  createTag,
-  createTagAndAssign,
-  deleteNote,
-  deleteTag,
-  duplicateNote,
-  emptyTrash,
-  getAllNoteTags,
-  getNote,
-  getNoteCountPerTag,
-  getNoteCounts,
-  getNoteTags,
-  getNoteTitle,
-  importNotes,
-  listNotes,
-  listTags,
-  removeTagFromNote,
-  restoreNote,
-  trashNote,
-  updateNote,
-  updateTag
-} from './db/queries'
 import {
   clearRecoveryUnconfirmed,
   getCurrentVaultPath,
   getPref,
-  getPrefs,
   isLocalVaultPath,
-  isPrefKey,
   isRecoveryUnconfirmed,
-  isValidPref,
   markRecoveryUnconfirmed,
   promoteVaultToTop,
-  recordVaultUsed,
-  removeRecentVault,
-  setPref
+  recordVaultUsed
 } from './prefs/prefs'
-import {
-  clearUpdateSilences,
-  dismissUpdateForSession,
-  downloadUpdate,
-  snoozeUpdate
-} from './updater/updater'
-import { isSafeExternalUrl, isTrustedFrame } from './security/url-guard'
+import { registerUpdaterHandlers } from './updater/ipc'
+import { registerSecurityHandlers } from './security/ipc'
 import {
   createVaultBackup,
   ensureVaultBackupDir,
@@ -88,16 +47,14 @@ import {
   hasAnyBackups
 } from './vault/backups'
 import { readContainer, shouldWarnOpeningInDevBuild, vaultFileStatus } from './vault/container'
-import { KEY_FILE_MAX_BYTES, measureKdfLevel, memzero, readKeyFileContents } from './vault/crypto'
+import { KEY_FILE_MAX_BYTES, measureKdfLevel, readKeyFileContents } from './vault/crypto'
 import {
   changePassword,
   closeVault,
   configureKeyFile,
   createVault,
-  getDb,
   getHasKeyFileFromOpenVault,
   getKdfLevelFromOpenVault,
-  getMasterKey,
   getVaultPath,
   isVaultOpen,
   migrateHeaderIfNeeded,
@@ -109,34 +66,6 @@ import {
   syncContainer,
   withVaultLock
 } from './vault/vault'
-
-// ─── IPC envelope helper ─────────────────────────────────────────────────────
-
-type IpcResult<T> = { success: true; data: T } | { success: false; error: string }
-
-function ok<T>(data: T): IpcResult<T> {
-  return { success: true, data }
-}
-
-function fail(error: unknown): IpcResult<never> {
-  return { success: false, error: error instanceof Error ? error.message : String(error) }
-}
-
-// Every handler registers through this so a call from any frame other than the
-// app's own page is refused before it runs. ipcMain.handle has no
-// middleware, and a guard line per handler is easy to forget on a new channel.
-function handle(
-  channel: string,
-  fn: (event: IpcMainInvokeEvent, ...args: never[]) => unknown
-): void {
-  ipcMain.handle(channel, (event, ...args: unknown[]) =>
-    isTrustedFrame(event) ? fn(event, ...(args as never[])) : fail('Untrusted sender')
-  )
-}
-
-function requireVault(): void {
-  if (!isVaultOpen()) throw new Error('Vault is locked')
-}
 
 // Set while a new recovery key may still be on screen, so the soft locks (inactivity, minimize)
 // wait for the user to confirm it. Memory only and dropped on any close: the prefs flag is what
@@ -164,109 +93,6 @@ function markIssuedRecoveryKey(vaultPath: string): void {
   }
 }
 
-// The renderer's maxLength and color picker only limit what the UI offers, so any caller of
-// window.notvex.tags.* reaches here unchecked. Validated on write only: tags stored before these
-// checks stay readable.
-function validTagName(name: unknown): string {
-  const trimmed = typeof name === 'string' ? name.trim() : ''
-  if (trimmed.length === 0) throw new Error('Tag name cannot be empty')
-  if (trimmed.length > TAG_NAME_MAX) {
-    throw new Error(`Tag name must be at most ${TAG_NAME_MAX} characters`)
-  }
-  return trimmed
-}
-
-// The renderer builds a translucent background by appending a hex alpha, so only #rrggbb works.
-function validTagColor(color: unknown): string {
-  if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) {
-    throw new Error('Tag color must be a #rrggbb hex value')
-  }
-  return color.toLowerCase()
-}
-
-// The caller must memzero the result once written.
-// Exported files are plaintext: on Linux and macOS the default 0644 would let other local
-// accounts read them. Applies when a file is created; Windows ignores it.
-const EXPORT_MODE = 0o600
-
-function toMarkdownBytes(note: Note): Buffer {
-  const tags = note.tags.map((t) => t.name)
-  return Buffer.from(serializeNote({ ...note, tags }), 'utf8')
-}
-
-// 'wx' fails instead of replacing a file the user already has in `dir`; on EEXIST the next free
-// " (n)" name is tried. `used` also catches collisions within this export.
-function writeNewFile(dir: string, base: string, used: Set<string>, bytes: Uint8Array): void {
-  for (;;) {
-    try {
-      writeFileSync(join(dir, dedupeName(base, used)), bytes, { flag: 'wx', mode: EXPORT_MODE })
-      return
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
-    }
-  }
-}
-
-// Imported files are untrusted: size is checked before reading (and again after, in case the
-// file grew in between), and decoding is strict so a binary renamed to .md is rejected rather
-// than stored as mojibake. A file that can't be read is skipped, not fatal to the import.
-const IMPORT_MAX_FILES = 500
-const IMPORT_MAX_BYTES = 5 * 1024 * 1024
-// Far above any real note; only bounds what an untrusted renderer can push onto the clipboard.
-const CLIPBOARD_MAX_CHARS = 10_000_000
-const utf8Strict = new TextDecoder('utf-8', { fatal: true })
-
-function decodeUtf8(raw: Uint8Array): string | null {
-  try {
-    return utf8Strict.decode(raw)
-  } catch {
-    return null
-  }
-}
-
-// A short read is not EOF; stopping early would silently drop bytes.
-function readFully(fd: number, buf: Uint8Array): number {
-  let length = 0
-  while (length < buf.length) {
-    const n = readSync(fd, buf, length, buf.length - length, length)
-    if (n === 0) break
-    length += n
-  }
-  return length
-}
-
-// Checked and read through one descriptor, so the file that was checked is the file that is read.
-async function readImportFile(file: string): Promise<ImportRead> {
-  let fd: number
-  try {
-    // O_NONBLOCK: opening a FIFO would otherwise wait for a writer forever. No-op on Windows.
-    fd = openSync(file, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0))
-  } catch (e) {
-    logError('notes:import: open failed:', e)
-    return { skip: "couldn't be read" }
-  }
-  let buf: Buffer | undefined
-  try {
-    const stat = fstatSync(fd)
-    // FIFOs and devices report size 0 and may never reach EOF, so the size cap can't hold.
-    if (!stat.isFile()) return { skip: 'not a regular file' }
-    if (stat.size > IMPORT_MAX_BYTES) return { skip: 'larger than 5 MB' }
-    // One byte past the stated size, to notice a file that grew since fstat.
-    buf = Buffer.alloc(stat.size + 1)
-    const length = readFully(fd, buf)
-    if (length > stat.size) return { skip: 'changed while being read' }
-    const text = decodeUtf8(buf.subarray(0, length))
-    if (text === null) return { skip: 'not valid UTF-8' }
-    return { note: parseMarkdownFile(text, basename(file)) }
-  } catch (e) {
-    logError('notes:import: read failed:', e)
-    return { skip: "couldn't be read" }
-  } finally {
-    if (buf) memzero(buf)
-    closeSync(fd)
-  }
-}
-
 // ─── Auto-lock + periodic sync state ─────────────────────────────────────────
 
 const VAULT_SYNC_INTERVAL_MS = 30_000
@@ -274,12 +100,6 @@ const VAULT_SYNC_INTERVAL_MS = 30_000
 // reload takes the page and that error with it. Nobody is racing a reload the user asked for.
 const RELOAD_DRAIN_TIMEOUT_MS = 2_000
 
-const LOG_STACK_MAX = 4 * 1024
-const LOG_RATE_LIMIT = 10
-const LOG_RATE_WINDOW_MS = 60_000
-const REPORT_LOG_LINES = 30
-
-let rendererErrorTimes: number[] = []
 let lastActivityAt = Date.now()
 let autoLockTimer: ReturnType<typeof setInterval> | null = null
 let syncTimer: ReturnType<typeof setInterval> | null = null
@@ -1248,540 +1068,18 @@ export function registerIpcHandlers(
     }
   })
 
-  // ── Notes ─────────────────────────────────────────────────────────────────
+  registerNotesHandlers({ requireWin, touchActivity })
+  registerTagsHandlers({ touchActivity })
 
-  handle('notes:create', async (_e, input: CreateNoteInput) => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => createNote(getDb(), input, getMasterKey())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerPrefsHandlers()
 
-  handle('notes:get', async (_e, id: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => getNote(getDb(), id, getMasterKey())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerClipboardHandlers()
 
-  handle('notes:list', async (_e, filter: NoteFilter = {}) => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => listNotes(getDb(), getMasterKey(), filter)))
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerSecurityHandlers()
 
-  handle('notes:update', async (_e, id: string, patch: NotePatch) => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => updateNote(getDb(), id, patch, getMasterKey()))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerLogHandlers()
 
-  // Takes only the id: the content is read and re-encrypted here, never round-tripped
-  // through the renderer.
-  handle('notes:duplicate', async (_e, id: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => duplicateNote(getDb(), id, getMasterKey())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:trash', async (_e, id: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => trashNote(getDb(), id))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:restore', async (_e, id: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => restoreNote(getDb(), id))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:delete', async (_e, id: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => deleteNote(getDb(), id))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:empty-trash', async () => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => emptyTrash(getDb()))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:counts', async () => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => getNoteCounts(getDb())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // ── Markdown export / import ────────────────────────────────────────────────
-  // The renderer sends only ids and gets back only counts: note content is read, decrypted and
-  // written here and never crosses IPC.
-
-  handle('notes:export', async (_e, noteId: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      // Only the title before the dialog: the content isn't decrypted while it waits on the user.
-      const title = await withVaultLock(() => getNoteTitle(getDb(), noteId, getMasterKey()))
-      if (title === null) return fail('Note not found')
-
-      // Outside the vault lock: an open dialog must not hold up the periodic sync or a lock.
-      const { canceled, filePath } = await dialog.showSaveDialog(requireWin(), {
-        title: 'Export note',
-        defaultPath: dialogDefaultPath(`${toSafeFilename(title)}.md`),
-        filters: [{ name: 'Markdown', extensions: ['md'] }]
-      })
-      if (canceled || !filePath) return ok(null)
-      rememberDialogDir(filePath)
-      // A lock while the dialog was open means the user may have walked away: don't write.
-      requireVault()
-      // Re-read from whatever vault is open now; another one may have been unlocked meanwhile.
-      const note = await withVaultLock(() => getNote(getDb(), noteId, getMasterKey()))
-      if (!note) return fail('Note not found')
-
-      const bytes = toMarkdownBytes(note)
-      try {
-        writeFileSync(filePath, bytes, { mode: EXPORT_MODE })
-      } catch (e) {
-        logError('notes:export: write failed:', e)
-        return fail("Couldn't write the exported file")
-      } finally {
-        memzero(bytes)
-      }
-      return ok(true)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:export-all', async () => {
-    try {
-      requireVault()
-      touchActivity()
-      // The folder is picked before any note is decrypted, so no plaintext waits on the user.
-      const { canceled, filePaths } = await dialog.showOpenDialog(requireWin(), {
-        title: 'Export all notes',
-        defaultPath: dialogDefaultPath(),
-        properties: ['openDirectory', 'createDirectory'],
-        buttonLabel: 'Export here'
-      })
-      const dir = filePaths[0]
-      if (canceled || !dir) return ok(null)
-      rememberDialogDir(dir)
-      requireVault()
-
-      // One note decrypted at a time. Exporting holds the vault lock, but it's a one-off action
-      // the user is waiting on.
-      return await withVaultLock(async () => {
-        const ids = (await listNotes(getDb(), getMasterKey(), { trashed: false })).map((n) => n.id)
-        const used = new Set<string>()
-        let written = 0
-        for (const id of ids) {
-          const note = await getNote(getDb(), id, getMasterKey())
-          if (!note) continue
-          const bytes = toMarkdownBytes(note)
-          try {
-            writeNewFile(dir, toSafeFilename(note.title), used, bytes)
-          } catch (e) {
-            logError('notes:export-all: write failed:', e)
-            return fail(
-              `Export stopped after ${written} of ${ids.length} notes: a file couldn't be written`
-            )
-          } finally {
-            memzero(bytes)
-          }
-          written++
-        }
-        return ok(written)
-      })
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('notes:import', async () => {
-    try {
-      requireVault()
-      touchActivity()
-      const { canceled, filePaths } = await dialog.showOpenDialog(requireWin(), {
-        title: 'Import Markdown',
-        defaultPath: dialogDefaultPath(),
-        properties: ['openFile', 'multiSelections'],
-        filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }]
-      })
-      if (canceled || filePaths.length === 0) return ok(null)
-      rememberDialogDir(filePaths[0])
-      if (filePaths.length > IMPORT_MAX_FILES) {
-        return fail(`Select at most ${IMPORT_MAX_FILES} files per import`)
-      }
-      requireVault()
-
-      // importNotes reads each file inside its transaction, so this holds the vault lock for the
-      // whole import; it's a one-off action the user is waiting on.
-      const result = await withVaultLock(() =>
-        importNotes(getDb(), filePaths, getMasterKey(), readImportFile)
-      )
-      return ok(result)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // ── Tags ──────────────────────────────────────────────────────────────────
-
-  handle('tags:create', async (_e, input: CreateTagInput) => {
-    try {
-      requireVault()
-      const name = validTagName(input?.name)
-      const color = validTagColor(input?.color)
-      touchActivity()
-      return ok(await withVaultLock(() => createTag(getDb(), { ...input, name, color })))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle(
-    'tags:create-and-assign',
-    async (_e, input: { noteId: string; name: string; color: string }) => {
-      try {
-        requireVault()
-        const name = validTagName(input?.name)
-        const color = validTagColor(input?.color)
-        touchActivity()
-        return ok(await withVaultLock(() => createTagAndAssign(getDb(), { ...input, name, color })))
-      } catch (e) {
-        return fail(e)
-      }
-    }
-  )
-
-  handle('tags:list', async () => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => listTags(getDb())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('tags:update', async (_e, id: string, patch: TagPatch) => {
-    try {
-      requireVault()
-      const checked = {
-        ...patch,
-        ...(patch?.name !== undefined && { name: validTagName(patch.name) }),
-        ...(patch?.color !== undefined && { color: validTagColor(patch.color) })
-      }
-      touchActivity()
-      await withVaultLock(() => updateTag(getDb(), id, checked))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('tags:delete', async (_e, id: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => deleteTag(getDb(), id))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // ── Note-tags ─────────────────────────────────────────────────────────────
-
-  handle('note-tags:add', async (_e, noteId: string, tagId: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => addTagToNote(getDb(), noteId, tagId))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('note-tags:remove', async (_e, noteId: string, tagId: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      await withVaultLock(() => removeTagFromNote(getDb(), noteId, tagId))
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('note-tags:list', async (_e, noteId: string) => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => getNoteTags(getDb(), noteId)))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('note-tags:counts', async () => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => getNoteCountPerTag(getDb())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('note-tags:all', async () => {
-    try {
-      requireVault()
-      touchActivity()
-      return ok(await withVaultLock(() => getAllNoteTags(getDb())))
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // ── Prefs ─────────────────────────────────────────────────────────────────
-
-  handle('prefs:get', () => {
-    try {
-      return ok(getPrefs())
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('prefs:set', (_e, key: keyof Prefs, value: Prefs[keyof Prefs]) => {
-    try {
-      if (!isPrefKey(key)) return fail(`Unknown preference key: ${key}`)
-      if (!isValidPref(key, value)) return fail(`Invalid value for preference: ${key}`)
-
-      setPref(key, value)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('prefs:remove-recent-vault', (_e, filePath: unknown) => {
-    try {
-      if (typeof filePath !== 'string' || filePath === '') {
-        return fail("Couldn't remove this vault from the list")
-      }
-      removeRecentVault(filePath)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // ── Clipboard ────────────────────────────────────────────────────────────
-
-  handle('clipboard:write', async (_e, text: unknown, opts: unknown) => {
-    try {
-      if (typeof text !== 'string' || text === '' || text.length > CLIPBOARD_MAX_CHARS) {
-        return fail('Invalid clipboard value')
-      }
-      const flags = opts as { secret?: unknown; fromUnlockedView?: unknown } | null | undefined
-      const secret = flags?.secret === true
-      // The renderer hears of a lock only after main cleared the clipboard, so a copy from the
-      // view it still shows can arrive with the vault closed. The recovery key is shown once, so
-      // its copy goes through regardless. Nothing may await between this check and
-      // writeClipboard(): a lock in that gap would be missed by both this and its lock generation.
-      if (!secret && flags?.fromUnlockedView === true && !isVaultOpen()) {
-        return fail('Vault is locked')
-      }
-      await writeClipboard(text, { secret })
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('shell:open-external', async (_e, url: string) => {
-    try {
-      if (!isSafeExternalUrl(url)) return fail('URL must start with http:// or https://')
-      await shell.openExternal(url)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // ── Error log ──────────────────────────────────────────────────────────────
-
-  // The renderer is untrusted here: an error loop must not fill the disk, so past the limit
-  // errors are dropped, and ok() because the renderer can do nothing useful with a refusal.
-  handle('log:error', (_e, payload: unknown) => {
-    try {
-      const { name, stack } = (
-        typeof payload === 'object' && payload !== null ? payload : {}
-      ) as Record<string, unknown>
-      if (typeof name !== 'string' || typeof stack !== 'string') {
-        return fail('Invalid error payload')
-      }
-      const now = Date.now()
-      rendererErrorTimes = rendererErrorTimes.filter((t) => now - t < LOG_RATE_WINDOW_MS)
-      if (rendererErrorTimes.length >= LOG_RATE_LIMIT) return ok(null)
-      rendererErrorTimes.push(now)
-      appendError('renderer', { name, stack: stack.slice(0, LOG_STACK_MAX) })
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // Returned as parts, not one text: the renderer drops log lines to fit the issue URL limit.
-  handle('log:build-report', () => {
-    try {
-      const environment = [
-        `**Version:** ${app.getVersion()}`,
-        `**Electron:** ${process.versions.electron ?? 'unknown'}`,
-        `**OS:** ${process.platform} ${release()} ${process.arch}`
-      ].join(' · ')
-      return ok({ environment, log: readLogTail(REPORT_LOG_LINES) })
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('log:open-folder', async () => {
-    try {
-      const result = await shell.openPath(ensureLogDir())
-      return result ? fail(result) : ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('log:clear', () => {
-    try {
-      clearLog()
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  // ── Updater ────────────────────────────────────────────────────────────────
-
-  const checkForUpdates = async (): Promise<IpcResult<string | null>> => {
-    try {
-      const result = await autoUpdater.checkForUpdates()
-      const available = result?.isUpdateAvailable ?? false
-      return ok(available ? (result?.updateInfo.version ?? null) : null)
-    } catch (e) {
-      return fail(e)
-    }
-  }
-
-  handle('updater:check-now', () => {
-    try {
-      clearUpdateSilences()
-    } catch (e) {
-      return fail(e)
-    }
-    return checkForUpdates()
-  })
-
-  // The opt-out is enforced here, not in the renderer, so a renderer bug can't leak the request.
-  // Each check downloads latest.yml from the real release, and its download count is the only
-  // signal of how many installs exist, so dev launches must not add to it.
-  handle('updater:check-on-startup', () =>
-    app.isPackaged && getPref('checkUpdatesOnStartup') ? checkForUpdates() : ok(null)
-  )
-
-  handle('updater:snooze', (_e, version: unknown) => {
-    if (typeof version !== 'string' || version === '') return fail('Invalid version')
-    try {
-      snoozeUpdate(version)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('updater:dismiss', (_e, version: unknown) => {
-    if (typeof version !== 'string' || version === '') return fail('Invalid version')
-    dismissUpdateForSession(version)
-    return ok(null)
-  })
-
-  handle('updater:download', async () => {
-    try {
-      await downloadUpdate()
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('updater:install-now', () => {
-    try {
-      autoUpdater.quitAndInstall(false, true)
-      return ok(null)
-    } catch (e) {
-      return fail(e)
-    }
-  })
-
-  handle('updater:get-current-version', () => {
-    try {
-      return ok(app.getVersion())
-    } catch (e) {
-      return fail(e)
-    }
-  })
+  registerUpdaterHandlers()
 
   handle('app:is-dev', () => {
     try {

@@ -39,6 +39,10 @@ concerns (boundary correctness doubles as the architecture check for now).
 Add a second rule to `.dependency-cruiser.cjs` if another boundary needs
 enforcing later; don't add a second tool for it.
 
+| Check | Command | Rule | Reason |
+|---|---|---|---|
+| Vault session ownership | `pnpm depcruise` | 0 violations of `features-no-vault-session` (`.dependency-cruiser.cjs`) | `src/main/ipc-handlers.ts` holds the vault session state (unlock/create flags, renderer generation, gates, timers). Modules in a `src/main` folder never import it and get what they need from it as parameters, so none of them can read or change that state directly. |
+
 ## Test file location
 
 Test files live under `tests/` at the project root, never colocated inside

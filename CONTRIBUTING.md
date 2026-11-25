@@ -20,7 +20,7 @@ Prerequisites and install steps are in the README's [Development](./README.md#de
 1. Fork the repository and branch from `main`: `fix/short-name` or `feat/short-name`, or `fix/issue-123-short-name` when there's an issue.
 2. Read [CLAUDE.md](./CLAUDE.md). Despite its name, it's the project guide for people and coding agents alike: architecture, the IPC pattern, code style, UI rules and security rules. [CONSTRAINTS.md](./CONSTRAINTS.md) is the quality bar the checks enforce.
 3. The rules that matter most:
-   - The renderer never imports crypto, SQLCipher or vault code. Everything goes through IPC (`ipc-handlers.ts` → `preload/index.ts` → `lib/ipc.ts`).
+   - The renderer never imports crypto, SQLCipher or vault code. Everything goes through IPC (main's handlers in `ipc-handlers.ts` and each feature's `ipc.ts` → `preload/index.ts` → `lib/ipc.ts`).
    - UI: reuse what's in `src/renderer/src/components/ui/`, use the semantic color tokens from `main.css`, no inline styles, dark mode only.
    - Copy: sentence case, and error messages start with "Couldn't …".
    - Tests go in `tests/`, in the folder that mirrors `src/`, never next to the code.
