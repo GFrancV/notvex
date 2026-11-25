@@ -71,6 +71,7 @@ const { getNote, getNoteTitle, importNotes, listNotes } = await import('@main/db
 const { isVaultOpen } = await import('@main/vault/vault')
 const { memzero } = await import('@main/vault/crypto')
 const { logError } = await import('@main/log/log')
+const { getPref } = await import('@main/prefs/prefs')
 const { dialog } = await import('electron')
 const { closeSync, fstatSync, openSync, readSync, writeFileSync } = await import('fs')
 
@@ -101,6 +102,7 @@ let written: { path: string; text: string } | undefined
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isVaultOpen).mockReset().mockReturnValue(true)
+  vi.mocked(getPref).mockImplementation((() => 0) as never)
   vi.mocked(getNote).mockResolvedValue(NOTE)
   vi.mocked(getNoteTitle).mockResolvedValue(NOTE.title)
   written = undefined
@@ -136,6 +138,20 @@ describe('notes:export', () => {
       SaveDialogOptions
     ]
     expect(options.defaultPath).toMatch(/Plan_ Q3_\.md$/)
+  })
+
+  it('offers a generic filename in privacy mode, since the save dialog shows it in plain text', async () => {
+    vi.mocked(getPref).mockImplementation(((key: string) => key === 'privacyMode') as never)
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({ canceled: true, filePath: '' })
+
+    await invoke('notes:export', 'n1')
+
+    const [, options] = vi.mocked(dialog.showSaveDialog).mock.calls[0] as unknown as [
+      BrowserWindow,
+      SaveDialogOptions
+    ]
+    expect(options.defaultPath).toMatch(/[\\/]note\.md$|^note\.md$/)
+    expect(options.defaultPath).not.toContain('Plan')
   })
 
   it('writes the plaintext file readable by its owner only', async () => {
