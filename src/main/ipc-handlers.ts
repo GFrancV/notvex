@@ -185,16 +185,17 @@ function recycleRenderer(win: BrowserWindow | null, next: PendingVault | null): 
 }
 
 // closeVaultDrained() for a lock the user stays in the app for. A failed pack keeps the
-// renderer, since its pack-failed toast is the only notice of the lost changes. next defaults
-// to the vault being locked.
+// renderer, since its pack-failed toast is the only notice of the lost changes; noEdits says
+// there were none (the vault was just unlocked), so the typed credentials go with the renderer
+// anyway. next defaults to the vault being locked.
 export async function lockAndRecycle(
   win: BrowserWindow | null,
-  opts: { drainTimeoutMs?: number; next?: PendingVault } = {}
+  opts: { drainTimeoutMs?: number; next?: PendingVault; noEdits?: boolean } = {}
 ): Promise<{ recycled: boolean }> {
   const lockedPath = getVaultPath()
   const next = opts.next ?? (lockedPath ? { path: lockedPath, mode: 'open' } : null)
   const { packFailed } = await closeVaultDrained(win, opts.drainTimeoutMs)
-  if (packFailed) return { recycled: false }
+  if (packFailed && !opts.noEdits) return { recycled: false }
   return { recycled: recycleRenderer(win, next) }
 }
 
@@ -202,6 +203,7 @@ export async function lockVaultAndNotify(win: BrowserWindow | null): Promise<voi
   if (!isVaultOpen()) {
     // Nothing to close yet, but vault:create applies this lock once the vault exists
     if (isCreating) lockPendingDuringCreate = true
+    if (isUnlocking) lockPendingDuringUnlock = true
     return
   }
   const { recycled } = await lockAndRecycle(win)
@@ -289,6 +291,10 @@ let isUnlocking = false
 let isCreating = false
 // A hard lock that arrived while isCreating was set.
 let lockPendingDuringCreate = false
+// A hard lock that arrived while isUnlocking was set.
+let lockPendingDuringUnlock = false
+const LOCKED_DURING_UNLOCK =
+  "Couldn't unlock the vault: it was locked while it opened. Unlock it again"
 
 // Bumped when the renderer is replaced while its window stays alive (reload,
 // crash). An unlock started under an older renderer has nobody left to show
@@ -581,11 +587,16 @@ export function registerIpcHandlers(
           const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
           if (delaySecs > 0) unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
         }
+        if (vaultVersion !== null && lockPendingDuringUnlock) {
+          await lockAndRecycle(liveWin(), { noEdits: true })
+          return fail(LOCKED_DURING_UNLOCK)
+        }
         return ok(vaultVersion)
       } catch (e) {
         return fail(e)
       } finally {
         isUnlocking = false
+        lockPendingDuringUnlock = false
       }
     }
   )
@@ -721,9 +732,14 @@ export function registerIpcHandlers(
             const delaySecs = throttleDelaySeconds(unlockThrottle.failedAttempts)
             if (delaySecs > 0) unlockThrottle.lockedUntil = Date.now() + delaySecs * 1000
           }
+          if (vaultVersion !== null && lockPendingDuringUnlock) {
+            await lockAndRecycle(liveWin(), { noEdits: true })
+            return fail(LOCKED_DURING_UNLOCK)
+          }
           return ok(vaultVersion)
         } finally {
           isUnlocking = false
+          lockPendingDuringUnlock = false
         }
       } catch (e) {
         return fail(e)
