@@ -12,6 +12,7 @@ import { cn } from 'cn'
 
 import { formatTimeAgo } from '@/lib/utils'
 import type { NoteListItem } from '@shared/types'
+import { Masked } from './Masked'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -66,7 +67,7 @@ export function NoteListRow({
           <div className="mb-1 flex min-w-0 items-center gap-1.5">
             {note.isPinned && <PinIcon className="text-primary fill-primary size-3 shrink-0" />}
             <h3 className="flex-1 truncate text-sm font-medium text-pretty">
-              {note.title || 'Untitled'}
+              <Masked text={note.title || 'Untitled'} />
             </h3>
           </div>
           <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
@@ -81,9 +82,13 @@ export function NoteListRow({
                   />
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="truncate">{note.tags[0].name}</span>
+                      <span className="truncate">
+                        <Masked text={note.tags[0].name} />
+                      </span>
                     </TooltipTrigger>
-                    <TooltipContent>{note.tags[0].name}</TooltipContent>
+                    <TooltipContent>
+                      <Masked text={note.tags[0].name} />
+                    </TooltipContent>
                   </Tooltip>
                 </span>
                 {note.tags.length > 1 && (
@@ -92,10 +97,12 @@ export function NoteListRow({
                       <span className="shrink-0">+{note.tags.length - 1}</span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {note.tags
-                        .slice(1)
-                        .map((t) => t.name)
-                        .join(', ')}
+                      <Masked
+                        text={note.tags
+                          .slice(1)
+                          .map((t) => t.name)
+                          .join(', ')}
+                      />
                     </TooltipContent>
                   </Tooltip>
                 )}

@@ -25,6 +25,7 @@ const prefsAfterCreate: Prefs = {
   clearClipboardOnLock: true,
   noteSort: { field: 'updatedAt', direction: 'desc' },
   checkUpdatesOnStartup: true,
+  privacyMode: false,
   updateSnooze: null
 }
 

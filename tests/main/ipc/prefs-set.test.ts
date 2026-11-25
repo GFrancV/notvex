@@ -85,7 +85,8 @@ describe.each<[string, unknown[], unknown[]]>([
   ['autoLockMinutes', [0, 480], [481, -1, 1.5, '15']],
   ['clipboardClearSeconds', [0, 10, 30, 60, 120, 300], [45, '60']],
   ['allowScreenCapture', [true, false], ['true', 1]],
-  ['lockOnMinimize', [true, false], ['true', 1]]
+  ['lockOnMinimize', [true, false], ['true', 1]],
+  ['privacyMode', [true, false], ['true', 1, null]]
 ])('prefs:set %s', (key, valid, invalid) => {
   it.each(valid)('accepts %j', async (value) => {
     await expect(setPrefIpc(key, value)).resolves.toEqual({ success: true, data: null })

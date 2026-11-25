@@ -2,7 +2,9 @@ import type React from 'react'
 
 import { MoreHorizontalIcon, PenIcon, Trash2Icon } from 'lucide-react'
 
+import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import type { Tag } from '@shared/types'
+import { Masked } from '../Masked'
 import { Checkbox } from '../ui/checkbox'
 import {
   DropdownMenu,
@@ -37,6 +39,7 @@ export function TagItem({
   onEdit,
   onDelete
 }: TagItemProps): React.ReactNode {
+  const { privacyMode } = usePrivacyMode()
   return (
     <SidebarMenuItem>
       {/* A sibling, not a child: Radix Checkbox is a <button>, and nested inside the row
@@ -44,7 +47,7 @@ export function TagItem({
       <Checkbox
         checked={active}
         onCheckedChange={onToggle}
-        aria-label={`Filter by ${tag.name}`}
+        aria-label={privacyMode ? 'Filter by hidden tag' : `Filter by ${tag.name}`}
         className="absolute top-1/2 left-2 z-10 -translate-y-1/2 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100"
       />
       <SidebarMenuButton isActive={active} onClick={onClick}>
@@ -54,9 +57,13 @@ export function TagItem({
         />
         <Tooltip>
           <TooltipTrigger asChild>
-            <span>{tag.name}</span>
+            <span>
+              <Masked text={tag.name} />
+            </span>
           </TooltipTrigger>
-          <TooltipContent>{tag.name}</TooltipContent>
+          <TooltipContent>
+            <Masked text={tag.name} />
+          </TooltipContent>
         </Tooltip>
       </SidebarMenuButton>
       <DropdownMenu>

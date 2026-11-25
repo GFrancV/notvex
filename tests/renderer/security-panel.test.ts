@@ -64,6 +64,7 @@ beforeEach(() => {
   ipc.getKdfLevel.mockResolvedValue({ success: true, data: { id: 4, memoryMiB: 256, passes: 3 } })
   ipc.configureKeyFile.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
   ipc.removeKeyFile.mockResolvedValue({ success: true, data: { mnemonic: MNEMONIC } })
+  prefsIpc.set.mockResolvedValue({ success: true, data: null })
 })
 
 afterEach(() => {

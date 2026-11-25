@@ -21,6 +21,7 @@ import {
 import { dialogDefaultPath, rememberDialogDir } from '../dialog-dir'
 import { fail, handle, ok, readFully, requireVault } from '../ipc/core'
 import { logError } from '../log/log'
+import { getPref } from '../prefs/prefs'
 import { memzero } from '../vault/crypto'
 import { getDb, getMasterKey, withVaultLock } from '../vault/vault'
 import { dedupeName, parseMarkdownFile, serializeNote, toSafeFilename } from './markdown-io'
@@ -224,7 +225,10 @@ export function registerNotesHandlers({
       // Outside the vault lock: an open dialog must not hold up the periodic sync or a lock.
       const { canceled, filePath } = await dialog.showSaveDialog(requireWin(), {
         title: 'Export note',
-        defaultPath: dialogDefaultPath(`${toSafeFilename(title)}.md`),
+        // The native dialog shows the name in plain text, beyond the renderer's masking.
+        defaultPath: dialogDefaultPath(
+          getPref('privacyMode') ? 'note.md' : `${toSafeFilename(title)}.md`
+        ),
         filters: [{ name: 'Markdown', extensions: ['md'] }]
       })
       if (canceled || !filePath) return ok(null)

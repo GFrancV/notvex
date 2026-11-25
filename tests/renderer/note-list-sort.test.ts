@@ -170,6 +170,7 @@ describe('note list sort sources', () => {
       clearClipboardOnLock: true,
       noteSort: { field: 'title', direction: 'desc' },
       checkUpdatesOnStartup: true,
+      privacyMode: false,
       updateSnooze: null
     }
     ipc.prefs.get.mockResolvedValue({ success: true, data: saved })

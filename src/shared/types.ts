@@ -143,6 +143,7 @@ export interface Prefs {
   clearClipboardOnLock: boolean
   noteSort: NoteSort
   checkUpdatesOnStartup: boolean
+  privacyMode: boolean
   // "Remind me later": the version stays hidden from startup checks until `until` (epoch ms)
   updateSnooze: { version: string; until: number } | null
 }

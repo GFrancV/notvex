@@ -8,9 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // that change produced, it must wait. Closing the vault then would lose a key nobody wrote down.
 
 const close = vi.hoisted(() => vi.fn(async () => ({ success: true, data: null })))
+const prefsSet = vi.hoisted(() => vi.fn(async () => ({ success: true, data: null })))
 
 vi.mock('@/lib/ipc', () => ({
-  notvex: { vault: { close }, onWillLock: () => () => {} }
+  notvex: { vault: { close }, prefs: { set: prefsSet }, onWillLock: () => () => {} }
 }))
 vi.mock('@/components/command-palette', () => ({ CommandPalette: () => null }))
 vi.mock('@/components/dialogs/RecoveryKeyUnconfirmedDialog', () => ({
@@ -25,6 +26,7 @@ vi.mock('@/components/ui/sidebar', () => ({
 }))
 
 const { Main } = await import('@/views/main')
+const { usePrefsStore } = await import('@/store/prefs.store')
 const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
@@ -106,5 +108,28 @@ describe('Main: Ctrl+Shift+E', () => {
     press()
 
     expect(useUiStore.getState().editorMode).toBe('editing')
+  })
+})
+
+describe('Main: Ctrl+Shift+H', () => {
+  afterEach(() => {
+    usePrefsStore.setState({ privacyMode: false })
+  })
+
+  it.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Cmd', { metaKey: true }]
+  ])('Mod-Shift-h toggles the mode (%s)', async (_mod, modifier) => {
+    const press = (): Promise<void> =>
+      act(async () => {
+        fireEvent.keyDown(window, { key: 'H', shiftKey: true, ...modifier })
+      })
+
+    await press()
+    expect(usePrefsStore.getState().privacyMode).toBe(true)
+    expect(prefsSet).toHaveBeenLastCalledWith('privacyMode', true)
+
+    await press()
+    expect(usePrefsStore.getState().privacyMode).toBe(false)
   })
 })

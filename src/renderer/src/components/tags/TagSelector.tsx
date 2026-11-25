@@ -3,9 +3,11 @@ import { type ReactNode, useState } from 'react'
 import { PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { opaqueValue } from '@/lib/opaque-value'
 import { PRESET_COLORS } from '@/lib/tag-colors'
 import { useVaultStore } from '@/store/vault.store'
 import { type Tag, TAG_NAME_MAX } from '@shared/types'
+import { Masked } from '../Masked'
 import {
   Command,
   CommandEmpty,
@@ -70,17 +72,18 @@ function AddTagList({ noteId, onDone }: { noteId: string; onDone: () => void }):
       <CommandList>
         {!showCreate && <CommandEmpty>No tags found</CommandEmpty>}
         <CommandGroup>
-          {available.map((tag) => (
+          {available.map((tag, i) => (
             <CommandItem
               key={tag.id}
-              value={tag.name}
+              value={opaqueValue(i)}
+              keywords={[tag.name]}
               disabled={loading}
               onSelect={() =>
                 void assignAndClose(() => addTagToNote(noteId, tag.id), "Couldn't add the tag")
               }
             >
               <TagDot tag={tag} />
-              {tag.name}
+              <Masked text={tag.name} />
             </CommandItem>
           ))}
           {showCreate && (
@@ -129,10 +132,15 @@ export function RemoveTagSelector({
           <CommandList>
             <CommandEmpty>No tags found</CommandEmpty>
             <CommandGroup>
-              {tags.map((tag) => (
-                <CommandItem key={tag.id} value={tag.name} onSelect={() => onRemove(tag.id)}>
+              {tags.map((tag, i) => (
+                <CommandItem
+                  key={tag.id}
+                  value={opaqueValue(i)}
+                  keywords={[tag.name]}
+                  onSelect={() => onRemove(tag.id)}
+                >
                   <TagDot tag={tag} />
-                  {tag.name}
+                  <Masked text={tag.name} />
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -103,12 +103,20 @@ describe.each(['checkUpdatesOnStartup', 'clearClipboardOnLock'] as const)('getPr
   })
 })
 
+describe('getPrefs privacyMode', () => {
+  it('privacyMode defaults to false for a prefs.json written before the pref existed', () => {
+    fsState.contents = JSON.stringify({ autoLockMinutes: 5 })
+    expect(getPrefs().privacyMode).toBe(false)
+  })
+})
+
 // Valid values exclude the default, which a fallback would also return.
 describe.each<[keyof Prefs, unknown[], unknown, unknown[]]>([
   ['clipboardClearSeconds', [0, 10, 30, 120, 300], 60, [-1, 45, '60', 2 ** 31, 1.5, null, true]],
   ['autoLockMinutes', [0, 1, 480], 15, [-1, 481, 1.5, '15', null, true]],
   ['lockOnMinimize', [true], false, ['true', 1]],
-  ['allowScreenCapture', [true], false, ['true', 1]]
+  ['allowScreenCapture', [true], false, ['true', 1]],
+  ['privacyMode', [true], false, ['true', 1, null]]
 ])('getPrefs %s', (key, valid, fallback, invalid) => {
   it.each(valid)('keeps a saved %j', (value) => {
     fsState.contents = JSON.stringify({ [key]: value })
@@ -139,6 +147,7 @@ describe('getPrefs', () => {
       clearClipboardOnLock: true,
       noteSort: { field: 'updatedAt', direction: 'desc' },
       checkUpdatesOnStartup: true,
+      privacyMode: false,
       updateSnooze: null
     })
   })
@@ -395,6 +404,7 @@ describe('getPrefs with every pref invalid', () => {
       clearClipboardOnLock: true,
       noteSort: { field: 'updatedAt', direction: 'desc' },
       checkUpdatesOnStartup: true,
+      privacyMode: false,
       updateSnooze: null
     })
   })
