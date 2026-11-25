@@ -1,12 +1,17 @@
+import { toast } from 'sonner'
+
 import { usePrefsStore } from '@/store/prefs.store'
 
 /**
- * Switches privacy mode. A plain function, so a caller that only toggles (a keyboard shortcut)
- * doesn't re-render whenever the mode changes.
+ * Switches privacy mode; reverts and says so if it can't be saved. A plain function, so a caller
+ * that only toggles (a keyboard shortcut) doesn't re-render whenever the mode changes.
  */
 export async function togglePrivacyMode(): Promise<void> {
   const { privacyMode, setPref } = usePrefsStore.getState()
-  await setPref('privacyMode', !privacyMode)
+  const on = !privacyMode
+  if (!(await setPref('privacyMode', on))) {
+    toast.error(on ? "Couldn't turn on privacy mode" : "Couldn't turn off privacy mode")
+  }
 }
 
 /**

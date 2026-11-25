@@ -24,11 +24,16 @@ vi.mock('@/lib/bug-report', () => ({
   openLogsFolder: vi.fn()
 }))
 vi.mock('@/lib/reload-window', () => ({ requestReload: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+
+const { toast } = await import('sonner')
 
 const { CommandPalette } = await import('@/components/command-palette')
 const { NoteList } = await import('@/components/note-list')
 const { PrivacyModeToggle } = await import('@/components/PrivacyModeToggle')
 const { TagChip } = await import('@/components/tags/TagChip')
+const { TagCreateModal } = await import('@/components/tags/TagCreateModal')
+const { TagDeleteModal } = await import('@/components/tags/TagDeleteModal')
 const { TagFilter } = await import('@/components/tags/TagFilter')
 const { TagItem } = await import('@/components/tags/TagItem')
 const { TagSelector } = await import('@/components/tags/TagSelector')
@@ -274,6 +279,23 @@ describe('privacy mode in tags', () => {
     })
     expect(addTagToNote).toHaveBeenCalledExactlyOnceWith('a', personal.id)
   })
+
+  // Opened on purpose for one tag: renaming or deleting it blind isn't possible.
+  it('tag edit and delete dialogs show the real tag name while the mode is on', () => {
+    usePrefsStore.setState({ privacyMode: true })
+    useVaultStore.setState({ tags: [crypto], tagCounts: { [crypto.id]: 1 } })
+
+    render(
+      withTooltips(createElement(TagCreateModal, { open: true, onClose: vi.fn(), editTag: crypto }))
+    )
+    expect(screen.getByRole('textbox').getAttribute('value')).toBe('crypto')
+    cleanup()
+
+    render(
+      withTooltips(createElement(TagDeleteModal, { open: true, onClose: vi.fn(), tag: crypto }))
+    )
+    expect(screen.getByRole('heading', { name: 'Delete “crypto”?' })).toBeTruthy()
+  })
 })
 
 describe('turning privacy mode on and off', () => {
@@ -295,6 +317,25 @@ describe('turning privacy mode on and off', () => {
     expect(button.getAttribute('aria-pressed')).toBe('false')
     expect(ipc.prefsSet).toHaveBeenLastCalledWith('privacyMode', false)
   })
+
+  it.each([
+    [false, "Couldn't turn on privacy mode"],
+    [true, "Couldn't turn off privacy mode"]
+  ])(
+    'toggle reverts and shows a toast when the pref can’t be saved (was on: %s)',
+    async (wasOn, message) => {
+      usePrefsStore.setState({ privacyMode: wasOn })
+      ipc.prefsSet.mockResolvedValue({ success: false, error: 'disk full' })
+      render(withTooltips(createElement(PrivacyModeToggle)))
+      const button = screen.getByRole('button', { name: 'Privacy mode' })
+
+      await act(async () => fireEvent.click(button))
+
+      expect(usePrefsStore.getState().privacyMode).toBe(wasOn)
+      expect(button.getAttribute('aria-pressed')).toBe(String(wasOn))
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(message)
+    }
+  )
 })
 
 describe('privacy mode in the command palette', () => {
@@ -324,5 +365,27 @@ describe('privacy mode in the command palette', () => {
       fireEvent.keyDown(input, { key: 'Enter' })
     })
     expect(useVaultStore.getState().activeNoteId).toBe('b')
+  })
+
+  it('palette item reads "Turn on privacy mode" / "Turn off privacy mode" and toggles it', async () => {
+    ipc.prefsSet.mockResolvedValue({ success: true, data: null })
+    useVaultStore.setState({ notes: [], activeNoteId: null, noteTagsMap: {} })
+    const openPalette = (): void => {
+      act(() => useUiStore.setState({ commandPaletteOpen: true }))
+    }
+    render(createElement(CommandPalette))
+
+    openPalette()
+    expect(screen.getByRole('option', { name: /Turn on privacy mode/ }).textContent).toContain(
+      'Ctrl Shift H'
+    )
+    await act(async () => fireEvent.click(screen.getByRole('option', { name: /Turn on/ })))
+    expect(usePrefsStore.getState().privacyMode).toBe(true)
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false)
+
+    openPalette()
+    expect(screen.queryByRole('option', { name: /Turn on privacy mode/ })).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('option', { name: /Turn off/ })))
+    expect(usePrefsStore.getState().privacyMode).toBe(false)
   })
 })

@@ -47,7 +47,7 @@ const { useUiStore } = await import('@/store/ui.store')
 const { useVaultStore } = await import('@/store/vault.store')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
 
-const setPref = vi.fn(async () => undefined)
+const setPref = vi.fn(async () => true)
 const onOpenChange = vi.fn()
 
 async function renderDialog(initialTab?: 'about'): Promise<void> {

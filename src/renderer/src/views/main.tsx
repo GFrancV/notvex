@@ -8,6 +8,7 @@ import { NoteList } from '@/components/note-list'
 import { Sidebar } from '@/components/sidebar'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { useCreateNote } from '@/hooks/use-create-note'
+import { togglePrivacyMode } from '@/hooks/use-privacy-mode'
 import { notvex } from '@/lib/ipc'
 import { flushAllPending } from '@/lib/pending-save'
 import { useUiStore } from '@/store/ui.store'
@@ -52,6 +53,10 @@ export function Main(): ReactNode {
             toggleEditorMode()
             return
           }
+          case 'h':
+            e.preventDefault()
+            void togglePrivacyMode()
+            return
           default:
             break
         }

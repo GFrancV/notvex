@@ -8,6 +8,7 @@ import {
   CopyPlusIcon,
   ExternalLinkIcon,
   EyeIcon,
+  EyeOffIcon,
   FileTextIcon,
   FolderOpenIcon,
   LockIcon,
@@ -21,6 +22,7 @@ import {
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useCreateNote } from '@/hooks/use-create-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
+import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { loadDebugInfo, openBugReport, openLogsFolder } from '@/lib/bug-report'
 import { opaqueValue } from '@/lib/opaque-value'
 import { requestReload } from '@/lib/reload-window'
@@ -84,6 +86,7 @@ function PaletteContent(): ReactNode {
   const { notes, lock, setActiveNoteId: selectNote, activeNoteId, noteTagsMap } = useVaultStore()
   const handleNewNote = useCreateNote()
   const duplicateNote = useDuplicateNote()
+  const { privacyMode, toggle: togglePrivacyMode } = usePrivacyMode()
   const [query, setQuery] = useState('')
 
   const { copyToClipboard } = useCopyToClipboard()
@@ -145,6 +148,16 @@ function PaletteContent(): ReactNode {
               </CommandShortcut>
             </CommandItem>
           )}
+          <CommandItem
+            keywords={['hide', 'conceal', 'mask', 'titles', 'privacy']}
+            onSelect={() => run(togglePrivacyMode)}
+          >
+            {privacyMode ? <EyeIcon /> : <EyeOffIcon />}
+            <span>{privacyMode ? 'Turn off privacy mode' : 'Turn on privacy mode'}</span>
+            <CommandShortcut>
+              <Shortcut keys="Mod-Shift-h" />
+            </CommandShortcut>
+          </CommandItem>
           <CommandItem
             keywords={['deleted notes', 'bin', 'recycle', 'restore']}
             onSelect={() => run(() => setShowTrash(true))}

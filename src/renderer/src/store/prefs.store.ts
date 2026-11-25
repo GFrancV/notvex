@@ -17,7 +17,8 @@ interface PrefsStore {
   privacyMode: boolean
   recentVaults: RecentVault[]
   load: () => Promise<void>
-  setPref: <K extends SettingKey>(key: K, value: Prefs[K]) => Promise<void>
+  /** Shows the value at once and saves it; reverts and resolves false if the save fails. */
+  setPref: <K extends SettingKey>(key: K, value: Prefs[K]) => Promise<boolean>
 }
 
 export const usePrefsStore = create<PrefsStore>((set, get) => ({
@@ -55,11 +56,14 @@ export const usePrefsStore = create<PrefsStore>((set, get) => ({
 
   setPref: async (key, value) => {
     const previous = get()[key]
+    set({ [key]: value })
     try {
-      set({ [key]: value })
-      await notvex.prefs.set(key, value)
+      // prefs:set reports a rejected or failed write in its result rather than throwing.
+      if ((await notvex.prefs.set(key, value)).success) return true
     } catch {
-      set({ [key]: previous })
+      // IPC itself failed: same outcome as a failed write.
     }
+    set({ [key]: previous })
+    return false
   }
 }))
