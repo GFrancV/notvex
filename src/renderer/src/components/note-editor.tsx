@@ -12,6 +12,7 @@ import {
   DownloadIcon,
   EllipsisIcon,
   EyeIcon,
+  EyeOffIcon,
   FileTextIcon,
   PencilIcon,
   PinIcon,
@@ -25,6 +26,7 @@ import { cn } from 'cn'
 import { useDeleteNote } from '@/hooks/use-delete-note'
 import { useDuplicateNote } from '@/hooks/use-duplicate-note'
 import { useExportNote } from '@/hooks/use-export-note'
+import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { useRestoreNote } from '@/hooks/use-restore-note'
 import { useTogglePin } from '@/hooks/use-toggle-pin'
 import { useTrashNote } from '@/hooks/use-trash-note'
@@ -43,6 +45,7 @@ import { ConfirmDeleteDialog } from './dialogs/ConfirmDeleteDialog'
 import { ExportWarningDialog } from './dialogs/ExportWarningDialog'
 import { EditorContextMenu } from './editor-context-menu'
 import { EditorToolbar } from './editor/EditorToolbar'
+import { Masked } from './Masked'
 import { NoteReadingView } from './note-reading-view'
 import { Shortcut } from './Shortcut'
 import { TagChip } from './tags/TagChip'
@@ -56,7 +59,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from './ui/empty'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle
+} from './ui/empty'
 import { Skeleton } from './ui/skeleton'
 import { Spinner } from './ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -136,8 +146,13 @@ export function NoteEditor(): ReactNode {
     tagSelectorNoteId,
     setTagSelectorNoteId,
     removeTagNoteId,
-    setRemoveTagNoteId
+    setRemoveTagNoteId,
+    revealedNoteId,
+    setRevealedNoteId
   } = useUiStore()
+  const { privacyMode } = usePrivacyMode()
+  // Not decrypted at all while hidden: nothing of the note is in memory until it's revealed.
+  const hidden = privacyMode && revealedNoteId !== activeNoteId
 
   const [note, setNote] = useState<Note | null>(null)
   const [title, setTitle] = useState('')
@@ -214,8 +229,18 @@ export function NoteEditor(): ReactNode {
   // A lock unmounts the editor; keys held for a note it will never show go nowhere.
   useEffect(() => dropTypeahead, [])
 
+  // A reveal lasts while its note stays open: once another one is selected, coming back to it
+  // shows the placeholder again.
   useEffect(() => {
-    if (!activeNoteId) {
+    if (useUiStore.getState().revealedNoteId !== activeNoteId) setRevealedNoteId(null)
+  }, [activeNoteId, setRevealedNoteId])
+
+  useEffect(() => {
+    if (!activeNoteId || hidden) {
+      // A load still in flight must not land in a note that isn't shown.
+      activeIdRef.current = null
+      // A title focus asked for a note opened hidden is spent, like the typed keys.
+      lastFocusTitleRef.current = useUiStore.getState().focusTitleRequest
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setNote(null)
       setTitle('')
@@ -285,7 +310,7 @@ export function NoteEditor(): ReactNode {
       clearTimeout(countTimerRef.current)
       window.removeEventListener('keydown', onKey, true)
     }
-  }, [activeNoteId, setActiveNoteId, contentSaver, titleSaver])
+  }, [activeNoteId, hidden, setActiveNoteId, contentSaver, titleSaver])
 
   const handleContentChange = useCallback(
     (value: string): void => {
@@ -324,16 +349,23 @@ export function NoteEditor(): ReactNode {
     editorView.focus()
   }
 
+  const listItem = notes.find((n) => n.id === activeNoteId)
+  // A note hidden by privacy mode is never decrypted, so its header works from the list entry.
+  // One still decrypting keeps waiting for the note.
+  const shownNote = note ?? (hidden ? listItem : null)
+
   // A pin made from the list only reaches the store's entry; the local copy is the fallback
   // for a note the current list doesn't hold.
-  const isPinned = notes.find((n) => n.id === note?.id)?.isPinned ?? note?.isPinned ?? false
+  const isPinned =
+    notes.find((n) => n.id === shownNote?.id)?.isPinned ?? shownNote?.isPinned ?? false
 
   const togglePin = useTogglePin()
   const handlePin = async (): Promise<void> => {
-    if (!note) return
-    if (!(await togglePin({ id: note.id, isPinned }))) return
+    if (!shownNote) return
+    const { id } = shownNote
+    if (!(await togglePin({ id, isPinned }))) return
     // The user may have switched notes while the pin was saving.
-    setNote((current) => (current?.id === note.id ? { ...current, isPinned: !isPinned } : current))
+    setNote((current) => (current?.id === id ? { ...current, isPinned: !isPinned } : current))
   }
 
   const exportNote = useExportNote()
@@ -347,12 +379,14 @@ export function NoteEditor(): ReactNode {
 
   // A trashed note is read-only: always in reading view, and its only actions are the trash
   // view's, Restore and Delete.
-  const inTrash = note?.isTrashed ?? false
+  const inTrash = shownNote?.isTrashed ?? false
   const viewMode = inTrash ? 'reading' : editorMode
   const restoreNote = useRestoreNote()
   const handleRestore = async (): Promise<void> => {
-    if (!note || !(await restoreNote(note.id))) return
-    setNote((current) => (current?.id === note.id ? { ...current, isTrashed: false } : current))
+    if (!shownNote) return
+    const { id } = shownNote
+    if (!(await restoreNote(id))) return
+    setNote((current) => (current?.id === id ? { ...current, isTrashed: false } : current))
     // The note has left the trash; show it where it now lives.
     setShowTrash(false)
   }
@@ -390,7 +424,11 @@ export function NoteEditor(): ReactNode {
       <div className="shrink-0 px-6.5 pb-3.5">
         {/* Title row */}
         <div className={cn('flex items-center gap-2', TITLEBAR_ROW)}>
-          {isLoading ? (
+          {hidden ? (
+            <span className="text-muted-foreground flex-1 text-xl font-semibold tracking-tight select-none">
+              <Masked text={listItem?.title || 'Untitled'} />
+            </span>
+          ) : isLoading ? (
             <div className="flex-1">
               <Skeleton className="h-6.5 w-40 rounded" />
             </div>
@@ -415,7 +453,7 @@ export function NoteEditor(): ReactNode {
         {/* Tags + action icons row */}
         <div className="mt-1 flex min-h-8.5 shrink-0 items-center gap-2">
           <div className="flex flex-1 flex-wrap items-center gap-2">
-            {note && (
+            {shownNote && (
               <>
                 {assignedTags.map((tag) => (
                   <TagChip
@@ -519,10 +557,10 @@ export function NoteEditor(): ReactNode {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                {note && !note.isTrashed && (
+                {shownNote && !shownNote.isTrashed && (
                   <>
                     <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={() => void duplicateNote(note.id)}>
+                      <DropdownMenuItem onClick={() => void duplicateNote(shownNote.id)}>
                         <CopyPlusIcon />
                         Duplicate
                       </DropdownMenuItem>
@@ -580,48 +618,72 @@ export function NoteEditor(): ReactNode {
         </div>
       </div>
 
+      {hidden && (
+        <Empty className="select-none">
+          <EmptyHeader>
+            <EmptyMedia className="text-muted-foreground/30">
+              <EyeOffIcon className="size-12" />
+            </EmptyMedia>
+            <EmptyTitle className="text-muted-foreground text-sm font-normal">
+              This note is hidden
+            </EmptyTitle>
+            <EmptyDescription className="text-xs">
+              Privacy mode is on. Show the note to read and edit it.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" size="sm" onClick={() => setRevealedNoteId(activeNoteId)}>
+              <EyeIcon />
+              Show note
+            </Button>
+          </EmptyContent>
+        </Empty>
+      )}
+
       {/* Editor Toolbar */}
-      {viewMode !== 'reading' && !isLoading && <EditorToolbar editorView={editorView} />}
+      {!hidden && viewMode !== 'reading' && !isLoading && <EditorToolbar editorView={editorView} />}
 
       {/* Editor / Reading view */}
-      <div className="relative flex min-h-0 min-w-0 flex-1">
-        {isLoading && (
-          <div className="bg-background absolute inset-0 z-50 flex items-center justify-center">
-            <div className="text-muted-foreground flex items-center gap-2 text-sm">
-              <Spinner aria-hidden />
-              Decrypting note…
+      {!hidden && (
+        <div className="relative flex min-h-0 min-w-0 flex-1">
+          {isLoading && (
+            <div className="bg-background absolute inset-0 z-50 flex items-center justify-center">
+              <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                <Spinner aria-hidden />
+                Decrypting note…
+              </div>
             </div>
-          </div>
-        )}
-        {viewMode === 'reading' ? (
-          <NoteReadingView content={content} />
-        ) : (
-          // Mounted only once the note has decrypted: it takes focus on mount, and a keystroke
-          // into an empty document before the content arrives would be autosaved over the note.
-          !isLoading && (
-            <EditorContextMenu editorView={editorView}>
-              <CodeMirror
-                // One instance per note: @uiw/react-codemirror defers external value updates while
-                // the user is typing, and a deferred update outlives a note switch, leaving the
-                // view showing (and editing) a document that isn't the open note's.
-                key={activeNoteId}
-                value={content}
-                theme="dark"
-                extensions={editorExtensions}
-                onChange={handleContentChange}
-                onCreateEditor={(view) => {
-                  editorViewRef.current = view
-                  setEditorView(view)
-                  // Mounted after load, so a title focused for a new note must keep its focus.
-                  if (document.activeElement !== titleInputRef.current) view.focus()
-                }}
-                basicSetup={editorBasicSetup}
-                className="h-full w-full overflow-auto"
-              />
-            </EditorContextMenu>
-          )
-        )}
-      </div>
+          )}
+          {viewMode === 'reading' ? (
+            <NoteReadingView content={content} />
+          ) : (
+            // Mounted only once the note has decrypted: it takes focus on mount, and a keystroke
+            // into an empty document before the content arrives would be autosaved over the note.
+            !isLoading && (
+              <EditorContextMenu editorView={editorView}>
+                <CodeMirror
+                  // One instance per note: @uiw/react-codemirror defers external value updates while
+                  // the user is typing, and a deferred update outlives a note switch, leaving the
+                  // view showing (and editing) a document that isn't the open note's.
+                  key={activeNoteId}
+                  value={content}
+                  theme="dark"
+                  extensions={editorExtensions}
+                  onChange={handleContentChange}
+                  onCreateEditor={(view) => {
+                    editorViewRef.current = view
+                    setEditorView(view)
+                    // Mounted after load, so a title focused for a new note must keep its focus.
+                    if (document.activeElement !== titleInputRef.current) view.focus()
+                  }}
+                  basicSetup={editorBasicSetup}
+                  className="h-full w-full overflow-auto"
+                />
+              </EditorContextMenu>
+            )
+          )}
+        </div>
+      )}
 
       {note && !isLoading && (
         <footer className="text-muted-foreground border-border shrink-0 border-t px-6.5 py-1 text-end text-xs tabular-nums">

@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 
 import { usePrefsStore } from '@/store/prefs.store'
+import { useUiStore } from '@/store/ui.store'
 
 /**
  * Switches privacy mode; reverts and says so if it can't be saved. A plain function, so a caller
@@ -9,6 +10,8 @@ import { usePrefsStore } from '@/store/prefs.store'
 export async function togglePrivacyMode(): Promise<void> {
   const { privacyMode, setPref } = usePrefsStore.getState()
   const on = !privacyMode
+  // Turning it on hides every note, including one revealed before it was last turned off.
+  if (on) useUiStore.getState().setRevealedNoteId(null)
   if (!(await setPref('privacyMode', on))) {
     toast.error(on ? "Couldn't turn on privacy mode" : "Couldn't turn off privacy mode")
   }

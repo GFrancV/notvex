@@ -21,6 +21,9 @@ export function useCreateNote(): (title?: string) => Promise<void> {
       )
       // A new note is live: from the trash, show it where it lives (Ctrl+N works in any view).
       if (useUiStore.getState().showTrash) setShowTrash(false)
+      // Empty, so nothing to hide in privacy mode, and its title is where the keys typed since
+      // the shortcut go. Revealed before it opens, or the editor clears the reveal.
+      useUiStore.getState().setRevealedNoteId(note.id)
       setActiveNoteId(note.id)
       setSearchQuery('')
       requestFocusTitle()

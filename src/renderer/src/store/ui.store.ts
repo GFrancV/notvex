@@ -16,6 +16,8 @@ interface UiStore {
   removeTagNoteId: string | null
   focusTitleRequest: number
   focusSearchRequest: number
+  // The one note shown in full while privacy mode is on.
+  revealedNoteId: string | null
   setEditorMode: (mode: 'editing' | 'reading') => void
   toggleEditorMode: () => void
   setSearchQuery: (q: string) => void
@@ -32,6 +34,7 @@ interface UiStore {
   setRemoveTagNoteId: (id: string | null) => void
   requestFocusTitle: () => void
   requestFocusSearch: () => void
+  setRevealedNoteId: (id: string | null) => void
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -48,6 +51,7 @@ export const useUiStore = create<UiStore>((set) => ({
   removeTagNoteId: null,
   focusTitleRequest: 0,
   focusSearchRequest: 0,
+  revealedNoteId: null,
 
   setEditorMode: (editorMode): void => set({ editorMode }),
   toggleEditorMode: (): void =>
@@ -74,5 +78,6 @@ export const useUiStore = create<UiStore>((set) => ({
   setTagSelectorNoteId: (tagSelectorNoteId): void => set({ tagSelectorNoteId }),
   setRemoveTagNoteId: (removeTagNoteId): void => set({ removeTagNoteId }),
   requestFocusTitle: (): void => set((s) => ({ focusTitleRequest: s.focusTitleRequest + 1 })),
-  requestFocusSearch: (): void => set((s) => ({ focusSearchRequest: s.focusSearchRequest + 1 }))
+  requestFocusSearch: (): void => set((s) => ({ focusSearchRequest: s.focusSearchRequest + 1 })),
+  setRevealedNoteId: (revealedNoteId): void => set({ revealedNoteId })
 }))
