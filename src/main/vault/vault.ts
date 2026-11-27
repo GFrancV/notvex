@@ -397,6 +397,8 @@ export async function createVault(
     // Everything that can fail runs before the write, so a failure never leaves a .nvx behind
     database = await openDatabase(tmp)
     await applyKey(database, rawKey)
+    // Connection settings don't persist in the file, so the session connection needs them again.
+    await runMigrations(database)
     sessionKey = storeKey(rawKey) // zeros rawKey
     atomicWrite(filePath, containerBytes)
 

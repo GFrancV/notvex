@@ -25,6 +25,9 @@ export async function runMigrations(
   // PRAGMAs that affect the whole connection must run outside any transaction.
   await dbRun(db, 'PRAGMA journal_mode=WAL')
   await dbRun(db, 'PRAGMA foreign_keys=ON')
+  // Zeroes freed space so deleted and overwritten notes don't survive in the vault file; the
+  // bundled SQLCipher build's default isn't something Notvex can rely on.
+  await dbRun(db, 'PRAGMA secure_delete=ON')
 
   await dbRun(
     db,
